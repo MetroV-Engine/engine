@@ -1,0 +1,27 @@
+#!/bin/bash
+
+[ -f ./scripts/.helpers/repo-norms.sh ] || exit 0
+. ./scripts/.helpers/repo-norms.sh
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Allow commits on main/master (needed for release/sync workflows)
+[ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ] && exit 0
+
+if ! echo "$BRANCH" | grep -qE "$BRANCH_PATTERN"; then
+  echo ""
+  echo "❌ Branch name doesn't follow the repository standards!"
+  echo ""
+  echo "  Your branch : $BRANCH"
+  echo "  Expected    : type/NUMBER/description"
+  echo "  Example     : feat/42/add-new-feature"
+  echo ""
+  echo "💡 To create a properly formatted branch, use:"
+  echo "   pnpm checkout"
+  echo ""
+  echo "$AVAILABLE_COMMANDS"
+  echo ""
+  exit 1
+fi
+
+exit 0

@@ -1,0 +1,128 @@
+---
+alwaysApply: true
+---
+# Clean Code Guidelines
+
+Code is clean if it can be understood easily by everyone on the team. Clean code can be read and enhanced by a developer other than its original author. With understandability comes readability, changeability, extensibility and maintainability.
+
+## General Rules
+
+1. **Follow standard conventions** - Use the team's agreed-upon patterns and coding standards
+2. **Keep it simple stupid (KISS)** - Simpler is always better; reduce complexity as much as possible
+3. **Boy scout rule** - Leave the campground cleaner than you found it
+4. **Always find root cause** - Don't just fix symptoms; look for the root cause of problems
+
+## Design Rules
+
+1. **Keep configurable data at high levels** - Configuration should be easy to find and modify
+2. **Prefer polymorphism to if/else or switch/case** - Use object-oriented design to handle variations
+3. **Separate multi-threading code** - Isolate concurrency concerns from business logic
+4. **Prevent over-configurability** - Don't add configuration options you don't need
+5. **Use dependency injection** - See the dependency-injection rule for patterns
+6. **Follow Law of Demeter** - A class should know only its direct dependencies
+
+## Understandability
+
+1. **Be consistent** - If you do something a certain way, do all similar things the same way
+2. **Use explanatory variables** - Extract complex expressions into well-named variables
+3. **Encapsulate boundary conditions** - Put boundary condition processing in one place
+4. **Prefer dedicated value objects to primitive types** - Create types that represent domain concepts
+5. **Avoid logical dependency** - Don't write methods that depend on internal state of the same class
+6. **Avoid negative conditionals** - Positive conditionals are easier to read
+
+## Naming Rules
+
+1. **Choose descriptive and unambiguous names** - Names should reveal intent
+2. **Make meaningful distinctions** - Don't use names that differ only slightly
+3. **Use pronounceable names** - Names should be easy to discuss verbally
+4. **Use searchable names** - Avoid single-letter names or numeric constants
+5. **Replace magic numbers with named constants** - Give meaning to literal values
+6. **Avoid encodings** - Don't append prefixes or type information (Hungarian notation)
+
+## Function Rules
+
+1. **Small** - Functions should be small, ideally under 20 lines
+2. **Do one thing** - A function should have a single responsibility
+3. **Use descriptive names** - Function names should describe what they do
+4. **Prefer fewer arguments** - Ideally zero to two arguments; consider using an object for more
+5. **Have no side effects** - Functions should not modify external state unexpectedly
+6. **Don't use flag arguments** - Split into several independent methods instead
+
+## Source Code Structure
+
+1. **Separate concepts vertically** - Use blank lines between different concepts
+2. **Related code should appear vertically dense** - Keep related code close together
+3. **Declare variables close to their usage** - Don't declare at the top if used at the bottom
+4. **Dependent functions should be close** - Caller should be above callee
+5. **Similar functions should be close** - Group related functionality
+6. **Place functions in the downward direction** - Read top to bottom like a newspaper
+7. **Keep lines short** - Aim for under 120 characters
+8. **Don't use horizontal alignment** - It creates false visual relationships
+9. **Use white space wisely** - Associate related things, disassociate unrelated
+10. **Don't break indentation** - Maintain consistent indentation
+
+## Objects and Data Structures
+
+1. **Hide internal structure** - Expose behavior, not data
+2. **Prefer data structures for data transfer** - Use plain objects for DTOs
+3. **Avoid hybrid structures** - Don't mix object and data structure patterns
+4. **Should be small** - Classes should be focused and concise
+5. **Do one thing** - Single Responsibility Principle
+6. **Small number of instance variables** - Fewer dependencies mean easier testing
+7. **Base class should know nothing about derivatives** - Depend on abstractions
+8. **Prefer many functions over code selection** - Don't pass flags to select behavior
+9. **Prefer non-static methods** - Static methods are harder to mock and test
+
+## Code Smells to Avoid
+
+1. **Rigidity** - Software is difficult to change; small changes cause cascading changes
+2. **Fragility** - Software breaks in many places due to a single change
+3. **Immobility** - Cannot reuse parts of the code due to high coupling
+4. **Needless Complexity** - Over-engineering and premature optimization
+5. **Needless Repetition** - Duplicated code that should be abstracted
+6. **Opacity** - Code is hard to understand
+
+## Quick Reference
+
+### Do vs Don't
+
+| Principle      | Do                                 | Don't                               |
+| -------------- | ---------------------------------- | ----------------------------------- |
+| Naming         | `activeUserCount`                  | `n`, `auc`, `intActiveUserCount`    |
+| Functions      | Small, single purpose              | Large, multiple responsibilities    |
+| Conditionals   | `if (isValid)`                     | `if (!isNotValid)`                  |
+| Arguments      | 0-2 arguments, use objects         | Many positional arguments           |
+| Side Effects   | Pure functions                     | Hidden state modifications          |
+| Structure      | Related code together              | Scattered related code              |
+| Complexity     | Simple, obvious                    | Clever, hard to follow              |
+| Dependencies   | `user.getCityName()`               | `user.getAddress().getCity().name`  |
+| Magic Numbers  | `const MAX_RETRIES = 3`            | `if (attempts > 3)`                 |
+
+### Naming Cheatsheet
+
+| Bad           | Good                     | Why                     |
+| ------------- | ------------------------ | ----------------------- |
+| `d`           | `elapsedTimeInDays`      | Searchable, descriptive |
+| `lst`         | `activeUsers`            | Pronounceable           |
+| `strName`     | `name`                   | No encoding             |
+| `getData()`   | `getActiveUsersByRole()` | Reveals intent          |
+| `doStuff()`   | `sendWelcomeEmail()`     | Describes action        |
+| `process()`   | `validateAndSaveOrder()` | Specific behavior       |
+| `userList`    | `users`                  | No type in name         |
+
+### Function Size Guidelines
+
+| Metric                | Target      |
+| --------------------- | ----------- |
+| Lines per function    | < 20        |
+| Arguments             | 0-2 (max 3) |
+| Nesting depth         | < 3 levels  |
+
+### Code Smell Checklist
+
+- [ ] Can I change this without affecting unrelated code? (Rigidity)
+- [ ] Does a single change break multiple areas? (Fragility)
+- [ ] Can I reuse this in another project? (Immobility)
+- [ ] Is there unused flexibility or abstraction? (Needless Complexity)
+- [ ] Is there duplicated logic? (Needless Repetition)
+- [ ] Can a new team member understand this quickly? (Opacity)

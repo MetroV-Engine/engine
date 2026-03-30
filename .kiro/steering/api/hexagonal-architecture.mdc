@@ -1,0 +1,246 @@
+---
+description: Use this rule when creating new features or understanding the codebase architecture
+alwaysApply: false
+---
+
+# Hexagonal Architecture
+
+This codebase follows hexagonal (ports and adapters) architecture to separate concerns and make the code testable and maintainable.
+
+## Architecture Layers
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        HANDLERS                                  │
+│                    (Entry point)                                 │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────────┐
+│                        ADAPTERS                                  │
+│       (Parse input, call use cases, format output)               │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────────┐
+│                       USE CASES                                  │
+│                   (Business logic)                               │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────────┐
+│                    INFRASTRUCTURE                                │
+│                 (External services)                              │
+│                          │                                       │
+│              implements  │                                       │
+│                          ▼                                       │
+│     ┌──────────────────────────────────────┐                    │
+│     │              PORTS                    │                    │
+│     │           (Interfaces)                │                    │
+│     └──────────────────────────────────────┘                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 1. Handlers
+
+**Purpose:** Entry point that abstracts input for the adapter.
+
+**Responsibilities:**
+- Create an adapter instance
+- Export a main function that delegates to the adapter
+- Minimal logic - just wire up the adapter
+
+**Example:**
+```typescript
+import { MyAdapter } from './MyAdapter';
+
+const adapter = new MyAdapter();
+
+export const main = async (event: Event): Promise<Response> => adapter.handle(event);
+```
+
+## 2. Adapters
+
+**Purpose:** Parse input, use the right use case(s), and return formatted output.
+
+**Responsibilities:**
+- Validate and parse incoming request
+- Extract context information (user, tenant, etc.)
+- Call appropriate use case(s)
+- Transform domain models to response format
+- Handle response codes/status
+
+**When to bypass use cases:** If the logic is 1-2 lines, adapters can directly call infrastructure.
+
+**Example:**
+```typescript
+import { inject } from '@trackit.io/di-container';
+
+export class MyAdapter {
+  private readonly useCase = inject(tokenMyUseCase);
+
+  public async handle(event: Event): Promise<Response> {
+    // Parse and validate input
+    const { id, data } = this.parseInput(event);
+    const user = this.extractUser(event);
+    
+    // Call use case
+    const result = await this.useCase.doSomething({ id, data, user });
+    
+    // Transform and return response
+    return this.toResponse(result);
+  }
+}
+```
+
+## 3. Use Cases
+
+**Purpose:** Where business logic resides.
+
+**Responsibilities:**
+- Implement business rules and workflows
+- Coordinate between multiple infrastructure services
+- Validate business invariants
+- Throw domain-specific errors
+
+**What they should NOT do:**
+- Parse requests
+- Format responses
+- Know about specific infrastructure implementations
+
+**Example:**
+```typescript
+import { createInjectionToken, inject } from '@trackit.io/di-container';
+
+// 1. Define args type
+export type MyUseCaseArgs = {
+  id: string;
+  user: User;
+};
+
+// 2. Define interface
+export interface IMyUseCase {
+  doSomething(args: MyUseCaseArgs): Promise<MyModel>;
+}
+
+// 3. Implement the use case
+export class MyUseCase implements IMyUseCase {
+  private readonly repository = inject(tokenMyRepository);
+  private readonly logger = inject(tokenLogger);
+
+  public async doSomething(args: MyUseCaseArgs): Promise<MyModel> {
+    const { id, user } = args;
+    
+    const entity = await this.repository.get(id);
+    if (!entity) {
+      throw new NotFoundError({ id });
+    }
+    
+    // Business logic here
+    
+    return entity;
+  }
+}
+
+// 4. Export token (in separate .token.ts file)
+export const tokenMyUseCase = createInjectionToken<IMyUseCase>(
+  'MyUseCase',
+  { useClass: MyUseCase },
+);
+```
+
+## 4. Infrastructure
+
+**Purpose:** Services that interact with external services, packages, or resources.
+
+**Responsibilities:**
+- Implement port interfaces
+- Handle external service communication (databases, APIs, SDKs)
+- Map between domain models and external data formats
+- Handle infrastructure-specific errors
+
+**Naming Convention:**
+- Name implementations descriptively based on the technology used, NOT with "Impl" suffix
+- Examples: `MyServicePostgres`, `MyServiceSlackWebAPI`, `MyServiceDynamoDB`
+- Avoid: `MyServiceImpl`
+- Only use the `I` prefix for use cases.
+
+**Example:**
+```typescript
+import { MyService } from '@backend/ports';
+import { createInjectionToken, inject } from '@trackit.io/di-container';
+
+// Good: Descriptive name indicating the technology
+export class MyServicePostgres implements MyService {
+  private readonly client = inject(tokenPostgresClient);
+  private readonly logger = inject(tokenLogger);
+
+  public async doSomething(args: MyArgs): Promise<MyResult> {
+    // Implementation using PostgreSQL
+  }
+}
+
+// Token in separate .token.ts file
+export const tokenMyService = createInjectionToken<MyService>(
+  'MyService',
+  { useClass: MyServicePostgres },
+);
+```
+
+**Fake implementations:** Every infrastructure service should have a corresponding fake for testing:
+
+```typescript
+export class FakeMyService implements MyService {
+  public data: Map<string, MyResult> = new Map();
+
+  public async doSomething(args: MyArgs): Promise<MyResult> {
+    return this.data.get(args.id) ?? defaultResult;
+  }
+}
+
+export const tokenFakeMyService = createInjectionToken<FakeMyService>(
+  'FakeMyService',
+  { useClass: FakeMyService },
+);
+```
+
+## 5. Ports
+
+**Purpose:** Interfaces that define contracts for infrastructure services.
+
+**Responsibilities:**
+- Define method signatures for infrastructure operations
+- Use domain models in method signatures (not infrastructure-specific types)
+- Keep interfaces focused and cohesive
+
+**Example:**
+```typescript
+import type { MyModel, User } from '@backend/models';
+
+export interface MyRepository {
+  save(model: MyModel): Promise<void>;
+  get(id: string): Promise<MyModel | undefined>;
+  getByUser(user: User): Promise<MyModel[]>;
+}
+```
+
+## Dependency Flow
+
+```
+Handlers → Adapters → Use Cases → Infrastructure
+                           ↓
+                         Ports (interfaces)
+```
+
+- **Handlers** depend on **Adapters**
+- **Adapters** depend on **Use Cases** (via DI tokens)
+- **Use Cases** depend on **Infrastructure** (via DI tokens)
+- **Infrastructure** implements **Ports**
+- **Use Cases** reference **Ports** types, not concrete implementations
+
+## Key Principles
+
+1. **Dependency Inversion:** High-level modules (use cases) don't depend on low-level modules (infrastructure). Both depend on abstractions (ports).
+
+2. **Single Responsibility:** Each layer has a clear, focused responsibility.
+
+3. **Testability:** Use cases can be tested with fake infrastructure. Adapters can be tested with mocked use cases.
+
+4. **Domain-Centric:** The domain models and business logic are at the center, independent of frameworks and external services.

@@ -1,0 +1,68 @@
+#!/bin/bash
+
+[ -f ./scripts/.helpers/repo-norms.sh ] || exit 0
+. ./scripts/.helpers/repo-norms.sh
+
+# Skip validation for interactive scripts (uses temp file as proof)
+if [ -f "$INTERACTIVE_COMMIT_FLAG" ]; then
+  rm -f "$INTERACTIVE_COMMIT_FLAG"
+  exit 0
+fi
+
+COMMIT_MSG=$(cat "$1")
+
+# Allow release commits (from sync script)
+if echo "$COMMIT_MSG" | grep -qE '^chore\(release\): '; then
+  exit 0
+fi
+
+# Allow commits on main branch with ticket #0
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [ "$BRANCH" = "main" ] && echo "$COMMIT_MSG" | grep -qE '^(build|chore|ci|docs|feat|fix|perf|refactor|test|wip)\(0\): '; then
+  exit 0
+fi
+
+if ! echo "$COMMIT_MSG" | grep -qE "$COMMIT_PATTERN"; then
+  echo ""
+  echo "❌ Invalid commit format: $COMMIT_MSG"
+  echo "Expected: type(NUMBER): message"
+  echo "Example: feat(42): add new feature"
+  echo ""
+  exit 1
+fi
+
+TICKET=$(echo "$COMMIT_MSG" | sed -E 's/.*\(([0-9]+)\).*/\1/')
+ISSUE_NUM="$TICKET"
+
+REMOTE_URL=$(git config --get remote.origin.url)
+# Handle both SSH (git@github.com:org/repo.git) and HTTPS (https://github.com/org/repo.git)
+REPO=$(echo "$REMOTE_URL" | sed -E 's#(.*github\.com[:/])##' | sed 's/\.git$//')
+ORG=$(echo "$REPO" | cut -d'/' -f1)
+REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
+
+if [ -f "./scripts/.helpers/get-issue-type.sh" ] && command -v gh > /dev/null 2>&1; then
+  ISSUE_TYPE=$(./scripts/.helpers/get-issue-type.sh "$ORG" "$REPO_NAME" "$ISSUE_NUM" 2>/dev/null || echo "")
+
+  if [ -z "$ISSUE_TYPE" ]; then
+    echo ""
+    echo "⚠ Issue #$ISSUE_NUM has no type set"
+    echo "Consider setting type to: feature, bug, or task"
+    echo ""
+    # Only prompt if running in an interactive terminal
+    if [ -t 0 ]; then
+      printf "Continue with commit anyway? (y/n): "
+      read CONTINUE_COMMIT
+      case "$CONTINUE_COMMIT" in
+        [Yy]|[Yy][Ee][Ss]) ;;
+        *)
+          echo "Commit cancelled. Add a type to the issue first."
+          exit 1
+          ;;
+      esac
+    else
+      echo "Non-interactive mode — continuing with commit."
+    fi
+  fi
+fi
+
+exit 0

@@ -1,0 +1,556 @@
+---
+globs: *.test.ts,*.spec.ts
+alwaysApply: false
+---
+# Test Desiderata
+
+Optimize the value of your tests by choosing how to balance various valuable properties. Tests should maximize value while making intentional trade-offs between competing properties.
+
+Reference: [Test Desiderata](https://testdesiderata.com/)
+
+## Core Properties
+
+### 1. Isolated
+**Tests should return the same results regardless of the order in which they are run.**
+
+✅ **Do:**
+```typescript
+const setup = () => {
+  reset(); // Clear all state before each test
+  registerTestInfrastructure();
+  
+  return {
+    useCase: new MyUseCase(),
+    fakeRepository: inject(tokenFakeMyRepository),
+  };
+};
+
+it('should create user', async () => {
+  const { useCase, fakeRepository } = setup();
+  // Each test gets fresh dependencies
+});
+```
+
+❌ **Don't:**
+```typescript
+// Shared state between tests
+let sharedRepository: FakeRepository;
+
+beforeAll(() => {
+  sharedRepository = new FakeRepository(); // Reused across tests
+});
+
+it('test 1', async () => {
+  await sharedRepository.save(user); // Affects next test
+});
+
+it('test 2', async () => {
+  const users = await sharedRepository.findAll(); // Depends on test 1
+});
+```
+
+### 2. Composable
+**Test different dimensions of variability separately and combine the results.**
+
+✅ **Do:**
+```typescript
+// Test each dimension independently
+describe('user validation', () => {
+  it('should validate email format', () => {
+    const user = UserMother.basic().withEmail('invalid').build();
+    expect(() => validateUser(user)).toThrow();
+  });
+  
+  it('should validate age range', () => {
+    const user = UserMother.basic().withAge(-1).build();
+    expect(() => validateUser(user)).toThrow();
+  });
+});
+
+// Combine when testing integration
+describe('user creation', () => {
+  it('should create valid user', () => {
+    const user = UserMother.basic()
+      .withEmail('valid@email.com')
+      .withAge(25)
+      .build();
+    expect(() => createUser(user)).not.toThrow();
+  });
+});
+```
+
+❌ **Don't:**
+```typescript
+// Testing multiple dimensions at once
+it('should validate user completely', () => {
+  // Tests email, age, name, etc. all together
+  // If it fails, which validation failed?
+});
+```
+
+### 3. Deterministic
+**If nothing changes, the test result shouldn't change.**
+
+✅ **Do:**
+```typescript
+it('should format date consistently', () => {
+  const date = new Date('2025-01-20T10:00:00Z'); // Fixed date
+  const formatted = formatDate(date);
+  expect(formatted).toBe('2025-01-20');
+});
+
+it('should generate ID deterministically', () => {
+  const generator = new TestIDGenerator('fixed-seed');
+  expect(generator.next()).toBe('test-id-1');
+});
+```
+
+❌ **Don't:**
+```typescript
+it('should create timestamp', () => {
+  const timestamp = Date.now(); // Non-deterministic
+  expect(timestamp).toBeGreaterThan(0); // Will vary on each run
+});
+
+it('should generate random ID', () => {
+  const id = Math.random().toString(); // Non-deterministic
+  expect(id).toBeTruthy();
+});
+```
+
+### 4. Fast
+**Tests should run quickly.**
+
+✅ **Do:**
+```typescript
+// Use in-memory fakes
+const setup = () => {
+  reset();
+  registerTestInfrastructure(); // Registers fast fakes
+  
+  return {
+    useCase: new MyUseCase(),
+    fakeClockify: inject(tokenFakeClockifyService), // In-memory
+  };
+};
+
+it('should fetch projects quickly', async () => {
+  const { useCase, fakeClockify } = setup();
+  fakeClockify.projects.set('id', ProjectMother.basic().build());
+  
+  const result = await useCase.getProject({ id: 'id' }); // Instant
+  expect(result).toBeDefined();
+});
+```
+
+❌ **Don't:**
+```typescript
+// Using real external services
+it('should fetch from real Clockify API', async () => {
+  const api = new ClockifyAPI(process.env.API_KEY);
+  const result = await api.getProjects(); // Slow network call
+});
+
+// Unnecessary delays
+it('should wait', async () => {
+  await new Promise(resolve => setTimeout(resolve, 5000));
+});
+```
+
+### 5. Writable
+**Tests should be cheap to write relative to the cost of the code being tested.**
+
+✅ **Do:**
+```typescript
+// Use Mothers for quick test data creation
+it('should create allocation', async () => {
+  const { useCase } = setup();
+  
+  const args = UploadUserAllocationArgsMother.basic().build();
+  
+  await useCase.execute(args);
+  // Test written in 3 lines
+});
+
+// Reusable setup function
+const setup = () => {
+  reset();
+  registerTestInfrastructure();
+  return { useCase: new MyUseCase() };
+};
+```
+
+❌ **Don't:**
+```typescript
+// Manually constructing complex objects every time
+it('should create allocation', async () => {
+  const user = {
+    id: 'user-1',
+    email: 'test@example.com',
+    name: 'Test User',
+    clockifyId: 'clockify-1',
+    slackId: 'slack-1',
+    role: 'developer',
+    status: 'active',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    // ... 20 more fields
+  };
+  
+  const project = {
+    // ... another 15 fields
+  };
+  
+  // Lots of boilerplate for each test
+});
+```
+
+### 6. Readable
+**Tests should be comprehensible for the reader, invoking the motivation for writing this particular test.**
+
+✅ **Do:**
+```typescript
+describe('SendAllocationFormsUseCase', () => {
+  describe('when user has active assignments', () => {
+    it('should send allocation form to user', async () => {
+      const { useCase, fakeSlack } = setup();
+      
+      // Arrange: User with active assignment
+      const user = UserMother.basic().build();
+      const assignment = AssignmentMother.active()
+        .withUser(user)
+        .build();
+      
+      // Act: Send forms
+      await useCase.execute();
+      
+      // Assert: Slack message sent
+      expect(fakeSlack.sentMessages).toHaveLength(1);
+      expect(fakeSlack.sentMessages[0].userId).toBe(user.slackId);
+    });
+  });
+  
+  describe('when user has no assignments', () => {
+    it('should not send any forms', async () => {
+      const { useCase, fakeSlack } = setup();
+      // Clear motivation: testing empty state
+      
+      await useCase.execute();
+      
+      expect(fakeSlack.sentMessages).toHaveLength(0);
+    });
+  });
+});
+```
+
+❌ **Don't:**
+```typescript
+it('test1', async () => {
+  const x = setup();
+  const y = { a: 1, b: 2, c: 3 };
+  await x.do(y);
+  expect(x.z).toBe(4);
+  // What is this testing? Why?
+});
+```
+
+### 7. Behavioral
+**Tests should be sensitive to changes in the behavior of the code under test.**
+
+✅ **Do:**
+```typescript
+it('should send form to users with allocations below threshold', async () => {
+  const { useCase, fakeSlack } = setup();
+  
+  const userLowAllocation = UserMother.basic()
+    .withId('low')
+    .build();
+  const userHighAllocation = UserMother.basic()
+    .withId('high')
+    .build();
+  
+  fakeClockify.setAllocation(userLowAllocation.id, 50); // Below 80%
+  fakeClockify.setAllocation(userHighAllocation.id, 100); // Above 80%
+  
+  await useCase.execute();
+  
+  // Tests the business behavior: who gets the form
+  expect(fakeSlack.sentMessages).toContainEqual(
+    expect.objectContaining({ userId: userLowAllocation.slackId })
+  );
+  expect(fakeSlack.sentMessages).not.toContainEqual(
+    expect.objectContaining({ userId: userHighAllocation.slackId })
+  );
+});
+```
+
+❌ **Don't:**
+```typescript
+it('should call calculateAllocation', async () => {
+  const spy = vitest.spyOn(service, 'calculateAllocation');
+  await useCase.execute();
+  expect(spy).toHaveBeenCalled(); // Tests implementation, not behavior
+});
+```
+
+### 8. Structure-Insensitive
+**Tests should not change their result if the structure of the code changes.**
+
+✅ **Do:**
+```typescript
+// Test the public interface
+it('should get projects grouped by client', async () => {
+  const { useCase } = setup();
+  
+  const result = await useCase.execute({ workspaceId: 'ws-1' });
+  
+  // Assert on the output, not how it's computed
+  expect(result).toEqual({
+    'Client A': [project1, project2],
+    'Client B': [project3],
+  });
+});
+```
+
+❌ **Don't:**
+```typescript
+// Test internal structure
+it('should call private method in correct order', async () => {
+  const { useCase } = setup();
+  const spy1 = vitest.spyOn(useCase as any, '_fetchProjects');
+  const spy2 = vitest.spyOn(useCase as any, '_groupByClient');
+  
+  await useCase.execute({ workspaceId: 'ws-1' });
+  
+  // If we refactor and merge methods, test breaks
+  expect(spy1).toHaveBeenCalledBefore(spy2);
+});
+```
+
+### 9. Automated
+**Tests should run without human intervention.**
+
+✅ **Do:**
+```typescript
+// Tests run automatically in CI/CD
+// See: .github/workflows/run-tests.yml
+
+// Use assertions, not console.log
+it('should validate input', () => {
+  const result = validate(input);
+  expect(result.isValid).toBe(true);
+});
+```
+
+❌ **Don't:**
+```typescript
+it('should show result', () => {
+  const result = calculate(5, 10);
+  console.log('Check if result is 15:', result);
+  // Requires human to check console
+});
+
+it('manual test', () => {
+  // TODO: manually verify in browser
+  expect(true).toBe(true);
+});
+```
+
+### 10. Specific
+**If a test fails, the cause of the failure should be obvious.**
+
+✅ **Do:**
+```typescript
+describe('user email validation', () => {
+  it('should reject email without @', () => {
+    const user = UserMother.basic()
+      .withEmail('invalidemail.com')
+      .build();
+    
+    expect(() => validateUser(user))
+      .toThrow('Email must contain @');
+  });
+  
+  it('should reject email without domain', () => {
+    const user = UserMother.basic()
+      .withEmail('user@')
+      .build();
+    
+    expect(() => validateUser(user))
+      .toThrow('Email must have domain');
+  });
+});
+```
+
+❌ **Don't:**
+```typescript
+it('should validate user', () => {
+  // Tests many things at once
+  const user = UserMother.basic()
+    .withEmail('invalid')
+    .withAge(-1)
+    .withName('')
+    .build();
+  
+  expect(() => validateUser(user)).toThrow();
+  // Which validation failed?
+});
+```
+
+### 11. Predictive
+**If the tests all pass, then the code under test should be suitable for production.**
+
+✅ **Do:**
+```typescript
+// Test real-world scenarios
+describe('allocation form workflow', () => {
+  it('should handle complete user journey', async () => {
+    const { useCase, fakeClockify, fakeSlack } = setup();
+    
+    // Setup production-like data
+    const users = [
+      UserMother.active().withAllocation(50).build(),
+      UserMother.active().withAllocation(90).build(),
+    ];
+    
+    await useCase.sendForms();
+    await useCase.processResponses();
+    await useCase.syncToClockify();
+    
+    // Verify end-to-end behavior
+    expect(fakeClockify.allocations).toHaveLength(2);
+  });
+  
+  it('should handle API failures gracefully', async () => {
+    const { useCase, fakeSlack } = setup();
+    fakeSlack.simulateError(new Error('Network timeout'));
+    
+    await expect(useCase.execute()).rejects.toThrow('Network timeout');
+  });
+});
+```
+
+❌ **Don't:**
+```typescript
+// Only test happy path
+it('should work', async () => {
+  const result = await useCase.execute();
+  expect(result).toBeDefined();
+  // What about errors? Edge cases? Real scenarios?
+});
+```
+
+### 12. Inspiring
+**Passing the tests should inspire confidence.**
+
+✅ **Do:**
+```typescript
+// Comprehensive test coverage
+describe('SendAllocationFormsUseCase', () => {
+  describe('happy path', () => {
+    it('should send forms to eligible users', async () => { /* ... */ });
+  });
+  
+  describe('error handling', () => {
+    it('should retry on temporary failure', async () => { /* ... */ });
+    it('should log permanent failures', async () => { /* ... */ });
+  });
+  
+  describe('edge cases', () => {
+    it('should handle users with no Slack ID', async () => { /* ... */ });
+    it('should handle empty workspace', async () => { /* ... */ });
+  });
+  
+  describe('validation', () => {
+    it('should reject invalid workspace ID', async () => { /* ... */ });
+  });
+});
+
+// When all pass, you can deploy with confidence
+```
+
+## Balancing Trade-offs
+
+### Fast vs. Predictive
+
+**Trade-off:** More realistic tests (predictive) often run slower.
+
+**Solution:** Use test pyramids. Fast unit tests with fakes for most cases, slower integration tests for critical paths.
+
+```typescript
+// Fast: Unit test with fakes (most tests)
+it('should process allocation', async () => {
+  const { useCase, fakeClockify } = setup();
+  // Runs in milliseconds
+});
+
+// Predictive: Integration test (fewer tests)
+it('should integrate with real Clockify SDK', async () => {
+  // Uses real SDK in test mode
+  // Runs in seconds, but more realistic
+});
+```
+
+### Readable vs. Writable
+
+**Trade-off:** Very readable tests can be verbose to write.
+
+**Solution:** Use Mothers and setup functions to make tests both readable and writable.
+
+```typescript
+// Readable AND writable
+it('should send form to user with low allocation', async () => {
+  const { useCase } = setup(); // Easy to write
+  
+  const user = UserMother.active() // Easy to write
+    .withLowAllocation() // Readable intent
+    .build();
+  
+  await useCase.execute();
+  
+  expect(/* ... */); // Clear assertion
+});
+```
+
+### Isolated vs. Fast
+
+**Trade-off:** Resetting state for isolation can slow tests.
+
+**Solution:** Use lightweight in-memory fakes that reset quickly.
+
+```typescript
+const setup = () => {
+  reset(); // Fast - just clears Map/Set in memory
+  registerTestInfrastructure(); // Registers lightweight fakes
+  
+  return {
+    useCase: new MyUseCase(),
+    fakes: {
+      clockify: inject(tokenFakeClockifyService),
+      slack: inject(tokenFakeSlackService),
+    },
+  };
+};
+```
+
+## Checklist for High-Value Tests
+
+When writing tests, aim to maximize:
+
+- [ ] **Isolated** - Each test resets state with `reset()`
+- [ ] **Composable** - Test one dimension at a time
+- [ ] **Deterministic** - Use fixed dates, IDs, seeds
+- [ ] **Fast** - Use in-memory fakes, no real I/O
+- [ ] **Writable** - Use Mothers, reusable setup
+- [ ] **Readable** - Clear describe/it structure, meaningful names
+- [ ] **Behavioral** - Test outputs/side-effects, not implementation
+- [ ] **Structure-Insensitive** - Test public interface only
+- [ ] **Automated** - No manual steps, runs in CI
+- [ ] **Specific** - One assertion dimension per test
+- [ ] **Predictive** - Cover happy path, errors, edge cases
+- [ ] **Inspiring** - Comprehensive coverage of critical paths
+
+## References
+
+- [Test Desiderata](https://testdesiderata.com/) - Original framework
+- Kent Beck & Kelly Sutton - Videos on each property
