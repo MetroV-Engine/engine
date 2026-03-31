@@ -1,0 +1,36 @@
+name: Build with Ninja
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Cache build directory
+        uses: actions/cache@v4
+        with:
+          path: cmake-build-debug
+          key: ${{ runner.os }}-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Configure CMake
+        run: cmake -B cmake-build-debug -G Ninja
+
+      - name: Build with Ninja
+        run: ninja -C cmake-build-debug
+
