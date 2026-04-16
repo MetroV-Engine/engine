@@ -1,0 +1,29 @@
+name: Enforce dev→main PR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  enforce-dev-branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check PR source branch
+        run: |
+          echo "🔍 Checking PR source branch..."
+          echo "PR from branch: ${{ github.head_ref }}"
+          echo "PR to branch: ${{ github.base_ref }}"
+          
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo ""
+            echo "❌ Only PRs from 'dev' branch are allowed to merge into 'main'"
+            echo "   Current PR source: ${{ github.head_ref }}"
+            echo "   Expected source: dev"
+            echo ""
+            exit 1
+          fi
+          
+          echo "✅ PR source is 'dev' - check passed!"
+
