@@ -5,8 +5,8 @@
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-# Allow commits on main/master (needed for release/sync workflows)
-[ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ] && exit 0
+# Allow commits on main/master/dev (needed for release/sync workflows)
+[ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ] || [ "$BRANCH" = "dev" ] && exit 0
 
 if ! echo "$BRANCH" | grep -qE "$BRANCH_PATTERN"; then
   echo ""

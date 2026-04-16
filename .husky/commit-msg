@@ -18,7 +18,7 @@ fi
 
 # Allow commits on main branch with ticket #0
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-if [ "$BRANCH" = "main" ] && echo "$COMMIT_MSG" | grep -qE '^(build|chore|ci|docs|feat|fix|perf|refactor|test|wip)\(0\): '; then
+if ([ "$BRANCH" = "main" ] || [ "$BRANCH" = "dev" ]) && echo "$COMMIT_MSG" | grep -qE '^(build|chore|ci|docs|feat|fix|perf|refactor|test|wip)\(0\): '; then
   exit 0
 fi
 
