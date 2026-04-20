@@ -28,13 +28,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build zip unzip
 
-      # Avoid Chocolatey (feed 503 / cmake vs cmake.install version skew on runners).
-      - name: Install CMake and Ninja (Windows)
+      - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        uses: lukka/get-cmake@v3
-        with:
-          cmakeVersion: 3.31.6
-          ninjaVersion: 1.12.1
+        run: choco install cmake ninja -y
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
