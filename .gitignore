@@ -4,6 +4,8 @@ node_modules/
 # Build outputs
 .turbo/
 dist/
+cmake-build-*/
+vcpkg_installed/
 
 # Setup flag
 .setup-done
@@ -20,3 +22,5 @@ dist/
 # .changeset/*.md files should be committed with PRs
 
 .idea
+
+cmake-build-debug/
