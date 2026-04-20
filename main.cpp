@@ -16,4 +16,5 @@
 int main()
 {
     std::cout << "Hello, World!" << std::endl;
+    std::cout << "This is a C++ project." << std::endl;
 }
