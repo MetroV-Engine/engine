@@ -9,10 +9,18 @@ if(EXISTS "${_ENGINE_VCPKG_TOOLCHAIN}")
   if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(_engine_use_repo_vcpkg TRUE)
   else()
-    file(REAL_PATH "${CMAKE_TOOLCHAIN_FILE}" _engine_resolved_toolchain
-         BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-    if(_engine_resolved_toolchain STREQUAL "${_ENGINE_VCPKG_TOOLCHAIN}")
-      set(_engine_use_repo_vcpkg TRUE)
+    if(CMAKE_TOOLCHAIN_FILE STREQUAL "")
+      message(FATAL_ERROR
+              "CMAKE_TOOLCHAIN_FILE is defined but empty. Please provide a valid toolchain file path.")
+    elseif(EXISTS "${CMAKE_TOOLCHAIN_FILE}")
+      file(REAL_PATH "${CMAKE_TOOLCHAIN_FILE}" _engine_resolved_toolchain
+           BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+      if(_engine_resolved_toolchain STREQUAL "${_ENGINE_VCPKG_TOOLCHAIN}")
+        set(_engine_use_repo_vcpkg TRUE)
+      endif()
+    else()
+      message(FATAL_ERROR
+              "CMAKE_TOOLCHAIN_FILE is defined but does not exist: ${CMAKE_TOOLCHAIN_FILE}")
     endif()
   endif()
 
