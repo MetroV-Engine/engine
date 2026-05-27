@@ -1,0 +1,78 @@
+{
+  "entities": [
+    {
+      "components": [
+        {
+          "data": {
+            "color": {
+              "a": 255,
+              "b": 255,
+              "g": 255,
+              "r": 255
+            },
+            "height": 100.0,
+            "width": 100.0
+          },
+          "type": "Bounds"
+        },
+        {
+          "data": {
+            "canCollide": true
+          },
+          "type": "Collider"
+        },
+        {
+          "data": {
+            "canMove": true,
+            "layout": {
+              "DOWN": 22,
+              "LEFT": 4,
+              "RIGHT": 7,
+              "UP": 26
+            }
+          },
+          "type": "Controlable"
+        },
+        {
+          "data": {
+            "x": 100.0,
+            "y": 100.0
+          },
+          "type": "Position"
+        },
+        {
+          "data": {
+            "drawable": true
+          },
+          "type": "Drawable"
+        },
+        {
+          "data": {
+            "locked": true
+          },
+          "type": "ScreenLocked"
+        },
+        {
+          "data": {
+            "speed": 500.0,
+            "speedX": 500.0,
+            "speedY": 500.0,
+            "vx": 0.0,
+            "vy": 0.0
+          },
+          "type": "Velocity"
+        }
+      ],
+      "name": "Entity"
+    },
+    {
+      "components": [],
+      "name": "Entity"
+    }
+  ],
+  "screen": {
+    "height": 1080.0,
+    "width": 1920.0
+  },
+  "total_entities": 2
+}

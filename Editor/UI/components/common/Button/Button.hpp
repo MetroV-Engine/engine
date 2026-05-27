@@ -1,5 +1,7 @@
 /*
-    Filename: main.cpp
+    Filename: Button.hpp
+    Description: Reusable button primitive with semantic variants. Style is
+                 pulled from ThemeProvider so visuals stay consistent across panels.
 
     ███╗   ███╗███████╗████████╗██████╗  ██████╗ ██╗   ██╗
     ████╗ ████║██╔════╝╚══██╔══╝██╔══██╗██╔═══██╗██║   ██║
@@ -9,22 +11,22 @@
     ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝   ╚═══╝
 */
 
-#include <iostream>
+#ifndef PROTO_UI_COMMON_BUTTON_HPP
+#define PROTO_UI_COMMON_BUTTON_HPP
 
-#include "UI/App.hpp"
-#include "GameStructure/Components/ComponentsInit.hpp"
-#include "Editor/Save/SaveManager/SaveManager.hpp"
+#include <string>
+#include <imgui.h>
+#include "Types.hpp"
 
-int main() {
-    try {
-        ECS::Component::initializeComponents();
-        Editor::SaveManager &saveManager = Editor::SaveManager::getInstance();
-        saveManager.setSaveFile(std::string(PROJECT_ROOT_DIR) + "/scene.json");
+namespace Editor::UI::Components {
 
-        Editor::UI::App::getInstance().run();
-    } catch (const std::exception &e) {
-        std::cerr << "An error occurred: " << e.what() << std::endl;
-        return 1;
-    }
-    return 0;
+    class Button {
+    public:
+        // Returns true when clicked, like ImGui::Button.
+        static bool render(const std::string &label,
+                           const ButtonProps &props = {});
+    };
+
 }
+
+#endif
