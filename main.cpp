@@ -1,20 +1,30 @@
 /*
-    Created on: 30/03/2026
     Filename: main.cpp
-    Description: ${DESCRIPTION}
 
     ███╗   ███╗███████╗████████╗██████╗  ██████╗ ██╗   ██╗
     ████╗ ████║██╔════╝╚══██╔══╝██╔══██╗██╔═══██╗██║   ██║
     ██╔████╔██║█████╗     ██║   ██████╔╝██║   ██║██║   ██║
     ██║╚██╔╝██║██╔══╝     ██║   ██╔══██╗██║   ██║╚██╗ ██╔╝
-    ██║ ╚═╝ ██║███████╗   ██║   ██║  ██║╚██████╔╝ ╚████╔╝
+    ██║ ╚═╝ ██║███████╗   ██║   ██║  ██║╚██████╔╝ ╚════╝
     ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝   ╚═══╝
 */
 
 #include <iostream>
 
-int main()
-{
-    std::cout << "Hello, World!" << std::endl;
-    std::cout << "This is a C++ project." << std::endl;
+#include "UI/App.hpp"
+#include "GameStructure/Components/ComponentsInit.hpp"
+#include "Editor/Save/SaveManager/SaveManager.hpp"
+
+int main() {
+    try {
+        ECS::Component::initializeComponents();
+        Editor::SaveManager &saveManager = Editor::SaveManager::getInstance();
+        saveManager.setSaveFile(std::string(PROJECT_ROOT_DIR) + "/scene.json");
+
+        Editor::UI::App::getInstance().run();
+    } catch (const std::exception &e) {
+        std::cerr << "An error occurred: " << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
 }

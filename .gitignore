@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 .turbo/
 dist/
+build/
 
 # Setup flag
 .setup-done
@@ -20,3 +21,9 @@ dist/
 # .changeset/*.md files should be committed with PRs
 
 .idea
+
+# ImGui runtime config
+imgui.ini
+
+# Mono crash dumps
+mono_crash.*.json
