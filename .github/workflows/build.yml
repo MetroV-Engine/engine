@@ -2,11 +2,9 @@ name: Build with Ninja
 
 on:
   push:
-    branches:
-      - dev
+    branches: [dev]
   pull_request:
-    branches:
-      - dev
+    branches: [dev]
 
 jobs:
   build:
@@ -18,31 +16,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Only vcpkg is required for CMake; the `scripts` submodule may be private or absent on CI.
       - name: Init vcpkg submodule
         run: git submodule update --init --depth 1 vcpkg
 
-      # Same CMake/Ninja on every OS (see https://github.com/lukka/get-cmake/releases).
       - name: Install CMake and Ninja
         uses: lukka/get-cmake@v4.3.1
         with:
           cmakeVersion: 3.31.6
           ninjaVersion: 1.12.1
 
-      # vcpkg bootstrap scripts require zip/unzip on Debian-based images.
       - name: Install vcpkg bootstrap deps (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y zip unzip
 
-      - name: Cache build directory
+      - name: Cache vcpkg installed packages
         uses: actions/cache@v4
         with:
-          path: cmake-build-debug
-          key: ${{ runner.os }}-build-${{ github.sha }}
+          path: vcpkg/installed
+          key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            ${{ runner.os }}-build-
+            ${{ runner.os }}-vcpkg-
 
       - name: Configure CMake
         run: cmake -B cmake-build-debug -G Ninja
