@@ -1,0 +1,1 @@
+This folder contains the ECS library used by the engine and the game created with this engine.
