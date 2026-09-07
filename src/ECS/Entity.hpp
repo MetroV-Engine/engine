@@ -2,36 +2,56 @@
 
 #include <cstddef>
 #include <compare>
-#include <type_traits>
-#include <string>
 
 namespace ECS {
+    /**
+     * @brief Lightweight identity used to refer to an entity in the ECS.
+     *
+    * Entity deliberately stores only a numeric identity.
+     * Creation, destruction and validity checks belong to EntityManager. The
+     * identity is therefore cheap to copy and can be used as a key by sparse
+     * component storage.
+     */
     class Entity {
         public:
-            // construction must be explicit (no implicit conversion from size_t)
+            /**
+             * @brief Creates an entity handle for an existing numeric identity.
+             * @param id Numeric identity assigned by the entity manager.
+             */
             explicit Entity(std::size_t id) noexcept : _id(id) {}
 
-            // optionally allow default construction (identity 0). Remove if you want to force explicit init.
+            /**
+             * @brief Creates the default handle with identity zero.
+             *
+             * This constructor is retained for compatibility with the current
+             * engine API. A default-constructed handle is not proof that an
+             * entity is alive; use EntityManager::isAlive() for that check.
+             */
             Entity() noexcept = default;
 
-            // implicitly convertible to size_t
+            /**
+             * @brief Converts the handle to its numeric identity.
+             * @return The identity stored by this handle.
+             */
             operator std::size_t() const noexcept { return _id; }
 
-            // explicit accessor
+            /**
+             * @brief Reads the numeric identity without conversion syntax.
+             * @return The identity stored by this handle.
+             */
             std::size_t value() const noexcept { return _id; }
 
-            // Name is added to be able to display the entity in the UI only
-            void setName(const std::string &name) { _name = name; };
-            [[nodiscard]] const std::string& getName() const { return _name; }
-
-            // Comparisons use the identity only; the name is display metadata.
+            /**
+             * @brief Compares entity identities using three-way comparison.
+             * @param other Handle whose identity is compared with this one.
+             * @return Ordering based only on the numeric identity.
+             */
             std::strong_ordering operator<=>(const Entity& other) const noexcept {
                 return _id <=> other._id;
             }
 
         private:
             std::size_t _id{0};
-            std::string _name="";
     };
 }
      

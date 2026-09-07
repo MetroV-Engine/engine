@@ -49,5 +49,11 @@ endif()
 project(engine)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory(src/ECS)
+
 add_executable(engine
-        main.cpp)
+  main.cpp)
+
+target_link_libraries(engine PRIVATE engine_ecs)

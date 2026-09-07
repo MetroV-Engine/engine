@@ -25,3 +25,4 @@ vcpkg_installed/
 
 cmake-build-debug/
 a.out
+build
