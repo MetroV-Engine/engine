@@ -1,0 +1,6 @@
+#ifndef PROTO_UI_TOOLBAR_PLAYBUTTON_INDEX_HPP
+#define PROTO_UI_TOOLBAR_PLAYBUTTON_INDEX_HPP
+
+#include "PlayButton.hpp"
+
+#endif

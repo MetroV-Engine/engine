@@ -1,6 +1,9 @@
 [submodule "scripts"]
 	path = scripts
 	url = git@github.com:MetroV-Engine/scripts.git
-[submodule "vcpkg"]
-	path = vcpkg
-	url = https://github.com/microsoft/vcpkg
+[submodule "External/imgui"]
+	path = External/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "External/bgfx.cmake"]
+	path = External/bgfx.cmake
+	url = https://github.com/bkaradzic/bgfx.cmake.git

@@ -4,8 +4,7 @@ node_modules/
 # Build outputs
 .turbo/
 dist/
-cmake-build-*/
-vcpkg_installed/
+build/
 
 # Setup flag
 .setup-done
@@ -23,4 +22,8 @@ vcpkg_installed/
 
 .idea
 
-cmake-build-debug/
+# ImGui runtime config
+imgui.ini
+
+# Mono crash dumps
+mono_crash.*.json
