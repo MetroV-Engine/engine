@@ -53,7 +53,7 @@ namespace ECS {
              * This compatibility helper does not make an identity live.
              */
             [[nodiscard]] Entity entityFromIndex(std::size_t idx) const noexcept {
-                return Entity(idx);
+                return _entities.entityFromIndex(idx);
             }
 
             /**
@@ -116,12 +116,14 @@ namespace ECS {
              */
             template<typename Component>
             Component& getComponent(Entity entity) {
+                ensureEntityAlive(entity);
                 return getComponents<Component>().get(entity.value());
             }
 
             /** @copydoc getComponent(Entity) */
             template<typename Component>
             const Component& getComponent(Entity entity) const {
+                ensureEntityAlive(entity);
                 return getComponents<Component>().get(entity.value());
             }
 
@@ -132,6 +134,9 @@ namespace ECS {
              */
             template<typename Component>
             [[nodiscard]] bool hasComponent(Entity entity) const noexcept {
+                if (!_entities.isAlive(entity)) {
+                    return false;
+                }
                 const ComponentId id = componentId<Component>();
                 if (id >= _pools.size() || !_pools[id]) {
                     return false;
@@ -146,6 +151,7 @@ namespace ECS {
              */
             template<typename Component>
             std::decay_t<Component>& addComponent(Entity entity, Component&& component) {
+                ensureEntityAlive(entity);
                 using StoredComponent = std::decay_t<Component>;
                 auto& pool = registerComponent<StoredComponent>();
                 return pool.insertAt(entity.value(), std::forward<Component>(component));
@@ -157,6 +163,7 @@ namespace ECS {
              */
             template<typename Component, typename... Params>
             Component& emplaceComponent(Entity entity, Params&&... params) {
+                ensureEntityAlive(entity);
                 return registerComponent<Component>().emplaceAt(
                     entity.value(), std::forward<Params>(params)...);
             }
@@ -166,7 +173,8 @@ namespace ECS {
              * @param entity Entity whose component should be removed.
              */
             template<typename Component>
-            void removeComponent(Entity entity) noexcept {
+            void removeComponent(Entity entity) {
+                ensureEntityAlive(entity);
                 auto* pool = getIf<Component>();
                 if (pool) {
                     pool->erase(entity.value());
@@ -188,13 +196,13 @@ namespace ECS {
             /** @brief Creates a query over entities with all requested components. */
             template<typename... Components>
             View<Components...> view() {
-                return View<Components...>(getComponents<Components>()...);
+                return View<Components...>(_entities, getComponents<Components>()...);
             }
 
             /** @brief Creates a read-only query over entities with all requested components. */
             template<typename... Components>
             ReadOnlyView<Components...> view() const {
-                return ReadOnlyView<Components...>(getComponents<Components>()...);
+                return ReadOnlyView<Components...>(_entities, getComponents<Components>()...);
             }
 
             /**
@@ -234,11 +242,20 @@ namespace ECS {
 
             /** @brief Returns an entity's display name, or an empty string. */
             [[nodiscard]] std::string getEntityName(Entity entity) const {
+                if (!_entities.isAlive(entity)) {
+                    return {};
+                }
                 const auto it = _entityNames.find(entity.value());
                 return it == _entityNames.end() ? std::string{} : it->second;
             }
 
         private:
+            void ensureEntityAlive(Entity entity) const {
+                if (!_entities.isAlive(entity)) {
+                    throw std::invalid_argument("ECS::Registry: entity handle is not alive");
+                }
+            }
+
             void ensurePoolSlot(ComponentId id) {
                 if (id >= _pools.size()) {
                     _pools.resize(static_cast<std::size_t>(id) + 1);

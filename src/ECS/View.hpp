@@ -7,6 +7,7 @@
 
 #include "ComponentStorage.hpp"
 #include "Entity.hpp"
+#include "EntityManager.hpp"
 #include "Zipper.hpp"
 
 namespace ECS {
@@ -22,8 +23,11 @@ namespace ECS {
             public:
                 ViewIterator() = delete;
 
-                explicit ViewIterator(ZipperIterator zipperIterator)
-                    : _iterator(std::move(zipperIterator)) {}
+                                explicit ViewIterator(
+                                        ZipperIterator zipperIterator,
+                                        const EntityManager& entityManager)
+                                        : _iterator(std::move(zipperIterator)),
+                                            _entityManager(entityManager) {}
 
                 ViewIterator& operator++() {
                     ++_iterator;
@@ -42,15 +46,17 @@ namespace ECS {
 
             private:
                 template<std::size_t... Indices>
-                static ValueType makeValue(
+                ValueType makeValue(
                     const auto& values,
-                    std::index_sequence<Indices...>) {
+                    std::index_sequence<Indices...>) const {
                     return ValueType(
-                        Entity(std::get<ComponentCount>(values)),
+                        _entityManager.entityFromIndex(
+                            std::get<ComponentCount>(values)),
                         std::get<Indices>(values)...);
                 }
 
                 ZipperIterator _iterator;
+                const EntityManager& _entityManager;
         };
 
         /**
@@ -93,8 +99,9 @@ namespace ECS {
                  * @brief Creates a view over the supplied component storages.
                  * @param storages Storages queried for a common entity set.
                  */
-                explicit ViewImpl(StorageReference<Components>... storages)
-                    : _storages(storages...) {}
+                explicit ViewImpl(const EntityManager& entityManager,
+                                  StorageReference<Components>... storages)
+                    : _entityManager(entityManager), _storages(storages...) {}
 
                 /** @brief Returns an iterator to the first matching entity. */
                 iterator begin() {
@@ -113,11 +120,12 @@ namespace ECS {
             private:
                 template<typename Factory>
                 iterator makeIterator(Factory&& factory) {
-                    return iterator(std::apply(
-                        std::forward<Factory>(factory),
-                        _storages));
+                    return iterator(
+                        std::apply(std::forward<Factory>(factory), _storages),
+                        _entityManager);
                 }
 
+                const EntityManager& _entityManager;
                 StorageTuple _storages;
         };
     }

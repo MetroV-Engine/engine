@@ -39,9 +39,9 @@ entities that contain the components they need.
 
 See [Entity.hpp](Entity.hpp).
 
-`Entity` is a lightweight handle containing only a numeric identity. It can be
-copied cheaply and passed to component operations. Display names are not stored
-in the handle; they are owned by `Registry`.
+`Entity` is a lightweight handle containing an index and a generation. It can
+be copied cheaply and passed to component operations. Display names are not
+stored in the handle; they are owned by `Registry`.
 
 ```cpp
 ECS::Entity player = world.spawnEntity("Player");
@@ -52,12 +52,13 @@ The entity handle does not create or destroy entities. That responsibility
 belongs to `EntityManager` and `Registry`.
 
 ```text
-Entity handle -> numeric ID
-               -> component pool lookup
+Entity handle -> index + generation
+               -> component pool lookup by index
 ```
 
-The current handle uses an ID only. Generation-based stale-handle protection is
-not implemented yet, so a handle must not be used after its entity is destroyed.
+An entity is valid only while its index and generation match the state held by
+`EntityManager`. When an index is recycled, its generation is incremented, so
+old handles are rejected instead of accessing the new entity.
 
 ## EntityManager
 
