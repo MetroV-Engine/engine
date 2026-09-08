@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <memory>
 
-#include "SparseSet.hpp"
+#include "ComponentStorage.hpp"
 
 namespace ECS {
     /**
@@ -25,17 +25,17 @@ namespace ECS {
     };
 
     /**
-     * @brief Type-erased adapter around a typed SparseSet.
+    * @brief Type-erased adapter around a typed component storage.
      * @tparam Component Component type stored by this pool.
      */
     template<typename Component>
     class ComponentPool final : public IComponentPool {
         public:
             /** @brief Returns the concrete component storage. */
-            [[nodiscard]] SparseSet<Component>& storage() noexcept { return _storage; }
+            [[nodiscard]] ComponentStorage<Component>& storage() noexcept { return _storage; }
 
             /** @copydoc storage() */
-            [[nodiscard]] const SparseSet<Component>& storage() const noexcept {
+            [[nodiscard]] const ComponentStorage<Component>& storage() const noexcept {
                 return _storage;
             }
 
@@ -50,6 +50,6 @@ namespace ECS {
             }
 
         private:
-            SparseSet<Component> _storage;
+            ComponentStorage<Component> _storage;
     };
 }

@@ -8,16 +8,15 @@
 
 namespace ECS {
     /**
-     * @brief Dense component storage with sparse entity-to-component lookup.
-     * @tparam Component Component value stored by this pool.
+     * @brief Component storage with dense iteration and entity lookup.
+     * @tparam Component Component value stored by this storage.
      * @tparam Allocator Allocator used by the dense component vector.
      *
-     * Components are kept densely in `_packed`, which makes iteration cache
-     * friendly. `_sparse` maps an entity identity to its packed index. Erasing
-     * uses swap-and-pop, so component order is not stable after removal.
+     * The representation is private so it can be replaced later without
+     * changing the registry or view APIs.
      */
     template<typename Component, typename Allocator = std::allocator<Component>>
-    class SparseSet {
+    class ComponentStorage {
         public:
             using value_type = Component;
             using reference = value_type&;
@@ -26,13 +25,17 @@ namespace ECS {
             using const_reference_type = const_reference;
             using size_type = std::size_t;
 
-            /** @brief Sentinel used for entities without a component. */
+            /** @brief Sentinel used by the entity-to-packed-index lookup. */
             static constexpr size_type npos = static_cast<size_type>(-1);
 
-            /** @brief Returns the number of stored components. */
+            /** @brief Returns the number of components currently stored. */
             [[nodiscard]] size_type size() const noexcept { return _packed.size(); }
 
-            /** @brief Reserves dense and sparse storage for a known workload. */
+            /**
+             * @brief Reserves capacity for components and optional entity IDs.
+             * @param componentCapacity Expected number of stored components.
+             * @param entityCapacity Expected highest entity lookup capacity.
+             */
             void reserve(size_type componentCapacity, size_type entityCapacity = 0) {
                 _packed.reserve(componentCapacity);
                 _packedEntities.reserve(componentCapacity);
@@ -41,26 +44,21 @@ namespace ECS {
                 }
             }
 
-            /** @brief Provides dense iteration over all stored components. */
+            /** @brief Begins dense iteration over component values. */
             auto begin() noexcept { return _packed.begin(); }
+            /** @brief Ends dense iteration over component values. */
             auto end() noexcept { return _packed.end(); }
+            /** @copydoc begin() */
             auto begin() const noexcept { return _packed.begin(); }
+            /** @copydoc end() */
             auto end() const noexcept { return _packed.end(); }
 
-            /**
-             * @brief Checks whether an entity owns a component in this pool.
-             * @param entity_id Numeric entity identity.
-             */
-            [[nodiscard]] bool has(size_type entity_id) const noexcept {
-                return entity_id < _sparse.size() && _sparse[entity_id] != npos;
+            /** @brief Checks whether an entity has a component in this storage. */
+            [[nodiscard]] bool has(size_type entityId) const noexcept {
+                return entityId < _sparse.size() && _sparse[entityId] != npos;
             }
 
-            /**
-             * @brief Inserts or replaces a component for an entity.
-             * @param entity_id Numeric entity identity.
-             * @param component Value to copy into the pool.
-             * @return Reference to the inserted or replaced value.
-             */
+            /** @brief Inserts or replaces a component by copy. */
             reference insertAt(size_type entityId, const Component& component) {
                 ensureSparseSize(entityId);
                 if (has(entityId)) {
@@ -70,12 +68,7 @@ namespace ECS {
                 return _packed.back();
             }
 
-            /**
-             * @brief Inserts or replaces a component for an entity by move.
-             * @param entity_id Numeric entity identity.
-             * @param component Value moved into the pool.
-             * @return Reference to the inserted or replaced value.
-             */
+            /** @brief Inserts or replaces a component by move. */
             reference insertAt(size_type entityId, Component&& component) {
                 ensureSparseSize(entityId);
                 if (has(entityId)) {
@@ -85,12 +78,7 @@ namespace ECS {
                 return _packed.back();
             }
 
-            /**
-             * @brief Constructs or replaces a component in place.
-             * @param entity_id Numeric entity identity.
-             * @param params Arguments forwarded to Component's constructor.
-             * @return Reference to the inserted or replaced value.
-             */
+            /** @brief Constructs or replaces a component in place. */
             template<typename... Params>
             reference emplaceAt(size_type entityId, Params&&... params) {
                 ensureSparseSize(entityId);
@@ -105,15 +93,12 @@ namespace ECS {
             }
 
             /**
-             * @brief Removes an entity's component using swap-and-pop.
-             * @param entity_id Numeric entity identity.
+             * @brief Removes a component using swap-and-pop.
              *
-             * Removing a middle element moves the final packed component into
-             * its slot. Iteration order and references to moved values are not
-             * stable across this operation. Calling erase for a missing entity
-             * is harmless.
+             * Packed order is not stable after removal. Structural changes
+             * should not be made while a view is iterating this storage.
              */
-            void erase(size_type entityId) {
+            void erase(size_type entityId) noexcept {
                 if (!has(entityId)) {
                     return;
                 }
@@ -132,12 +117,12 @@ namespace ECS {
             }
 
             /**
-             * @brief Accesses a component by entity identity.
-             * @throws std::out_of_range if the entity has no component.
+             * @brief Returns a mutable component by entity ID.
+             * @throws std::out_of_range when the entity has no component.
              */
             reference get(size_type entityId) {
                 if (!has(entityId)) {
-                    throw std::out_of_range("ECS::SparseSet::get: component not found");
+                    throw std::out_of_range("ECS::ComponentStorage::get: component not found");
                 }
                 return _packed[_sparse[entityId]];
             }
@@ -145,19 +130,19 @@ namespace ECS {
             /** @copydoc get(size_type) */
             const_reference get(size_type entityId) const {
                 if (!has(entityId)) {
-                    throw std::out_of_range("ECS::SparseSet::get: component not found");
+                    throw std::out_of_range("ECS::ComponentStorage::get: component not found");
                 }
                 return _packed[_sparse[entityId]];
             }
 
-            /** @brief Returns the entity identity stored at a packed position. */
+            /** @brief Returns the entity ID at a dense component position. */
             [[nodiscard]] size_type entityAt(size_type packedIndex) const {
                 return _packedEntities.at(packedIndex);
             }
 
-            /** @brief Provides unchecked dense component access for query code. */
+            /** @brief Returns unchecked mutable access by dense position. */
             reference operator[](size_type packedIndex) noexcept { return _packed[packedIndex]; }
-            /** @copydoc operator[](size_type) */
+            /** @brief Returns unchecked read-only access by dense position. */
             const_reference operator[](size_type packedIndex) const noexcept {
                 return _packed[packedIndex];
             }
@@ -177,12 +162,11 @@ namespace ECS {
             }
 
             std::vector<Component, Allocator> _packed;
-                std::vector<size_type> _packedEntities;
+            std::vector<size_type> _packedEntities;
             std::vector<size_type> _sparse;
     };
 
     template<typename Component, typename Allocator>
-    constexpr typename SparseSet<Component, Allocator>::size_type
-        SparseSet<Component, Allocator>::npos;
-
+    constexpr typename ComponentStorage<Component, Allocator>::size_type
+        ComponentStorage<Component, Allocator>::npos;
 }

@@ -30,10 +30,10 @@ entities that contain the components they need.
 | [Entity.hpp](Entity.hpp) | Lightweight entity handle and identity access. |
 | [EntityManager.hpp](EntityManager.hpp) | Entity creation, destruction, validation, and ID reuse. |
 | [ComponentId.hpp](ComponentId.hpp) | Lazy runtime ID assignment for component types. |
-| [SparseSet.hpp](SparseSet.hpp) | Dense storage and fast entity-to-component lookup. |
+| [ComponentStorage.hpp](ComponentStorage.hpp) | Component storage and fast entity-to-component lookup. |
 | [ComponentPool.hpp](ComponentPool.hpp) | Type-erased access to different component pools. |
 | [Registry.hpp](Registry.hpp) | Main ECS API for entities, components, and systems. |
-| [Zipper.hpp](Zipper.hpp) | Iteration over entities shared by several component pools. |
+| [View.hpp](View.hpp) | Public queries over entities sharing component types. |
 
 ## Entity
 
@@ -106,11 +106,11 @@ Position -> ComponentId 0
 These IDs are runtime implementation details. They must not be stored in scene
 files, save files, or network data.
 
-## SparseSet
+## ComponentStorage
 
-See [SparseSet.hpp](SparseSet.hpp).
+See [ComponentStorage.hpp](ComponentStorage.hpp).
 
-`SparseSet<Component>` stores components densely while keeping a lookup from an
+`ComponentStorage<Component>` stores components densely while keeping a lookup from an
 entity ID to the component's packed position.
 
 ```text
@@ -123,7 +123,7 @@ Packed data   [Position of entity 1][Position of entity 2]
 Typical operations are:
 
 ```cpp
-ECS::SparseSet<Position> positions;
+ECS::ComponentStorage<Position> positions;
 positions.emplaceAt(entityId, 10, 20);
 
 if (positions.has(entityId)) {
@@ -139,7 +139,7 @@ a component uses swap-and-pop, so packed order is not stable after an erase.
 See [ComponentPool.hpp](ComponentPool.hpp).
 
 The registry stores pools containing different component types. Since one
-container cannot directly store `SparseSet<Position>` and `SparseSet<Velocity>`
+container cannot directly store `ComponentStorage<Position>` and `ComponentStorage<Velocity>`
 as the same concrete type, `IComponentPool` provides a small type-erased
 interface.
 
@@ -227,11 +227,10 @@ they require. They are executed in registration order.
 
 ```cpp
 world.addSystem<Position, Velocity>(
-    [](ECS::Registry&, ECS::SparseSet<Position>& positions,
-       ECS::SparseSet<Velocity>& velocities) {
-        for (auto [position, velocity, entityId] :
-             ECS::zipper(positions, velocities)) {
-            position.x += velocity.x;
+  [](ECS::Registry& world) {
+    for (auto [entity, position, velocity] :
+       world.view<Position, Velocity>()) {
+      position.x += velocity.x;
             position.y += velocity.y;
         }
     });
@@ -248,17 +247,17 @@ Registry
   -> system processes matching entities
 ```
 
-## Zipper
+## View
 
-See [Zipper.hpp](Zipper.hpp).
+`Registry::view<Components...>()` is the public query API. It iterates the
+intersection of the requested component storages and returns an `Entity` plus
+references to each matching component. Internally, it uses `Zipper`.
 
-`zipper` iterates the intersection of several component pools. It uses the first
-pool as the driving set and checks whether each entity also exists in the other
-pools.
+Gameplay code does not need to access `ComponentStorage` or `Zipper` directly.
 
 ```cpp
-for (auto [position, velocity, entityId] :
-     ECS::zipper(positions, velocities)) {
+for (auto [entity, position, velocity] :
+  world.view<Position, Velocity>()) {
     position.x += velocity.x;
 }
 ```
@@ -271,8 +270,9 @@ Velocity: entity 1, entity 2
 Result:   entity 1, entity 2
 ```
 
-The first pool should generally be a small or selective pool when that choice is
-available, because it determines the number of membership checks.
+The first component storage should generally be a small or selective storage
+when that choice is available, because it determines the number of membership
+checks.
 
 ## Header-Only Design
 
@@ -313,6 +313,6 @@ The important relationship is:
 Registry
   -> EntityManager manages entity IDs
   -> ComponentPool stores component data
-  -> SparseSet provides dense storage
-  -> Zipper helps systems iterate matching entities
+  -> ComponentStorage provides dense storage
+  -> View helps systems iterate matching entities
 ```

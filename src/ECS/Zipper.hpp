@@ -6,9 +6,9 @@
 
 namespace ECS {
     /**
-     * @brief Iterates the entities shared by several sparse component sets.
-     * @tparam FirstSet First set used as the driving dense iteration.
-     * @tparam OtherSets Additional sets checked for matching entity identities.
+    * @brief Iterates the entities shared by several component storages.
+    * @tparam FirstSet Storage used as the driving dense iteration.
+    * @tparam OtherSets Additional storages checked for entity membership.
      *
      * The first set determines iteration cost. For every packed component in
      * it, the zipper checks membership in the other sets and yields only the
@@ -20,14 +20,14 @@ namespace ECS {
         public:
             using EntityType = typename FirstSet::size_type;
             using value_type = std::tuple<
-                typename FirstSet::reference_type,
-                typename OtherSets::reference_type...,
+                decltype(std::declval<FirstSet&>().get(std::size_t{})),
+                decltype(std::declval<OtherSets&>().get(std::size_t{}))...,
                 EntityType>;
 
             /**
-             * @brief Creates a zipper over the supplied component sets.
-             * @param first Dense set used to drive iteration.
-             * @param others Sets whose entity membership is required.
+             * @brief Creates an intersection query over component storages.
+             * @param first Storage used to drive iteration.
+             * @param others Storages whose entity membership is required.
              */
             ZipperN(FirstSet& first, OtherSets&... others)
                 : _first(first), _others(others...) {}

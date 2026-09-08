@@ -11,14 +11,16 @@
 #include <unordered_map>
 
 #include "ComponentId.hpp"
+#include "ComponentStorage.hpp"
 #include "ComponentPool.hpp"
 #include "EntityManager.hpp"
+#include "View.hpp"
 
 namespace ECS {
     /**
      * @brief Header-only ECS registry for entities, component pools and systems.
      *
-     * Registry keeps one dense SparseSet per component type. Component IDs are
+    * Registry keeps one component storage per component type. Component IDs are
      * allocated lazily and index the pool table, while EntityManager owns the
      * entity lifecycle. Systems receive typed pools and therefore avoid runtime
      * type lookup during their iteration.
@@ -76,7 +78,7 @@ namespace ECS {
              * @return Typed dense storage for Component.
              */
             template<typename Component>
-            SparseSet<Component>& registerComponent() {
+            ComponentStorage<Component>& registerComponent() {
                 const ComponentId id = componentId<Component>();
                 ensurePoolSlot(id);
                 if (!_pools[id]) {
@@ -90,7 +92,7 @@ namespace ECS {
              * @throws std::out_of_range when Component has not been registered.
              */
             template<typename Component>
-            SparseSet<Component>& getComponents() {
+            ComponentStorage<Component>& getComponents() {
                 const ComponentId id = componentId<Component>();
                 if (id >= _pools.size() || !_pools[id]) {
                     throw std::out_of_range("ECS::Registry::getComponents: component not registered");
@@ -100,7 +102,7 @@ namespace ECS {
 
             /** @copydoc getComponents() */
             template<typename Component>
-            const SparseSet<Component>& getComponents() const {
+            const ComponentStorage<Component>& getComponents() const {
                 const ComponentId id = componentId<Component>();
                 if (id >= _pools.size() || !_pools[id]) {
                     throw std::out_of_range("ECS::Registry::getComponents: component not registered");
@@ -175,7 +177,7 @@ namespace ECS {
              * @brief Returns a typed pool when registered, otherwise nullptr.
              */
             template<typename Component>
-            SparseSet<Component>* getIf() noexcept {
+            ComponentStorage<Component>* getIf() noexcept {
                 const ComponentId id = componentId<Component>();
                 if (id >= _pools.size() || !_pools[id]) {
                     return nullptr;
@@ -183,17 +185,29 @@ namespace ECS {
                 return &typedPool<Component>(id).storage();
             }
 
+            /** @brief Creates a query over entities with all requested components. */
+            template<typename... Components>
+            View<Components...> view() {
+                return View<Components...>(getComponents<Components>()...);
+            }
+
+            /** @brief Creates a read-only query over entities with all requested components. */
+            template<typename... Components>
+            ReadOnlyView<Components...> view() const {
+                return ReadOnlyView<Components...>(getComponents<Components>()...);
+            }
+
             /**
-             * @brief Registers a callable system receiving typed component pools.
-             * @tparam Components Pools requested by the system.
-             * @tparam Function Callable accepting `(Registry&, pools...)`.
+             * @brief Registers a callable system receiving the registry facade.
+             * @tparam Components Component types required by the system.
+             * @tparam Function Callable accepting `(Registry&)`.
              */
             template<typename... Components, typename Function>
             void addSystem(Function&& function) {
                 using FunctionType = std::decay_t<Function>;
                 _systems.emplace_back(
                     [callable = FunctionType(std::forward<Function>(function))](Registry& world) mutable {
-                        callable(world, world.getComponents<Components>()...);
+                        callable(world);
                     });
             }
 
