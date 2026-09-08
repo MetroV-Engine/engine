@@ -12,10 +12,8 @@ namespace ECS {
      * @brief Creates, validates and recycles entity identities.
      *
      * EntityManager owns the lifecycle state associated with Entity handles.
-     * Identities are recycled through a free list so creating many short-lived
-     * entities does not grow the identity space unnecessarily. This first
-     * version preserves the existing size_t-based Entity API; generation
-     * counters can be introduced later without changing component storage.
+    * identities are recycled through a free list so creating many short-lived
+    * entities does not grow the identity space unnecessarily.
      */
     class EntityManager {
         public:
@@ -29,7 +27,7 @@ namespace ECS {
                     const std::size_t id = _freeIds.back();
                     _freeIds.pop_back();
                     _alive[id] = true;
-                    return Entity(id);
+                    return Entity(id, _generations[id]);
                 }
 
                 if (_nextId == std::numeric_limits<std::size_t>::max()) {
@@ -38,7 +36,8 @@ namespace ECS {
 
                 const std::size_t id = _nextId++;
                 _alive.push_back(true);
-                return Entity(id);
+                _generations.push_back(0);
+                return Entity(id, _generations.back());
             }
 
             /**
@@ -55,7 +54,12 @@ namespace ECS {
                     throw std::invalid_argument("ECS::EntityManager: entity is not alive");
                 }
 
+                if (_generations[id] == std::numeric_limits<EntityGeneration>::max()) {
+                    throw std::overflow_error("ECS::EntityManager: entity generation overflow");
+                }
+
                 _alive[id] = false;
+                ++_generations[id];
                 _freeIds.push_back(id);
             }
 
@@ -66,7 +70,17 @@ namespace ECS {
              */
             [[nodiscard]] bool isAlive(Entity entity) const noexcept {
                 const std::size_t id = entity.value();
-                return id < _alive.size() && _alive[id];
+                return id < _alive.size()
+                    && _alive[id]
+                    && _generations[id] == entity.generation();
+            }
+
+            /** @brief Returns the current handle for an allocated index. */
+            [[nodiscard]] Entity entityFromIndex(std::size_t id) const noexcept {
+                if (id >= _generations.size()) {
+                    return Entity(id);
+                }
+                return Entity(id, _generations[id]);
             }
 
             /**
@@ -90,7 +104,7 @@ namespace ECS {
                 entities.reserve(size());
                 for (std::size_t id = 0; id < _nextId; ++id) {
                     if (_alive[id]) {
-                        entities.emplace_back(id);
+                        entities.emplace_back(id, _generations[id]);
                     }
                 }
                 return entities;
@@ -105,11 +119,13 @@ namespace ECS {
              */
             void reserve(std::size_t capacity) {
                 _alive.reserve(capacity);
+                _generations.reserve(capacity);
                 _freeIds.reserve(capacity);
             }
 
         private:
             std::vector<bool> _alive;
+            std::vector<EntityGeneration> _generations;
             std::vector<std::size_t> _freeIds;
             std::size_t _nextId{0};
     };
