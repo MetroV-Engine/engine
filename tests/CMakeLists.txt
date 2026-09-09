@@ -1,0 +1,7 @@
+add_executable(registry_get_all_entities_test registry_get_all_entities_test.cpp)
+target_link_libraries(registry_get_all_entities_test PRIVATE engine_ecs)
+add_test(NAME registry_get_all_entities_test COMMAND registry_get_all_entities_test)
+
+add_executable(registry_add_system_test registry_add_system_test.cpp)
+target_link_libraries(registry_add_system_test PRIVATE engine_ecs)
+add_test(NAME registry_add_system_test COMMAND registry_add_system_test)

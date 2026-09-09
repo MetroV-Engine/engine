@@ -57,3 +57,6 @@ add_executable(engine
   main.cpp)
 
 target_link_libraries(engine PRIVATE engine_ecs)
+
+enable_testing()
+add_subdirectory(tests)
