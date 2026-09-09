@@ -207,11 +207,15 @@ namespace ECS {
 
             /**
              * @brief Registers a callable system receiving the registry facade.
-             * @tparam Components Component types required by the system.
+             * @tparam Components Component types required by the system. Each
+             *         is registered immediately so a `view<Components...>()`
+             *         call inside the system body never throws for a type
+             *         that no entity has received yet.
              * @tparam Function Callable accepting `(Registry&)`.
              */
             template<typename... Components, typename Function>
             void addSystem(Function&& function) {
+                (registerComponent<Components>(), ...);
                 using FunctionType = std::decay_t<Function>;
                 _systems.emplace_back(
                     [callable = FunctionType(std::forward<Function>(function))](Registry& world) mutable {
@@ -226,9 +230,19 @@ namespace ECS {
                 }
             }
 
-            /** @brief Returns all currently live entities for tooling or inspection. */
-            [[nodiscard]] std::vector<Entity> getAllEntities() const {
-                return _entities.getAll();
+            /**
+             * @brief Returns all currently live entities for tooling or inspection.
+             * @return A reference to a cache rebuilt only when entities changed
+             *         since the last call. The reference is invalidated by any
+             *         subsequent call that rebuilds the cache (spawn, kill, or
+             *         a name change), so do not hold it across those calls.
+             */
+            [[nodiscard]] const std::vector<Entity>& getAllEntities() const {
+                if (_entitiesDirty) {
+                    _cachedEntities = _entities.getAll();
+                    _entitiesDirty = false;
+                }
+                return _cachedEntities;
             }
 
             /** @brief Associates a display name with an entity. */
@@ -276,6 +290,7 @@ namespace ECS {
             std::vector<std::unique_ptr<IComponentPool>> _pools;
             std::vector<std::function<void(Registry&)>> _systems;
             std::unordered_map<std::size_t, std::string> _entityNames;
+            mutable std::vector<Entity> _cachedEntities;
             mutable bool _entitiesDirty{true};
     };
 }
