@@ -14,6 +14,7 @@
 #include "ComponentStorage.hpp"
 #include "ComponentPool.hpp"
 #include "EntityManager.hpp"
+#include "Signature.hpp"
 #include "View.hpp"
 
 namespace ECS {
@@ -39,6 +40,8 @@ namespace ECS {
             Entity spawnEntity(const std::string& name = {}) {
                 _entitiesDirty = true;
                 const Entity entity = _entities.create();
+                ensureSignatureSlot(entity.value());
+                _signatures[entity.value()].reset();
                 if (!name.empty()) {
                     _entityNames[entity.value()] = name;
                 }
@@ -68,6 +71,7 @@ namespace ECS {
                         pool->erase(entity.value());
                     }
                 }
+                _signatures[entity.value()].reset();
                 _entityNames.erase(entity.value());
                 _entitiesDirty = true;
             }
@@ -154,7 +158,9 @@ namespace ECS {
                 ensureEntityAlive(entity);
                 using StoredComponent = std::decay_t<Component>;
                 auto& pool = registerComponent<StoredComponent>();
-                return pool.insertAt(entity.value(), std::forward<Component>(component));
+                auto& stored = pool.insertAt(entity.value(), std::forward<Component>(component));
+                _signatures[entity.value()].set(componentId<StoredComponent>());
+                return stored;
             }
 
             /**
@@ -164,8 +170,10 @@ namespace ECS {
             template<typename Component, typename... Params>
             Component& emplaceComponent(Entity entity, Params&&... params) {
                 ensureEntityAlive(entity);
-                return registerComponent<Component>().emplaceAt(
+                auto& stored = registerComponent<Component>().emplaceAt(
                     entity.value(), std::forward<Params>(params)...);
+                _signatures[entity.value()].set(componentId<Component>());
+                return stored;
             }
 
             /**
@@ -179,6 +187,25 @@ namespace ECS {
                 if (pool) {
                     pool->erase(entity.value());
                 }
+                _signatures[entity.value()].reset(componentId<Component>());
+            }
+
+            /**
+             * @brief Checks whether an entity owns every requested component type.
+             * @tparam Components Component types the entity must all own.
+             * @return True when the entity is alive and its Signature has every
+             *         requested type's bit set. O(1) regardless of how many
+             *         component types are registered, unlike checking each
+             *         storage individually.
+             */
+            template<typename... Components>
+            [[nodiscard]] bool hasComponents(Entity entity) const {
+                if (!_entities.isAlive(entity)) {
+                    return false;
+                }
+                Signature mask;
+                (mask.set(componentId<Components>()), ...);
+                return (_signatures[entity.value()] & mask) == mask;
             }
 
             /**
@@ -276,6 +303,12 @@ namespace ECS {
                 }
             }
 
+            void ensureSignatureSlot(std::size_t id) {
+                if (id >= _signatures.size()) {
+                    _signatures.resize(id + 1);
+                }
+            }
+
             template<typename Component>
             ComponentPool<Component>& typedPool(ComponentId id) {
                 return *static_cast<ComponentPool<Component>*>(_pools[id].get());
@@ -292,5 +325,6 @@ namespace ECS {
             std::unordered_map<std::size_t, std::string> _entityNames;
             mutable std::vector<Entity> _cachedEntities;
             mutable bool _entitiesDirty{true};
+            std::vector<Signature> _signatures;
     };
 }
