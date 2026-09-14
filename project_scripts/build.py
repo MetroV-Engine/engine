@@ -44,7 +44,15 @@ def main() -> None:
     require_tool("cmake")
     require_tool("ninja")
 
-    run(["git", "submodule", "update", "--init", "--recursive"])
+    run([
+        "git",
+        "submodule",
+        "update",
+        "--init",
+        "--depth",
+        "1",
+        "vcpkg",
+    ])
 
     build_dir = ROOT / "build"
 
