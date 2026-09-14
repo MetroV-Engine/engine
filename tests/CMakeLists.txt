@@ -5,3 +5,7 @@ add_test(NAME registry_get_all_entities_test COMMAND registry_get_all_entities_t
 add_executable(registry_add_system_test registry_add_system_test.cpp)
 target_link_libraries(registry_add_system_test PRIVATE engine_ecs)
 add_test(NAME registry_add_system_test COMMAND registry_add_system_test)
+
+add_executable(registry_signature_test registry_signature_test.cpp)
+target_link_libraries(registry_signature_test PRIVATE engine_ecs)
+add_test(NAME registry_signature_test COMMAND registry_signature_test)
