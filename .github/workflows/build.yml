@@ -30,6 +30,9 @@ jobs:
           cmakeVersion: 3.31.6
           ninjaVersion: 1.12.1
 
+      - name: Init vcpkg submodule
+        run: git submodule update --init --depth 1 vcpkg
+
       - name: Install vcpkg bootstrap deps (Ubuntu)
         if: runner.os == 'Linux'
         run: |
@@ -39,13 +42,10 @@ jobs:
       - name: Cache vcpkg packages
         uses: actions/cache@v4
         with:
-          path: |
-            vcpkg_installed
-            vcpkg/buildtrees
-            vcpkg/packages
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+          path: vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', '.github/workflows/build.yml') }}
           restore-keys: |
-            ${{ runner.os }}-vcpkg-
+            vcpkg-${{ runner.os }}-
 
       - name: Compile project and tests
         run: python project_scripts/build.py --compile-tests
