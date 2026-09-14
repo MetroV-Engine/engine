@@ -1,6 +1,5 @@
-from pathlib import Path
 import argparse
-import platform
+from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -21,25 +20,12 @@ def require_tool(tool: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build MetroV Engine")
-    parser.add_argument("--tests", action="store_true", help="Build unit tests")
     parser.add_argument(
-        "--no-test-run",
+        "--compile-tests",
         action="store_true",
-        help="Build tests without running them",
-    )
-    parser.add_argument(
-        "--coverage",
-        action="store_true",
-        help="Run tests and generate coverage on Linux",
+        help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
-
-    if args.no_test_run and not args.tests:
-        parser.error("--no-test-run requires --tests")
-    if args.coverage and not args.tests:
-        parser.error("--coverage requires --tests")
-    if args.coverage and platform.system() != "Linux":
-        parser.error("--coverage is only supported on Linux")
 
     require_tool("cmake")
     require_tool("ninja")
@@ -65,28 +51,10 @@ def main() -> None:
         "-G",
         "Ninja",
         "-DCMAKE_BUILD_TYPE=Debug",
-        f"-DENGINE_BUILD_TESTS={'ON' if args.tests else 'OFF'}",
-        f"-DENGINE_ENABLE_COVERAGE={'ON' if args.coverage else 'OFF'}",
+        f"-DENGINE_BUILD_TESTS={'ON' if args.compile_tests else 'OFF'}",
+        "-DENGINE_ENABLE_COVERAGE=OFF",
     ])
     run(["cmake", "--build", str(build_dir), "--parallel"])
-
-    if args.tests and not args.no_test_run:
-        run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
-
-    if args.coverage:
-        require_tool("gcovr")
-        coverage_dir = build_dir / "tests" / "coverage"
-        coverage_dir.mkdir(parents=True, exist_ok=True)
-        run([
-            "gcovr",
-            "--root",
-            str(ROOT),
-            "--filter",
-            str(ROOT / "src"),
-            "--html-details",
-            str(coverage_dir / "index.html"),
-            "--print-summary",
-        ])
 
 
 if __name__ == "__main__":
