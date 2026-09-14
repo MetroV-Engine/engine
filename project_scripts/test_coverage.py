@@ -33,15 +33,17 @@ def main() -> None:
     if shutil.which("gcovr") is None:
         raise RuntimeError("gcovr is required to generate the coverage report")
 
-    require_tool = lambda tool: shutil.which(tool) is not None
-    if not require_tool("cmake"):
+    if shutil.which("cmake") is None:
         raise RuntimeError("cmake is required to generate coverage")
-    if not require_tool("ninja"):
+    if shutil.which("ninja") is None:
         raise RuntimeError("ninja is required to generate coverage")
 
     run(["git", "submodule", "update", "--init", "--depth", "1", "vcpkg"])
 
     build_dir = ROOT / "build"
+    if build_dir.exists():
+        shutil.rmtree(build_dir)
+
     run([
         "cmake",
         "-S",
@@ -51,6 +53,7 @@ def main() -> None:
         "-G",
         "Ninja",
         "-DCMAKE_BUILD_TYPE=Debug",
+        "-DENGINE_BUILD_APP=OFF",
         "-DENGINE_BUILD_TESTS=ON",
         "-DENGINE_ENABLE_COVERAGE=ON",
     ])

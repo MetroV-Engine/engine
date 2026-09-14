@@ -2,6 +2,8 @@ find_package(ut CONFIG REQUIRED)
 
 set(ECS_TEST_FILES
 	ECS/TestEntity.cpp
+	ECS/TestEntityManager.cpp
+	main.cpp
 )
 
 set(ENGINE_SOURCE_FILES

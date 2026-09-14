@@ -52,6 +52,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(ENGINE_BUILD_TESTS "Build unit tests" OFF)
+option(ENGINE_BUILD_APP "Build the engine executable" ON)
 option(ENGINE_ENABLE_COVERAGE "Enable code coverage" OFF)
 
 if(ENGINE_ENABLE_COVERAGE AND NOT ENGINE_BUILD_TESTS)
@@ -70,10 +71,12 @@ endif()
 
 add_subdirectory(src/ECS)
 
-add_executable(engine
-  main.cpp)
+if(ENGINE_BUILD_APP)
+  add_executable(engine
+    main.cpp)
 
-target_link_libraries(engine PRIVATE engine_ecs)
+  target_link_libraries(engine PRIVATE engine_ecs)
+endif()
 
 if(ENGINE_BUILD_TESTS)
   enable_testing()
