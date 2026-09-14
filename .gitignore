@@ -24,3 +24,5 @@ vcpkg_installed/
 .idea
 
 cmake-build-debug/
+a.out
+build
