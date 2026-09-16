@@ -8,6 +8,12 @@
 #include "Entity.hpp"
 
 namespace ECS {
+#ifdef ENGINE_TESTING
+    namespace TestAccess {
+        struct EntityManagerAccess;
+    }
+#endif
+
     /**
      * @brief Creates, validates and recycles entity identities.
      *
@@ -16,6 +22,10 @@ namespace ECS {
     * entities does not grow the identity space unnecessarily.
      */
     class EntityManager {
+#ifdef ENGINE_TESTING
+        friend struct TestAccess::EntityManagerAccess;
+#endif
+
         public:
             /**
              * @brief Creates a new live entity.

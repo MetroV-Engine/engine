@@ -3,6 +3,13 @@ find_package(ut CONFIG REQUIRED)
 set(ECS_TEST_FILES
 	ECS/TestEntity.cpp
 	ECS/TestEntityManager.cpp
+	ECS/TestComponentId.cpp
+	ECS/TestComponentStorage.cpp
+	ECS/TestComponentPool.cpp
+	ECS/TestSignature.cpp
+	ECS/TestZipper.cpp
+	ECS/TestView.cpp
+	ECS/TestRegistry.cpp
 	main.cpp
 )
 
@@ -18,6 +25,7 @@ add_executable(tests_ecs
 	${ECS_TEST_FILES}
 )
 target_link_libraries(tests_ecs PRIVATE engine_ecs Boost::ut)
+target_compile_definitions(tests_ecs PRIVATE ENGINE_TESTING)
 add_test(NAME tests_ecs COMMAND tests_ecs)
 
 if(ENGINE_TEST_FILES)
