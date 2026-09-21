@@ -11,8 +11,9 @@ namespace ECS {
      * distinct C++ type used anywhere in the program, not per entity or per
      * component instance. Sized well above a full game's expected component
      * type count (Hollow Knight-scale games are estimated around 40-70) to
-     * leave headroom for scripted/user-defined components. Exceeding it
-     * throws std::out_of_range from Signature::set, rather than silently
+     * leave headroom for scripted/user-defined components. Registry refuses a
+     * component type past this limit with std::out_of_range when it is
+     * registered, before any entity data is touched, rather than silently
      * corrupting state.
      */
     constexpr std::size_t MaxComponentTypes = 256;
