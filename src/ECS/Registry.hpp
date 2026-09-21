@@ -21,10 +21,15 @@ namespace ECS {
     /**
      * @brief Header-only ECS registry for entities, component pools and systems.
      *
-    * Registry keeps one component storage per component type. Component IDs are
+     * Registry keeps one component storage per component type. Component IDs are
      * allocated lazily and index the pool table, while EntityManager owns the
-     * entity lifecycle. Systems receive typed pools and therefore avoid runtime
-     * type lookup during their iteration.
+     * entity lifecycle.
+     *
+     * The pools are the source of truth for which components an entity owns.
+     * Each entity's Signature mirrors them and is only updated here, which is
+     * why storages are handed out read-only: adding or removing a component
+     * must go through the Registry. The Signature's one authority is capacity:
+     * a component type whose ID does not fit in it is refused at registration.
      */
     class Registry {
         public:
@@ -71,38 +76,23 @@ namespace ECS {
             /**
              * @brief Registers a component pool if absent and returns its storage.
              * @tparam Component Component type to register.
-             * @return Typed dense storage for Component.
+             * @return Read-only typed dense storage for Component.
+             * @throws std::out_of_range when Component's ID does not fit in a
+             *         Signature (see MaxComponentTypes). Nothing is registered.
              */
             template<typename Component>
-            ComponentStorage<Component>& registerComponent() {
-                const ComponentId id = componentId<Component>();
-                ensurePoolSlot(id);
-                if (!_pools[id]) {
-                    _pools[id] = std::make_unique<ComponentPool<Component>>();
-                }
-                return typedPool<Component>(id).storage();
+            const ComponentStorage<Component>& registerComponent() {
+                return ensureStorage<Component>();
             }
 
             /**
-             * @brief Returns an already registered component pool.
+             * @brief Returns an already registered component storage, read-only.
              * @throws std::out_of_range when Component has not been registered.
              */
             template<typename Component>
-            ComponentStorage<Component>& getComponents() {
-                const ComponentId id = componentId<Component>();
-                if (id >= _pools.size() || !_pools[id]) {
-                    throw std::out_of_range("ECS::Registry::getComponents: component not registered");
-                }
-                return typedPool<Component>(id).storage();
-            }
-
-            /** @copydoc getComponents() */
-            template<typename Component>
             const ComponentStorage<Component>& getComponents() const {
                 const ComponentId id = componentId<Component>();
-                if (id >= _pools.size() || !_pools[id]) {
-                    throw std::out_of_range("ECS::Registry::getComponents: component not registered");
-                }
+                requireRegistered(id);
                 return typedPool<Component>(id).storage();
             }
 
@@ -113,7 +103,7 @@ namespace ECS {
             template<typename Component>
             Component& getComponent(Entity entity) {
                 ensureEntityAlive(entity);
-                return getComponents<Component>().get(entity.value());
+                return mutableStorage<Component>().get(entity.value());
             }
 
             /** @copydoc getComponent(Entity) */
@@ -188,13 +178,16 @@ namespace ECS {
              * @brief Checks whether an entity owns every requested component type.
              * @tparam Components Component types the entity must all own.
              * @return True when the entity is alive and its Signature has every
-             *         requested type's bit set. O(1) regardless of how many
-             *         component types are registered, unlike checking each
-             *         storage individually.
+             *         requested type's bit set. The Signature mirrors the pools;
+             *         a type whose ID does not fit in it can never have been
+             *         registered, so no entity owns it.
              */
             template<typename... Components>
             [[nodiscard]] bool hasComponents(Entity entity) const {
                 if (!_entities.isAlive(entity)) {
+                    return false;
+                }
+                if (((componentId<Components>() >= MaxComponentTypes) || ...)) {
                     return false;
                 }
                 Signature mask;
@@ -203,10 +196,10 @@ namespace ECS {
             }
 
             /**
-             * @brief Returns a typed pool when registered, otherwise nullptr.
+             * @brief Returns a read-only typed storage when registered, otherwise nullptr.
              */
             template<typename Component>
-            ComponentStorage<Component>* getIf() noexcept {
+            const ComponentStorage<Component>* getIf() const noexcept {
                 const ComponentId id = componentId<Component>();
                 if (id >= _pools.size() || !_pools[id]) {
                     return nullptr;
@@ -217,7 +210,7 @@ namespace ECS {
             /** @brief Creates a query over entities with all requested components. */
             template<typename... Components>
             View<Components...> view() {
-                return View<Components...>(_entities, getComponents<Components>()...);
+                return View<Components...>(_entities, mutableStorage<Components>()...);
             }
 
             /** @brief Creates a read-only query over entities with all requested components. */
@@ -349,15 +342,14 @@ namespace ECS {
 
             template<typename StoredComponent>
             StoredComponent& addComponentImmediate(Entity entity, StoredComponent value) {
-                auto& pool = registerComponent<StoredComponent>();
-                auto& stored = pool.insertAt(entity.value(), std::move(value));
+                auto& stored = ensureStorage<StoredComponent>().insertAt(entity.value(), std::move(value));
                 _signatures[entity.value()].set(componentId<StoredComponent>());
                 return stored;
             }
 
             template<typename StoredComponent>
             StoredComponent& addComponentDeferred(Entity entity, StoredComponent value) {
-                registerComponent<StoredComponent>();
+                ensureStorage<StoredComponent>();
                 auto staged = std::make_shared<StoredComponent>(std::move(value));
                 StoredComponent& ref = *staged;
                 _commandQueue.emplace_back(
@@ -369,14 +361,14 @@ namespace ECS {
 
             template<typename Component>
             Component& emplaceComponentImmediate(Entity entity, Component value) {
-                auto& stored = registerComponent<Component>().emplaceAt(entity.value(), std::move(value));
+                auto& stored = ensureStorage<Component>().emplaceAt(entity.value(), std::move(value));
                 _signatures[entity.value()].set(componentId<Component>());
                 return stored;
             }
 
             template<typename Component>
             Component& emplaceComponentDeferred(Entity entity, Component value) {
-                registerComponent<Component>();
+                ensureStorage<Component>();
                 auto staged = std::make_shared<Component>(std::move(value));
                 Component& ref = *staged;
                 _commandQueue.emplace_back(
@@ -388,11 +380,13 @@ namespace ECS {
 
             template<typename Component>
             void removeComponentImmediate(Entity entity) {
-                auto* pool = getIf<Component>();
-                if (pool) {
-                    pool->erase(entity.value());
+                const ComponentId id = componentId<Component>();
+                if (id >= _pools.size() || !_pools[id]) {
+                    return;
                 }
-                _signatures[entity.value()].reset(componentId<Component>());
+                _pools[id]->erase(entity.value());
+                // Safe: a registered pool implies id < MaxComponentTypes.
+                _signatures[entity.value()].reset(id);
             }
 
             template<typename Component>
@@ -426,6 +420,35 @@ namespace ECS {
                 if (id >= _pendingSpawns.size()) {
                     _pendingSpawns.resize(id + 1, false);
                 }
+            }
+
+            void requireRegistered(ComponentId id) const {
+                if (id >= _pools.size() || !_pools[id]) {
+                    throw std::out_of_range("ECS::Registry: component not registered");
+                }
+            }
+
+            /** @brief Registers Component if needed and returns its mutable storage. */
+            template<typename Component>
+            ComponentStorage<Component>& ensureStorage() {
+                const ComponentId id = componentId<Component>();
+                if (id >= MaxComponentTypes) {
+                    throw std::out_of_range(
+                        "ECS::Registry: too many component types (see MaxComponentTypes)");
+                }
+                ensurePoolSlot(id);
+                if (!_pools[id]) {
+                    _pools[id] = std::make_unique<ComponentPool<Component>>();
+                }
+                return typedPool<Component>(id).storage();
+            }
+
+            /** @brief Mutable storage of a registered component, for views and getComponent. */
+            template<typename Component>
+            ComponentStorage<Component>& mutableStorage() {
+                const ComponentId id = componentId<Component>();
+                requireRegistered(id);
+                return typedPool<Component>(id).storage();
             }
 
             void ensurePoolSlot(ComponentId id) {
