@@ -1,11 +1,39 @@
-add_executable(registry_get_all_entities_test registry_get_all_entities_test.cpp)
-target_link_libraries(registry_get_all_entities_test PRIVATE engine_ecs)
-add_test(NAME registry_get_all_entities_test COMMAND registry_get_all_entities_test)
+find_package(ut CONFIG REQUIRED)
 
-add_executable(registry_add_system_test registry_add_system_test.cpp)
-target_link_libraries(registry_add_system_test PRIVATE engine_ecs)
-add_test(NAME registry_add_system_test COMMAND registry_add_system_test)
+set(ECS_TEST_FILES
+	ECS/TestEntity.cpp
+	ECS/TestEntityManager.cpp
+	ECS/TestComponentId.cpp
+	ECS/TestComponentStorage.cpp
+	ECS/TestComponentPool.cpp
+	ECS/TestSignature.cpp
+	ECS/TestZipper.cpp
+	ECS/TestView.cpp
+	ECS/TestRegistry.cpp
+	main.cpp
+)
 
-add_executable(registry_signature_test registry_signature_test.cpp)
-target_link_libraries(registry_signature_test PRIVATE engine_ecs)
-add_test(NAME registry_signature_test COMMAND registry_signature_test)
+set(ENGINE_SOURCE_FILES
+	# ADD ENGINE SOURCE FILES HERE
+)
+
+set(ENGINE_TEST_FILES
+	# ADD ENGINE TEST FILES HERE
+)
+
+add_executable(tests_ecs
+	${ECS_TEST_FILES}
+)
+target_link_libraries(tests_ecs PRIVATE engine_ecs Boost::ut)
+target_compile_definitions(tests_ecs PRIVATE ENGINE_TESTING)
+add_test(NAME tests_ecs COMMAND tests_ecs)
+
+if(ENGINE_TEST_FILES)
+	add_executable(tests_engine
+		${ENGINE_TEST_FILES}
+		${ENGINE_SOURCE_FILES}
+	)
+
+	target_link_libraries(tests_engine PRIVATE engine_ecs Boost::ut)
+	add_test(NAME tests_engine COMMAND tests_engine)
+endif()
