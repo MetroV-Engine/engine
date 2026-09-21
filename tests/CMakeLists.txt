@@ -10,6 +10,7 @@ set(ECS_TEST_FILES
 	ECS/TestZipper.cpp
 	ECS/TestView.cpp
 	ECS/TestRegistry.cpp
+	ECS/TestDeferredMutations.cpp
 	main.cpp
 )
 
