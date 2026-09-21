@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "ECS/Registry.hpp"
@@ -15,6 +16,13 @@ namespace {
     struct Velocity { int x; int y; };
     struct Health { int value; };
     struct Unregistered { int value; };
+    struct BeyondLimit { int value; };
+    template<std::size_t N> struct Filler { int value; };
+
+    template<std::size_t... Indices>
+    void exhaust_component_ids(std::index_sequence<Indices...>) {
+        ((void)ECS::componentId<Filler<Indices>>(), ...);
+    }
 
     void test_registry_is_default_constructible() {
         "registry is default constructible"_test = [] {
@@ -130,23 +138,25 @@ namespace {
     void test_register_component_is_idempotent() {
         "registerComponent is idempotent"_test = [] {
             ECS::Registry registry;
-            auto& first = registry.registerComponent<Position>();
-            first.emplaceAt(1, Position{1, 2});
-            auto& second = registry.registerComponent<Position>();
+            const auto entity = registry.spawnEntity();
+            const auto& first = registry.registerComponent<Position>();
+            registry.emplaceComponent<Position>(entity, 1, 2);
+            const auto& second = registry.registerComponent<Position>();
 
             expect(&first == &second);
-            expect(second.get(1).x == 1);
+            expect(second.get(entity.value()).x == 1);
         };
     }
 
     void test_register_different_components_have_independent_pools() {
         "different component types have independent pools"_test = [] {
             ECS::Registry registry;
-            registry.registerComponent<Position>().emplaceAt(1, 1, 2);
-            registry.registerComponent<Velocity>().emplaceAt(1, 3, 4);
+            const auto entity = registry.spawnEntity();
+            registry.emplaceComponent<Position>(entity, 1, 2);
+            registry.emplaceComponent<Velocity>(entity, 3, 4);
 
-            expect(registry.getComponents<Position>().get(1).x == 1);
-            expect(registry.getComponents<Velocity>().get(1).x == 3);
+            expect(registry.getComponents<Position>().get(entity.value()).x == 1);
+            expect(registry.getComponents<Velocity>().get(entity.value()).x == 3);
         };
     }
 
@@ -545,6 +555,89 @@ namespace {
             expect(registry.getEntityName(ECS::Entity{42}).empty());
         };
     }
+
+    void test_registry_hands_out_read_only_storages() {
+        "registry only hands out read-only storages"_test = [] {
+            ECS::Registry registry;
+            using Storage = ECS::ComponentStorage<Position>;
+            static_assert(std::is_same_v<
+                decltype(registry.registerComponent<Position>()), const Storage&>);
+            static_assert(std::is_same_v<
+                decltype(registry.getComponents<Position>()), const Storage&>);
+            static_assert(std::is_same_v<
+                decltype(registry.getIf<Position>()), const Storage*>);
+            expect(true);
+        };
+    }
+
+    void test_signature_mirrors_the_pools() {
+        "hasComponent and hasComponents agree through every change"_test = [] {
+            ECS::Registry registry;
+            const auto agree = [&](ECS::Entity entity) {
+                return registry.hasComponent<Position>(entity)
+                        == registry.hasComponents<Position>(entity)
+                    && registry.hasComponent<Velocity>(entity)
+                        == registry.hasComponents<Velocity>(entity);
+            };
+
+            const auto entity = registry.spawnEntity();
+            expect(agree(entity));
+
+            registry.emplaceComponent<Position>(entity, 1, 2);
+            expect(agree(entity));
+            expect(registry.hasComponents<Position>(entity));
+
+            registry.addComponent(entity, Position{3, 4});
+            registry.emplaceComponent<Velocity>(entity, 5, 6);
+            expect(agree(entity));
+            expect(registry.hasComponents<Position, Velocity>(entity));
+
+            registry.removeComponent<Position>(entity);
+            expect(agree(entity));
+            expect(!registry.hasComponents<Position>(entity));
+            expect(registry.hasComponents<Velocity>(entity));
+
+            registry.killEntity(entity);
+            expect(agree(entity));
+
+            const auto recycled = registry.spawnEntity();
+            expect(recycled.index() == entity.index());
+            expect(agree(recycled));
+            expect(!registry.hasComponent<Velocity>(recycled));
+            expect(!registry.hasComponents<Velocity>(recycled));
+        };
+    }
+
+    // Must stay the last test run: componentId<T>() is process-wide, so this
+    // consumes every remaining ID and any type first used afterwards would be
+    // past the Signature limit.
+    void test_component_types_beyond_signature_limit_are_rejected() {
+        "component types beyond the signature limit are rejected before insertion"_test = [] {
+            exhaust_component_ids(std::make_index_sequence<ECS::MaxComponentTypes>{});
+
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+
+            expect(throws<std::out_of_range>([&] {
+                registry.registerComponent<BeyondLimit>();
+            }));
+            expect(throws<std::out_of_range>([&] {
+                registry.addSystem<BeyondLimit>([](ECS::Registry&) {});
+            }));
+            expect(throws<std::out_of_range>([&] {
+                registry.addComponent(entity, BeyondLimit{1});
+            }));
+            expect(throws<std::out_of_range>([&] {
+                registry.emplaceComponent<BeyondLimit>(entity, 1);
+            }));
+
+            expect(registry.getIf<BeyondLimit>() == nullptr);
+            expect(!registry.hasComponent<BeyondLimit>(entity));
+            expect(!registry.hasComponents<BeyondLimit>(entity));
+            registry.removeComponent<BeyondLimit>(entity);
+            expect(!registry.hasComponent<BeyondLimit>(entity));
+        };
+    }
 }
 
 void run_registry_tests() {
@@ -580,6 +673,8 @@ void run_registry_tests() {
     test_has_components_is_false_for_dead_entity();
     test_get_if_returns_null_for_unregistered_component();
     test_get_if_returns_registered_storage();
+    test_registry_hands_out_read_only_storages();
+    test_signature_mirrors_the_pools();
     test_view_returns_matching_entities();
     test_view_requires_all_requested_components();
     test_view_throws_for_unregistered_component();
@@ -596,4 +691,5 @@ void run_registry_tests() {
     test_set_entity_name_rejects_dead_entity();
     test_set_entity_name_invalidates_cache();
     test_get_entity_name_returns_empty_for_unknown_or_dead_entity();
+    test_component_types_beyond_signature_limit_are_rejected();  // keep last
 }
