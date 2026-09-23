@@ -391,11 +391,25 @@ namespace {
         };
     }
 
-    void test_view_throws_for_unregistered_component() {
-        "view throws for an unregistered component"_test = [] {
+    void test_view_registers_unregistered_component_and_returns_no_matches() {
+        "view registers an unregistered component and returns no matches"_test = [] {
             ECS::Registry registry;
+            std::size_t count = 0;
+            for (auto entry : registry.view<Unregistered>()) {
+                (void)entry;
+                ++count;
+            }
+            expect(count == std::size_t{0});
+            expect(registry.getComponents<Unregistered>().size() == std::size_t{0});
+        };
+    }
+
+    void test_const_view_throws_for_unregistered_component() {
+        "const view throws for an unregistered component"_test = [] {
+            ECS::Registry registry;
+            const ECS::Registry& constRegistry = registry;
             expect(throws<std::out_of_range>([&] {
-                registry.view<Unregistered>();
+                constRegistry.view<Unregistered>();
             }));
         };
     }
@@ -413,55 +427,6 @@ namespace {
                 std::remove_reference_t<std::tuple_element_t<1, Value>>
             >);
             expect(std::get<1>(*query.begin()).x == 1);
-        };
-    }
-
-    void test_add_system_registers_required_components() {
-        "addSystem registers required component types"_test = [] {
-            ECS::Registry registry;
-            registry.addSystem<Position>([](ECS::Registry&) {});
-
-            expect(registry.getComponents<Position>().size() == std::size_t{0});
-        };
-    }
-
-    void test_add_system_runs_when_component_pool_is_empty() {
-        "addSystem runs with an empty component pool"_test = [] {
-            ECS::Registry registry;
-            bool ran = false;
-            registry.addSystem<Position>([&](ECS::Registry& world) {
-                for (auto entry : world.view<Position>()) {
-                    (void)entry;
-                }
-                ran = true;
-            });
-
-            registry.runSystems();
-            expect(ran);
-        };
-    }
-
-    void test_run_systems_executes_in_registration_order() {
-        "runSystems preserves registration order"_test = [] {
-            ECS::Registry registry;
-            std::vector<int> order;
-            registry.addSystem<Position>([&](ECS::Registry&) { order.push_back(1); });
-            registry.addSystem<Velocity>([&](ECS::Registry&) { order.push_back(2); });
-
-            registry.runSystems();
-            expect(order == std::vector<int>{1, 2});
-        };
-    }
-
-    void test_run_systems_executes_again() {
-        "runSystems keeps systems registered"_test = [] {
-            ECS::Registry registry;
-            int runs = 0;
-            registry.addSystem<Position>([&](ECS::Registry&) { ++runs; });
-
-            registry.runSystems();
-            registry.runSystems();
-            expect(runs == 2);
         };
     }
 
@@ -622,9 +587,6 @@ namespace {
                 registry.registerComponent<BeyondLimit>();
             }));
             expect(throws<std::out_of_range>([&] {
-                registry.addSystem<BeyondLimit>([](ECS::Registry&) {});
-            }));
-            expect(throws<std::out_of_range>([&] {
                 registry.addComponent(entity, BeyondLimit{1});
             }));
             expect(throws<std::out_of_range>([&] {
@@ -677,12 +639,9 @@ void run_registry_tests() {
     test_signature_mirrors_the_pools();
     test_view_returns_matching_entities();
     test_view_requires_all_requested_components();
-    test_view_throws_for_unregistered_component();
+    test_view_registers_unregistered_component_and_returns_no_matches();
+    test_const_view_throws_for_unregistered_component();
     test_const_view_returns_const_components();
-    test_add_system_registers_required_components();
-    test_add_system_runs_when_component_pool_is_empty();
-    test_run_systems_executes_in_registration_order();
-    test_run_systems_executes_again();
     test_get_all_entities_is_empty_for_new_registry();
     test_get_all_entities_reuses_cache_without_changes();
     test_get_all_entities_reflects_spawns_and_kills();

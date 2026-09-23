@@ -207,53 +207,58 @@ namespace ECS {
                 return &typedPool<Component>(id).storage();
             }
 
-            /** @brief Creates a query over entities with all requested components. */
+            /**
+             * @brief Creates a query over entities with all requested components.
+             *
+             * Any requested Component not yet registered gets an empty pool
+             * registered for it, so a system can query a type before any
+             * entity has received it and simply see no matches, instead of
+             * this throwing.
+             */
             template<typename... Components>
             View<Components...> view() {
+                (ensureStorage<Components>(), ...);
                 return View<Components...>(_entities, mutableStorage<Components>()...);
             }
 
-            /** @brief Creates a read-only query over entities with all requested components. */
+            /**
+             * @brief Creates a read-only query over entities with all requested components.
+             * @throws std::out_of_range when a requested Component has never
+             *         been registered. Unlike the mutable overload, this
+             *         can't register an empty pool as a side effect: it is
+             *         const, and a read-only query shouldn't create storage.
+             */
             template<typename... Components>
             ReadOnlyView<Components...> view() const {
                 return ReadOnlyView<Components...>(_entities, getComponents<Components>()...);
             }
 
             /**
-             * @brief Registers a callable system receiving the registry facade.
-             * @tparam Components Component types required by the system. Each
-             *         is registered immediately so a `view<Components...>()`
-             *         call inside the system body never throws for a type
-             *         that no entity has received yet.
-             * @tparam Function Callable accepting `(Registry&)`.
-             */
-            template<typename... Components, typename Function>
-            void addSystem(Function&& function) {
-                (registerComponent<Components>(), ...);
-                using FunctionType = std::decay_t<Function>;
-                _systems.emplace_back(
-                    [callable = FunctionType(std::forward<Function>(function))](Registry& world) mutable {
-                        callable(world);
-                    });
-            }
-
-            /**
-             * @brief Executes registered systems in registration order.
+             * @brief Runs callable under deferred-mutation mode.
              *
              * Structural mutations (spawnEntity, killEntity, addComponent,
-             * emplaceComponent, removeComponent) made by a system during this
-             * call are deferred: they queue instead of touching component
-             * storage immediately, so a View a system is iterating can't be
-             * reordered out from under it. Queued commands apply, in the
-             * order they were recorded, once every system has run.
+             * emplaceComponent, removeComponent) made from within callable are
+             * deferred: they queue instead of touching component storage
+             * immediately, so a View being iterated can't be reordered out
+             * from under it. Queued commands apply, in the order they were
+             * recorded, once callable returns or throws.
+             *
+             * Deferred mode is turned off and queued commands are flushed
+             * even if callable throws, so a failing caller (e.g. a system
+             * that throws mid-update) can't leave the registry stuck in
+             * deferred mode.
              */
-            void runSystems() {
+            template<typename Callable>
+            void runDeferred(Callable&& callable) {
                 _deferring = true;
-                for (auto& system : _systems) {
-                    system(*this);
-                }
-                _deferring = false;
-                flushCommands();
+                struct DeferGuard {
+                    Registry& registry;
+                    ~DeferGuard() {
+                        registry._deferring = false;
+                        registry.flushCommands();
+                    }
+                } guard{*this};
+                callable();
             }
 
             /**
@@ -475,7 +480,6 @@ namespace ECS {
 
             EntityManager _entities;
             std::vector<std::unique_ptr<IComponentPool>> _pools;
-            std::vector<std::function<void(Registry&)>> _systems;
             std::unordered_map<std::size_t, std::string> _entityNames;
             mutable std::vector<Entity> _cachedEntities;
             mutable bool _entitiesDirty{true};

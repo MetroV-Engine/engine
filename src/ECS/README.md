@@ -32,8 +32,9 @@ entities that contain the components they need.
 | [ComponentId.hpp](ComponentId.hpp) | Lazy runtime ID assignment for component types. |
 | [ComponentStorage.hpp](ComponentStorage.hpp) | Component storage and fast entity-to-component lookup. |
 | [ComponentPool.hpp](ComponentPool.hpp) | Type-erased access to different component pools. |
-| [Registry.hpp](Registry.hpp) | Main ECS API for entities, components, and systems. |
+| [Registry.hpp](Registry.hpp) | Main ECS API for entities and components. |
 | [View.hpp](View.hpp) | Public queries over entities sharing component types. |
+| [Systems.hpp](Systems.hpp) | `ISystem` interface and `SystemManager`, which owns and runs systems. |
 
 ## Entity
 
@@ -160,7 +161,10 @@ for operations shared by every pool, such as removing a destroyed entity.
 See [Registry.hpp](Registry.hpp).
 
 `Registry` is the main entry point for the ECS. It coordinates entity lifecycle,
-component pools, component access, and systems.
+component pools, and component access. System execution is handled by
+`SystemManager` (see [Systems](#systems) below), which calls
+`Registry::runDeferred` to protect an in-progress `view()` iteration from
+structural mutations.
 
 ### Creating and destroying entities
 
@@ -223,30 +227,33 @@ preferred.
 
 ## Systems
 
-Systems are registered on [Registry.hpp](Registry.hpp) with the component pools
-they require. They are executed in registration order.
+Systems are stateful objects implementing `ECS::ISystem`, owned and run by
+`ECS::SystemManager` (see [Systems.hpp](Systems.hpp)). They are executed in
+registration order.
 
 ```cpp
-world.addSystem<Position, Velocity>(
-  [](ECS::Registry& world) {
-    for (auto [entity, position, velocity] :
-       world.view<Position, Velocity>()) {
-      position.x += velocity.x;
-            position.y += velocity.y;
+class MovementSystem : public ECS::ISystem {
+    public:
+        void update(ECS::Registry& world, double dt) override {
+            for (auto [entity, position, velocity] :
+                 world.view<Position, Velocity>()) {
+                position.x += velocity.x * dt;
+                position.y += velocity.y * dt;
+            }
         }
-    });
+};
 
-world.runSystems();
+ECS::SystemManager systems;
+systems.addSystem<MovementSystem>();
+
+systems.update(world, dt);
 ```
 
-The registry supplies the requested typed pools to the system:
-
-```text
-Registry
-  -> Position pool
-  -> Velocity pool
-  -> system processes matching entities
-```
+`SystemManager::update` runs every registered system inside
+`Registry::runDeferred`, so structural mutations a system makes
+(spawnEntity, killEntity, addComponent, emplaceComponent, removeComponent)
+are queued and applied once every system has run, the same way
+`runDeferred` behaves for any other caller (see below).
 
 ## View
 
@@ -302,8 +309,9 @@ ECS::Entity entity = world.spawnEntity();
 world.emplaceComponent<Position>(entity, 0, 0);
 world.emplaceComponent<Velocity>(entity, 1, 0);
 
-world.addSystem<Position, Velocity>(updatePositions);
-world.runSystems();
+ECS::SystemManager systems;
+systems.addSystem<MovementSystem>();
+systems.update(world, dt);
 
 world.killEntity(entity);
 ```
@@ -316,4 +324,5 @@ Registry
   -> ComponentPool stores component data
   -> ComponentStorage provides dense storage
   -> View helps systems iterate matching entities
+  -> SystemManager runs ISystem instances against the registry
 ```
