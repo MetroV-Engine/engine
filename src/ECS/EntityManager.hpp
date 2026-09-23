@@ -33,10 +33,26 @@ namespace ECS {
              * @throws std::overflow_error if no identity can be allocated.
              */
             Entity create() {
+                const Entity entity = reserveIdentity();
+                commit(entity);
+                return entity;
+            }
+
+            /**
+             * @brief Allocates an identity without marking it alive.
+             * @return A handle for a recycled or newly allocated identity.
+             * @throws std::overflow_error if no identity can be allocated.
+             *
+             * Pairs with commit(). Lets a caller hand out a stable, usable
+             * handle before the identity should become visible to isAlive()
+             * or getAll() -- used by deferred entity creation, where the
+             * handle must exist immediately but must not be observable
+             * until the queued command actually applies.
+             */
+            Entity reserveIdentity() {
                 if (!_freeIds.empty()) {
                     const std::size_t id = _freeIds.back();
                     _freeIds.pop_back();
-                    _alive[id] = true;
                     return Entity(id, _generations[id]);
                 }
 
@@ -45,9 +61,14 @@ namespace ECS {
                 }
 
                 const std::size_t id = _nextId++;
-                _alive.push_back(true);
+                _alive.push_back(false);
                 _generations.push_back(0);
                 return Entity(id, _generations.back());
+            }
+
+            /** @brief Marks a previously reserved identity as alive. */
+            void commit(Entity entity) {
+                _alive[entity.value()] = true;
             }
 
             /**

@@ -72,4 +72,3 @@ namespace ECS {
             EntityGeneration _generation{0};
     };
 }
-     

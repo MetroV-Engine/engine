@@ -43,14 +43,10 @@ namespace ECS {
              * @return Newly created entity handle.
              */
             Entity spawnEntity(const std::string& name = {}) {
-                _entitiesDirty = true;
-                const Entity entity = _entities.create();
-                ensureSignatureSlot(entity.value());
-                _signatures[entity.value()].reset();
-                if (!name.empty()) {
-                    _entityNames[entity.value()] = name;
+                if (_deferring) {
+                    return spawnEntityDeferred(name);
                 }
-                return entity;
+                return spawnEntityImmediate(name);
             }
 
             /**
@@ -70,15 +66,11 @@ namespace ECS {
              * @throws std::invalid_argument if entity is not alive.
              */
             void killEntity(Entity entity) {
-                _entities.destroy(entity);
-                for (const auto& pool : _pools) {
-                    if (pool) {
-                        pool->erase(entity.value());
-                    }
+                if (_deferring) {
+                    killEntityDeferred(entity);
+                    return;
                 }
-                _signatures[entity.value()].reset();
-                _entityNames.erase(entity.value());
-                _entitiesDirty = true;
+                killEntityImmediate(entity);
             }
 
             /**
@@ -147,10 +139,11 @@ namespace ECS {
             std::decay_t<Component>& addComponent(Entity entity, Component&& component) {
                 ensureEntityAlive(entity);
                 using StoredComponent = std::decay_t<Component>;
-                auto& stored = ensureStorage<StoredComponent>().insertAt(
-                    entity.value(), std::forward<Component>(component));
-                _signatures[entity.value()].set(componentId<StoredComponent>());
-                return stored;
+                StoredComponent value(std::forward<Component>(component));
+                if (_deferring) {
+                    return addComponentDeferred<StoredComponent>(entity, std::move(value));
+                }
+                return addComponentImmediate<StoredComponent>(entity, std::move(value));
             }
 
             /**
@@ -160,10 +153,11 @@ namespace ECS {
             template<typename Component, typename... Params>
             Component& emplaceComponent(Entity entity, Params&&... params) {
                 ensureEntityAlive(entity);
-                auto& stored = ensureStorage<Component>().emplaceAt(
-                    entity.value(), std::forward<Params>(params)...);
-                _signatures[entity.value()].set(componentId<Component>());
-                return stored;
+                Component value(std::forward<Params>(params)...);
+                if (_deferring) {
+                    return emplaceComponentDeferred<Component>(entity, std::move(value));
+                }
+                return emplaceComponentImmediate<Component>(entity, std::move(value));
             }
 
             /**
@@ -173,13 +167,11 @@ namespace ECS {
             template<typename Component>
             void removeComponent(Entity entity) {
                 ensureEntityAlive(entity);
-                const ComponentId id = componentId<Component>();
-                if (id >= _pools.size() || !_pools[id]) {
+                if (_deferring) {
+                    removeComponentDeferred<Component>(entity);
                     return;
                 }
-                _pools[id]->erase(entity.value());
-                // Safe: a registered pool implies id < MaxComponentTypes.
-                _signatures[entity.value()].reset(id);
+                removeComponentImmediate<Component>(entity);
             }
 
             /**
@@ -245,11 +237,23 @@ namespace ECS {
                     });
             }
 
-            /** @brief Executes registered systems in registration order. */
+            /**
+             * @brief Executes registered systems in registration order.
+             *
+             * Structural mutations (spawnEntity, killEntity, addComponent,
+             * emplaceComponent, removeComponent) made by a system during this
+             * call are deferred: they queue instead of touching component
+             * storage immediately, so a View a system is iterating can't be
+             * reordered out from under it. Queued commands apply, in the
+             * order they were recorded, once every system has run.
+             */
             void runSystems() {
+                _deferring = true;
                 for (auto& system : _systems) {
                     system(*this);
                 }
+                _deferring = false;
+                flushCommands();
             }
 
             /**
@@ -286,9 +290,135 @@ namespace ECS {
             }
 
         private:
+            Entity spawnEntityImmediate(const std::string& name) {
+                _entitiesDirty = true;
+                const Entity entity = _entities.create();
+                ensureSignatureSlot(entity.value());
+                _signatures[entity.value()].reset();
+                if (!name.empty()) {
+                    _entityNames[entity.value()] = name;
+                }
+                return entity;
+            }
+
+            Entity spawnEntityDeferred(const std::string& name) {
+                const Entity entity = _entities.reserveIdentity();
+                ensurePendingSlot(entity.value());
+                _pendingSpawns[entity.value()] = true;
+                _commandQueue.emplace_back([entity, name](Registry& world) {
+                    world.commitSpawn(entity, name);
+                });
+                return entity;
+            }
+
+            void commitSpawn(Entity entity, const std::string& name) {
+                _entitiesDirty = true;
+                _entities.commit(entity);
+                _pendingSpawns[entity.value()] = false;
+                ensureSignatureSlot(entity.value());
+                _signatures[entity.value()].reset();
+                if (!name.empty()) {
+                    _entityNames[entity.value()] = name;
+                }
+            }
+
+            void killEntityImmediate(Entity entity) {
+                _entities.destroy(entity);
+                for (const auto& pool : _pools) {
+                    if (pool) {
+                        pool->erase(entity.value());
+                    }
+                }
+                _signatures[entity.value()].reset();
+                _entityNames.erase(entity.value());
+                _entitiesDirty = true;
+            }
+
+            void killEntityDeferred(Entity entity) {
+                _commandQueue.emplace_back([entity](Registry& world) {
+                    world.killEntityImmediate(entity);
+                });
+            }
+
+            template<typename StoredComponent>
+            StoredComponent& addComponentImmediate(Entity entity, StoredComponent value) {
+                auto& stored = ensureStorage<StoredComponent>().insertAt(entity.value(), std::move(value));
+                _signatures[entity.value()].set(componentId<StoredComponent>());
+                return stored;
+            }
+
+            template<typename StoredComponent>
+            StoredComponent& addComponentDeferred(Entity entity, StoredComponent value) {
+                ensureStorage<StoredComponent>();
+                auto staged = std::make_shared<StoredComponent>(std::move(value));
+                StoredComponent& ref = *staged;
+                _commandQueue.emplace_back(
+                    [entity, staged](Registry& world) {
+                        world.addComponentImmediate<StoredComponent>(entity, std::move(*staged));
+                    });
+                return ref;
+            }
+
+            template<typename Component>
+            Component& emplaceComponentImmediate(Entity entity, Component value) {
+                auto& stored = ensureStorage<Component>().emplaceAt(entity.value(), std::move(value));
+                _signatures[entity.value()].set(componentId<Component>());
+                return stored;
+            }
+
+            template<typename Component>
+            Component& emplaceComponentDeferred(Entity entity, Component value) {
+                ensureStorage<Component>();
+                auto staged = std::make_shared<Component>(std::move(value));
+                Component& ref = *staged;
+                _commandQueue.emplace_back(
+                    [entity, staged](Registry& world) {
+                        world.emplaceComponentImmediate<Component>(entity, std::move(*staged));
+                    });
+                return ref;
+            }
+
+            template<typename Component>
+            void removeComponentImmediate(Entity entity) {
+                const ComponentId id = componentId<Component>();
+                if (id >= _pools.size() || !_pools[id]) {
+                    return;
+                }
+                _pools[id]->erase(entity.value());
+                // Safe: a registered pool implies id < MaxComponentTypes.
+                _signatures[entity.value()].reset(id);
+            }
+
+            template<typename Component>
+            void removeComponentDeferred(Entity entity) {
+                _commandQueue.emplace_back([entity](Registry& world) {
+                    world.removeComponentImmediate<Component>(entity);
+                });
+            }
+
+            void flushCommands() {
+                for (auto& command : _commandQueue) {
+                    command(*this);
+                }
+                _commandQueue.clear();
+            }
+
             void ensureEntityAlive(Entity entity) const {
-                if (!_entities.isAlive(entity)) {
+                if (_entities.isAlive(entity)) {
+                    return;
+                }
+                const std::size_t id = entity.value();
+                const bool isPendingSpawn = id < _pendingSpawns.size()
+                    && _pendingSpawns[id]
+                    && entity == _entities.entityFromIndex(id);
+                if (!isPendingSpawn) {
                     throw std::invalid_argument("ECS::Registry: entity handle is not alive");
+                }
+            }
+
+            void ensurePendingSlot(std::size_t id) {
+                if (id >= _pendingSpawns.size()) {
+                    _pendingSpawns.resize(id + 1, false);
                 }
             }
 
@@ -350,5 +480,8 @@ namespace ECS {
             mutable std::vector<Entity> _cachedEntities;
             mutable bool _entitiesDirty{true};
             std::vector<Signature> _signatures;
+            std::vector<std::function<void(Registry&)>> _commandQueue;
+            std::vector<bool> _pendingSpawns;
+            bool _deferring{false};
     };
 }
