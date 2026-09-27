@@ -210,7 +210,7 @@ Both operations add or replace the component for the selected entity.
 ### Accessing and removing components
 
 ```cpp
-if (world.hasComponent<Health>(player)) {
+if (world.hasComponents<Health>(player)) {
     Health& health = world.getComponent<Health>(player);
 }
 

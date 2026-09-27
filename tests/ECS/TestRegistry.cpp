@@ -71,7 +71,7 @@ namespace {
             registry.killEntity(first);
             const auto second = registry.spawnEntity();
 
-            expect(!registry.hasComponent<Position>(second));
+            expect(!registry.hasComponents<Position>(second));
             expect(registry.getEntityName(second).empty());
             expect(second.generation() != first.generation());
         };
@@ -100,7 +100,7 @@ namespace {
             const auto entity = registry.spawnEntity();
             registry.killEntity(entity);
             expect(registry.getEntityName(entity).empty());
-            expect(!registry.hasComponent<Position>(entity));
+            expect(!registry.hasComponents<Position>(entity));
         };
     }
 
@@ -121,8 +121,8 @@ namespace {
             registry.emplaceComponent<Velocity>(entity, 3, 4);
             registry.killEntity(entity);
 
-            expect(!registry.hasComponent<Position>(entity));
-            expect(!registry.hasComponent<Velocity>(entity));
+            expect(!registry.hasComponents<Position>(entity));
+            expect(!registry.hasComponents<Velocity>(entity));
         };
     }
 
@@ -215,21 +215,21 @@ namespace {
     }
 
     void test_has_component_is_false_before_component_is_added() {
-        "hasComponent is false before insertion"_test = [] {
+        "hasComponents is false before insertion"_test = [] {
             ECS::Registry registry;
             const auto entity = registry.spawnEntity();
-            expect(!registry.hasComponent<Position>(entity));
+            expect(!registry.hasComponents<Position>(entity));
         };
     }
 
     void test_has_component_reflects_added_component() {
-        "hasComponent reflects insertion"_test = [] {
+        "hasComponents reflects insertion"_test = [] {
             ECS::Registry registry;
             const auto entity = registry.spawnEntity();
             registry.addComponent(entity, Position{1, 2});
 
-            expect(registry.hasComponent<Position>(entity));
-            expect(!registry.hasComponent<Velocity>(entity));
+            expect(registry.hasComponents<Position>(entity));
+            expect(!registry.hasComponents<Velocity>(entity));
         };
     }
 
@@ -287,7 +287,7 @@ namespace {
             registry.emplaceComponent<Position>(entity, 1, 2);
             registry.removeComponent<Position>(entity);
 
-            expect(!registry.hasComponent<Position>(entity));
+            expect(!registry.hasComponents<Position>(entity));
             expect(!registry.hasComponents<Position>(entity));
         };
     }
@@ -298,7 +298,7 @@ namespace {
             const auto entity = registry.spawnEntity();
             registry.removeComponent<Unregistered>(entity);
 
-            expect(!registry.hasComponent<Unregistered>(entity));
+            expect(!registry.hasComponents<Unregistered>(entity));
         };
     }
 
@@ -310,7 +310,7 @@ namespace {
             registry.emplaceComponent<Velocity>(entity, 3, 4);
             registry.removeComponent<Position>(entity);
 
-            expect(registry.hasComponent<Velocity>(entity));
+            expect(registry.hasComponents<Velocity>(entity));
         };
     }
 
@@ -363,7 +363,7 @@ namespace {
 
             std::size_t count = 0;
             for (auto [entity, position] : registry.view<Position>()) {
-                expect(registry.hasComponent<Position>(entity));
+                expect(registry.hasComponents<Position>(entity));
                 expect(position.x > 0);
                 ++count;
             }
@@ -574,9 +574,9 @@ namespace {
         "hasComponent and hasComponents agree through every change"_test = [] {
             ECS::Registry registry;
             const auto agree = [&](ECS::Entity entity) {
-                return registry.hasComponent<Position>(entity)
+                return registry.hasComponents<Position>(entity)
                         == registry.hasComponents<Position>(entity)
-                    && registry.hasComponent<Velocity>(entity)
+                    && registry.hasComponents<Velocity>(entity)
                         == registry.hasComponents<Velocity>(entity);
             };
 
@@ -603,7 +603,7 @@ namespace {
             const auto recycled = registry.spawnEntity();
             expect(recycled.index() == entity.index());
             expect(agree(recycled));
-            expect(!registry.hasComponent<Velocity>(recycled));
+            expect(!registry.hasComponents<Velocity>(recycled));
             expect(!registry.hasComponents<Velocity>(recycled));
         };
     }
@@ -632,10 +632,10 @@ namespace {
             }));
 
             expect(registry.getIf<BeyondLimit>() == nullptr);
-            expect(!registry.hasComponent<BeyondLimit>(entity));
+            expect(!registry.hasComponents<BeyondLimit>(entity));
             expect(!registry.hasComponents<BeyondLimit>(entity));
             registry.removeComponent<BeyondLimit>(entity);
-            expect(!registry.hasComponent<BeyondLimit>(entity));
+            expect(!registry.hasComponents<BeyondLimit>(entity));
         };
     }
 }

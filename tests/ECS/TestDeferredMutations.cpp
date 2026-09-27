@@ -43,13 +43,13 @@ namespace {
 
             registry.addSystem<Position>([&](ECS::Registry& world) {
                 world.addComponent(entity, Position{1, 2});
-                hasDuringSystem = world.hasComponent<Position>(entity);
+                hasDuringSystem = world.hasComponents<Position>(entity);
             });
 
             registry.runSystems();
 
             expect(!hasDuringSystem);
-            expect(registry.hasComponent<Position>(entity));
+            expect(registry.hasComponents<Position>(entity));
         };
     }
 
@@ -62,13 +62,13 @@ namespace {
 
             registry.addSystem<Position>([&](ECS::Registry& world) {
                 world.removeComponent<Position>(entity);
-                hasDuringSystem = world.hasComponent<Position>(entity);
+                hasDuringSystem = world.hasComponents<Position>(entity);
             });
 
             registry.runSystems();
 
             expect(hasDuringSystem);
-            expect(!registry.hasComponent<Position>(entity));
+            expect(!registry.hasComponents<Position>(entity));
         };
     }
 
@@ -101,13 +101,13 @@ namespace {
                 world.addComponent(spawned, Position{1, 1});
             });
             registry.addSystem<Position>([&](ECS::Registry& world) {
-                secondSystemSawIt = world.hasComponent<Position>(spawned);
+                secondSystemSawIt = world.hasComponents<Position>(spawned);
             });
 
             registry.runSystems();
 
             expect(!secondSystemSawIt);
-            expect(registry.hasComponent<Position>(spawned));
+            expect(registry.hasComponents<Position>(spawned));
         };
     }
 
@@ -125,7 +125,7 @@ namespace {
 
             registry.runSystems();
 
-            expect(registry.hasComponent<Position>(spawned));
+            expect(registry.hasComponents<Position>(spawned));
             expect(registry.getComponent<Position>(spawned).x == 7);
             expect(registry.getComponent<Position>(spawned).y == 9);
         };
@@ -138,10 +138,10 @@ namespace {
             expect(contains(registry.getAllEntities(), entity));
 
             registry.addComponent(entity, Position{3, 4});
-            expect(registry.hasComponent<Position>(entity));
+            expect(registry.hasComponents<Position>(entity));
 
             registry.removeComponent<Position>(entity);
-            expect(!registry.hasComponent<Position>(entity));
+            expect(!registry.hasComponents<Position>(entity));
 
             registry.killEntity(entity);
             expect(!contains(registry.getAllEntities(), entity));
@@ -264,7 +264,7 @@ namespace {
 
             const std::vector<int> expected{0, 1, 2, 3, 4};
             expect(seenX == expected);
-            expect(registry.hasComponent<Position>(extra));
+            expect(registry.hasComponents<Position>(extra));
         };
     }
 }
