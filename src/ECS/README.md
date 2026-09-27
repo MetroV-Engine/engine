@@ -39,8 +39,9 @@ entities that contain the components they need.
 
 See [Entity.hpp](Entity.hpp).
 
-`Entity` is a lightweight handle containing an index and a generation. It can
-be copied cheaply and passed to component operations. Display names are not
+`Entity` is a lightweight handle containing an index, a generation and the
+world ID of the registry that issued it. It can be copied cheaply and passed to
+component operations. Display names are not
 stored in the handle; they are owned by `Registry`.
 
 ```cpp
@@ -49,16 +50,33 @@ std::size_t id = player.value();
 ```
 
 The entity handle does not create or destroy entities. That responsibility
-belongs to `EntityManager` and `Registry`.
+belongs to `EntityManager` and `Registry`. Only the default constructor is
+public: every other handle comes from `spawnEntity()`, a view, or
+`getAllEntities()`. A default-constructed `Entity` belongs to no world and is
+never alive.
 
 ```text
-Entity handle -> index + generation
+Entity handle -> world ID + index + generation
                -> component pool lookup by index
 ```
 
-An entity is valid only while its index and generation match the state held by
-`EntityManager`. When an index is recycled, its generation is incremented, so
-old handles are rejected instead of accessing the new entity.
+An entity is valid only while its world ID, index and generation match the
+state held by `EntityManager`. When an index is recycled, its generation is
+incremented, so old handles are rejected instead of accessing the new entity.
+
+Each `Registry` draws its own world ID, so a handle belongs to the registry
+that issued it. Passing it to another registry is rejected like any other dead
+handle, even when a local entity has the same index and generation:
+
+```cpp
+ECS::Registry worldA;
+ECS::Registry worldB;
+ECS::Entity a = worldA.spawnEntity();
+worldB.spawnEntity();                   // same index and generation as a
+
+worldB.hasComponent<Position>(a);       // false
+worldB.getComponent<Position>(a);       // throws std::invalid_argument
+```
 
 ## EntityManager
 

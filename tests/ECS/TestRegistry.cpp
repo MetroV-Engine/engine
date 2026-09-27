@@ -77,20 +77,49 @@ namespace {
         };
     }
 
-    void test_entity_from_index_does_not_create_entity() {
-        "registry entityFromIndex does not create an entity"_test = [] {
-            const ECS::Registry registry;
-            const auto entity = registry.entityFromIndex(42);
-            expect(entity.index() == std::size_t{42});
-            expect(registry.getAllEntities().empty());
+    void test_spawn_entity_stamps_registry_world() {
+        "spawnEntity stamps the registry's world id on the handle"_test = [] {
+            ECS::Registry registry;
+            expect(registry.worldId() != ECS::InvalidWorld);
+            expect(registry.spawnEntity().world() == registry.worldId());
         };
     }
 
-    void test_entity_from_index_returns_current_handle() {
-        "entityFromIndex returns the current handle"_test = [] {
-            ECS::Registry registry;
-            const auto created = registry.spawnEntity();
-            expect(registry.entityFromIndex(created.index()) == created);
+    void test_registries_have_distinct_world_ids() {
+        "each registry has its own world id"_test = [] {
+            const ECS::Registry first;
+            const ECS::Registry second;
+            expect(first.worldId() != second.worldId());
+        };
+    }
+
+    void test_registry_rejects_entity_from_another_registry() {
+        "a registry rejects a handle issued by another registry"_test = [] {
+            ECS::Registry worldA;
+            ECS::Registry worldB;
+            const auto a = worldA.spawnEntity("A");
+            const auto b = worldB.spawnEntity("B");
+            worldA.emplaceComponent<Position>(a, 10, 20);
+            worldB.emplaceComponent<Position>(b, 999, 999);
+
+            // Same index and generation: only the world id tells them apart.
+            expect(a.index() == b.index());
+            expect(a.generation() == b.generation());
+
+            expect(throws<std::invalid_argument>([&] {
+                (void)worldB.getComponent<Position>(a);
+            }));
+            expect(throws<std::invalid_argument>([&] {
+                worldB.emplaceComponent<Velocity>(a, 1, 1);
+            }));
+            expect(throws<std::invalid_argument>([&] {
+                worldB.killEntity(a);
+            }));
+            expect(!worldB.hasComponents<Position>(a));
+            expect(worldB.getEntityName(a).empty());
+
+            expect(worldB.getComponent<Position>(b).x == 999);
+            expect(worldA.getComponent<Position>(a).x == 10);
         };
     }
 
@@ -108,7 +137,7 @@ namespace {
         "killEntity rejects an invalid entity"_test = [] {
             ECS::Registry registry;
             expect(throws<std::invalid_argument>([&] {
-                registry.killEntity(ECS::Entity{42});
+                registry.killEntity(ECS::Entity{});
             }));
         };
     }
@@ -552,7 +581,7 @@ namespace {
             registry.killEntity(entity);
 
             expect(registry.getEntityName(entity).empty());
-            expect(registry.getEntityName(ECS::Entity{42}).empty());
+            expect(registry.getEntityName(ECS::Entity{}).empty());
         };
     }
 
@@ -647,8 +676,9 @@ void run_registry_tests() {
     test_spawn_entity_with_name_stores_name();
     test_spawn_entity_without_name_has_empty_name();
     test_spawn_entity_reuse_resets_state();
-    test_entity_from_index_does_not_create_entity();
-    test_entity_from_index_returns_current_handle();
+    test_spawn_entity_stamps_registry_world();
+    test_registries_have_distinct_world_ids();
+    test_registry_rejects_entity_from_another_registry();
     test_kill_entity_makes_entity_dead();
     test_kill_entity_rejects_invalid_entity();
     test_kill_entity_removes_all_components();

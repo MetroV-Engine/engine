@@ -50,14 +50,13 @@ namespace ECS {
             }
 
             /**
-             * @brief Reconstructs an entity handle from a numeric identity.
-             * @param idx Entity identity.
-             * @return Handle containing idx.
+             * @brief Returns the WorldId stamped on every handle this registry issues.
              *
-             * This compatibility helper does not make an identity live.
+             * Handles issued by another registry carry a different WorldId and
+             * are rejected as not alive here.
              */
-            [[nodiscard]] Entity entityFromIndex(std::size_t idx) const noexcept {
-                return _entities.entityFromIndex(idx);
+            [[nodiscard]] WorldId worldId() const noexcept {
+                return _entities.worldId();
             }
 
             /**

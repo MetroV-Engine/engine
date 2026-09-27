@@ -3,10 +3,13 @@
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
 
 #include "ECS/EntityManager.hpp"
+#include "EntityTestAccess.hpp"
 
 using namespace boost::ut;
+using ECS::TestAccess::EntityAccess;
 
 namespace ECS::TestAccess {
 	struct EntityManagerAccess {
@@ -32,7 +35,9 @@ void test_create_empty_manager() {
 		ECS::EntityManager manager;
 		const ECS::Entity entity = manager.create();
 
-		expect(entity == ECS::Entity{0, 0});
+		expect(entity.index() == std::size_t{0});
+		expect(entity.generation() == ECS::EntityGeneration{0});
+		expect(entity.world() == manager.worldId());
 		expect(manager.isAlive(entity));
 	};
 }
@@ -152,7 +157,7 @@ void test_destroy_rejects_unallocated_entity() {
 		ECS::EntityManager manager;
 
 		expect(throws<std::invalid_argument>([&] {
-			manager.destroy(ECS::Entity{42});
+			manager.destroy(EntityAccess::make(42, 0, manager.worldId()));
 		}));
 	};
 }
@@ -186,10 +191,11 @@ void test_destroy_rejects_handle_with_wrong_generation() {
 	"destroy rejects a handle with the wrong generation"_test = [] {
 		ECS::EntityManager manager;
 		const ECS::Entity entity = manager.create();
-		const ECS::Entity wrongGeneration{
+		const ECS::Entity wrongGeneration = EntityAccess::make(
 			entity.index(),
-			ECS::EntityGeneration{1}
-		};
+			ECS::EntityGeneration{1},
+			manager.worldId()
+		);
 
 		expect(throws<std::invalid_argument>([&] {
 			manager.destroy(wrongGeneration);
@@ -213,7 +219,7 @@ void test_is_alive_returns_false_for_empty_manager() {
 	"isAlive is false for an empty manager"_test = [] {
 		ECS::EntityManager manager;
 
-		expect(!manager.isAlive(ECS::Entity{0}));
+		expect(!manager.isAlive(EntityAccess::make(0, 0, manager.worldId())));
 	};
 }
 
@@ -241,7 +247,7 @@ void test_is_alive_rejects_wrong_index() {
 		ECS::EntityManager manager;
 		manager.create();
 
-		expect(!manager.isAlive(ECS::Entity{1}));
+		expect(!manager.isAlive(EntityAccess::make(1, 0, manager.worldId())));
 	};
 }
 
@@ -250,10 +256,11 @@ void test_is_alive_rejects_wrong_generation() {
 		ECS::EntityManager manager;
 		const ECS::Entity entity = manager.create();
 
-		expect(!manager.isAlive(ECS::Entity{
+		expect(!manager.isAlive(EntityAccess::make(
 			entity.index(),
-			ECS::EntityGeneration{1}
-		}));
+			ECS::EntityGeneration{1},
+			manager.worldId()
+		)));
 	};
 }
 
@@ -275,6 +282,57 @@ void test_is_alive_rejects_entity_from_another_manager() {
 		const ECS::Entity entity = firstManager.create();
 
 		expect(!secondManager.isAlive(entity));
+	};
+}
+
+void test_is_alive_rejects_matching_entity_from_another_manager() {
+	"isAlive rejects another manager's entity with the same index and generation"_test = [] {
+		ECS::EntityManager firstManager;
+		ECS::EntityManager secondManager;
+		const ECS::Entity foreign = firstManager.create();
+		const ECS::Entity local = secondManager.create();
+
+		expect(foreign.index() == local.index());
+		expect(foreign.generation() == local.generation());
+		expect(!secondManager.isAlive(foreign));
+		expect(secondManager.isAlive(local));
+	};
+}
+
+void test_is_alive_rejects_default_entity() {
+	"isAlive rejects a default handle even when index zero is alive"_test = [] {
+		ECS::EntityManager manager;
+		manager.create();
+
+		expect(!manager.isAlive(ECS::Entity{}));
+	};
+}
+
+void test_is_alive_rejects_handle_without_world() {
+	"isAlive rejects a handle carrying no world"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity entity = manager.create();
+
+		expect(!manager.isAlive(EntityAccess::make(entity.index(), entity.generation())));
+	};
+}
+
+void test_managers_have_distinct_world_ids() {
+	"each manager draws a distinct, valid world id"_test = [] {
+		const ECS::EntityManager firstManager;
+		const ECS::EntityManager secondManager;
+
+		expect(firstManager.worldId() != ECS::InvalidWorld);
+		expect(secondManager.worldId() != ECS::InvalidWorld);
+		expect(firstManager.worldId() != secondManager.worldId());
+	};
+}
+
+void test_manager_is_not_copyable() {
+	"manager is not copyable"_test = [] {
+		static_assert(!std::is_copy_constructible_v<ECS::EntityManager>);
+		static_assert(!std::is_copy_assignable_v<ECS::EntityManager>);
+		expect(true);
 	};
 }
 
@@ -304,7 +362,9 @@ void test_entity_from_index_returns_default_generation_for_unallocated_index() {
 		ECS::EntityManager manager;
 		const ECS::Entity entity = manager.entityFromIndex(42);
 
-		expect(entity == ECS::Entity{42, 0});
+		expect(entity.index() == std::size_t{42});
+		expect(entity.generation() == ECS::EntityGeneration{0});
+		expect(entity.world() == ECS::InvalidWorld);
 	};
 }
 
@@ -524,7 +584,9 @@ void test_reserve_supports_creation_after_reservation() {
 		manager.reserve(3);
 		const ECS::Entity entity = manager.create();
 
-		expect(entity == ECS::Entity{0, 0});
+		expect(entity.index() == std::size_t{0});
+		expect(entity.generation() == ECS::EntityGeneration{0});
+		expect(entity.world() == manager.worldId());
 		expect(manager.isAlive(entity));
 	};
 }
@@ -580,7 +642,7 @@ void test_destroy_throws_when_generation_overflows() {
 		);
 
 		expect(throws<std::overflow_error>([&] {
-			manager.destroy(ECS::Entity{index, generation});
+			manager.destroy(EntityAccess::make(index, generation, manager.worldId()));
 		}));
 	};
 }
@@ -610,6 +672,11 @@ void run_entity_manager_tests()
 	test_is_alive_rejects_wrong_generation();
 	test_is_alive_rejects_stale_handle_after_reuse();
 	test_is_alive_rejects_entity_from_another_manager();
+	test_is_alive_rejects_matching_entity_from_another_manager();
+	test_is_alive_rejects_default_entity();
+	test_is_alive_rejects_handle_without_world();
+	test_managers_have_distinct_world_ids();
+	test_manager_is_not_copyable();
 	test_entity_from_index_returns_current_live_handle();
 	test_entity_from_index_returns_current_generation_after_destroy();
 	test_entity_from_index_returns_default_generation_for_unallocated_index();
