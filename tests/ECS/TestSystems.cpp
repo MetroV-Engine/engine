@@ -142,7 +142,7 @@ namespace {
 
             systems.update(registry, 1.0);
 
-            expect(!registry.hasComponent<Position>(entity));
+            expect(!registry.hasComponents<Position>(entity));
         };
     }
 

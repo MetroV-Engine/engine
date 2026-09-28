@@ -114,23 +114,6 @@ namespace ECS {
             }
 
             /**
-             * @brief Checks whether an entity owns a component.
-             * @param entity Entity identity to inspect.
-             * @return True when the component pool exists and contains entity.
-             */
-            template<typename Component>
-            [[nodiscard]] bool hasComponent(Entity entity) const noexcept {
-                if (!_entities.isAlive(entity)) {
-                    return false;
-                }
-                const ComponentId id = componentId<Component>();
-                if (id >= _pools.size() || !_pools[id]) {
-                    return false;
-                }
-                return typedPool<Component>(id).has(entity.value());
-            }
-
-            /**
              * @brief Adds or replaces a component using copy or move semantics.
              * @tparam Component Deduced component value type.
              * @return Reference to the stored component.
