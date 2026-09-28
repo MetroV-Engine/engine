@@ -8,6 +8,7 @@ void run_zipper_tests();
 void run_view_tests();
 void run_registry_tests();
 void run_deferred_mutations_tests();
+void run_systems_tests();
 
 int main()
 {
@@ -20,6 +21,7 @@ int main()
     run_zipper_tests();
     run_view_tests();
     run_deferred_mutations_tests();
+    run_systems_tests();
     // run_registry_tests() exhausts componentId's process-wide counter (it
     // verifies the MaxComponentTypes boundary), so nothing that registers a
     // component type it hasn't used before can run after it.
