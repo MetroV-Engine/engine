@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
@@ -8,6 +9,11 @@
 #include "Entity.hpp"
 
 namespace ECS {
+    namespace detail {
+        // Starts at 1: InvalidWorld (0) is never issued.
+        inline std::atomic<WorldId> nextWorldId{1};
+    }
+
 #ifdef ENGINE_TESTING
     namespace TestAccess {
         struct EntityManagerAccess;
@@ -20,6 +26,10 @@ namespace ECS {
      * EntityManager owns the lifecycle state associated with Entity handles.
     * identities are recycled through a free list so creating many short-lived
     * entities does not grow the identity space unnecessarily.
+     *
+     * Each manager draws a unique WorldId and stamps it on every handle it
+     * issues, so a handle from another manager is never alive here, even
+     * when its index and generation happen to match a local entity.
      */
     class EntityManager {
 #ifdef ENGINE_TESTING
@@ -27,6 +37,14 @@ namespace ECS {
 #endif
 
         public:
+            EntityManager() noexcept
+                : _world(detail::nextWorldId.fetch_add(1, std::memory_order_relaxed)) {}
+
+            // A copy would share this manager's WorldId, so each would accept
+            // the other's handles.
+            EntityManager(const EntityManager&) = delete;
+            EntityManager& operator=(const EntityManager&) = delete;
+
             /**
              * @brief Creates a new live entity.
              * @return A handle for a recycled or newly allocated identity.
@@ -53,7 +71,7 @@ namespace ECS {
                 if (!_freeIds.empty()) {
                     const std::size_t id = _freeIds.back();
                     _freeIds.pop_back();
-                    return Entity(id, _generations[id]);
+                    return Entity(id, _generations[id], _world);
                 }
 
                 if (_nextId == std::numeric_limits<std::size_t>::max()) {
@@ -63,7 +81,7 @@ namespace ECS {
                 const std::size_t id = _nextId++;
                 _alive.push_back(false);
                 _generations.push_back(0);
-                return Entity(id, _generations.back());
+                return Entity(id, _generations.back(), _world);
             }
 
             /** @brief Marks a previously reserved identity as alive. */
@@ -97,21 +115,33 @@ namespace ECS {
             /**
              * @brief Checks whether an entity currently belongs to this manager.
              * @param entity Handle to validate.
-             * @return True when the identity is allocated and live.
+             * @return True when the handle was issued by this manager and
+             *         its identity is allocated and live.
              */
             [[nodiscard]] bool isAlive(Entity entity) const noexcept {
                 const std::size_t id = entity.value();
-                return id < _alive.size()
+                return entity.world() == _world
+                    && id < _alive.size()
                     && _alive[id]
                     && _generations[id] == entity.generation();
             }
 
-            /** @brief Returns the current handle for an allocated index. */
+            /**
+             * @brief Returns the current handle for an allocated index.
+             *
+             * An index that was never allocated gets a handle carrying
+             * InvalidWorld, which is never alive.
+             */
             [[nodiscard]] Entity entityFromIndex(std::size_t id) const noexcept {
                 if (id >= _generations.size()) {
-                    return Entity(id);
+                    return Entity(id, 0, InvalidWorld);
                 }
-                return Entity(id, _generations[id]);
+                return Entity(id, _generations[id], _world);
+            }
+
+            /** @brief Returns the WorldId stamped on every handle this manager issues. */
+            [[nodiscard]] WorldId worldId() const noexcept {
+                return _world;
             }
 
             /**
@@ -135,7 +165,7 @@ namespace ECS {
                 entities.reserve(size());
                 for (std::size_t id = 0; id < _nextId; ++id) {
                     if (_alive[id]) {
-                        entities.emplace_back(id, _generations[id]);
+                        entities.push_back(Entity(id, _generations[id], _world));
                     }
                 }
                 return entities;
@@ -159,5 +189,6 @@ namespace ECS {
             std::vector<EntityGeneration> _generations;
             std::vector<std::size_t> _freeIds;
             std::size_t _nextId{0};
+            WorldId _world;
     };
 }
