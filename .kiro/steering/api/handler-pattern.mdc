@@ -1,0 +1,279 @@
+---
+description: Use this rule when creating a handler
+alwaysApply: false
+---
+
+# Handler Pattern
+
+Guidelines for creating handlers following the established adapter pattern.
+
+## File Structure
+
+Each handler lives in its own directory with these files:
+
+```
+{handlerName}/
+├── handler.ts                    # Entry point
+├── {HandlerName}Adapter.ts       # Business logic adapter
+├── {HandlerName}Adapter.test.ts  # Tests
+└── {HandlerName}AdapterEventMother.ts  # Test data builder
+```
+
+## 1. handler.ts
+
+The entry point is minimal - it creates an adapter instance and exports the main function.
+
+```typescript
+import { {HandlerName}Adapter } from './{HandlerName}Adapter';
+
+const adapter = new {HandlerName}Adapter();
+
+export const main = async (event: Event): Promise<Response> => adapter.handle(event);
+```
+
+## 2. {HandlerName}Adapter.ts
+
+The adapter class contains all the business logic, validation schemas, and response transformation.
+
+### Structure
+
+```typescript
+import { inject } from '@trackit.io/di-container';
+
+export class {HandlerName}Adapter {
+  // Inject the use case via DI token
+  private readonly useCase = inject(token{UseCaseName}UseCase);
+
+  // Public handle method - entry point from handler.ts
+  public async handle(event: Event): Promise<Response> {
+    return handleRequest({
+      event,
+      func: this.processRequest.bind(this),
+      statusCode: 200,
+    });
+  }
+
+  // Optional: Response transformation method
+  private to{HandlerName}Response(model: DomainModel): ResponseType {
+    return {
+      // Transform domain model to response format
+    };
+  }
+
+  // Private method containing the actual business logic
+  private async processRequest(event: Event): Promise<ResponseType> {
+    // Parse and validate event parameters
+    const { params, body } = parseEvent(event, {
+      paramsSchema: {HandlerName}ParamsSchema,
+      bodySchema: {HandlerName}BodySchema,
+    });
+
+    // Get context (user, tenant, etc.)
+    const user = getUserFromEvent(event);
+
+    // Call use case with extracted parameters
+    const result = await this.useCase.{methodName}({
+      ...params,
+      ...body,
+      user,
+    });
+
+    // Return transformed response
+    return this.to{HandlerName}Response(result);
+  }
+}
+```
+
+### Input Validation
+
+Define schemas for input validation (using Zod or similar):
+
+```typescript
+// Path/URL parameters
+const {HandlerName}ParamsSchema = z.object({
+  id: z.uuid(),
+  slug: z.string().nonempty(),
+});
+
+// Query parameters (for GET requests)
+const {HandlerName}QuerySchema = z.object({
+  limit: z.coerce.number().min(1).optional(),
+  search: z.string().nonempty().optional(),
+  cursor: z.string().optional(),
+}).strict();
+
+// Request body (for POST/PUT/PATCH requests)
+const {HandlerName}BodySchema = z.object({
+  name: z.string().nonempty(),
+  description: z.string().optional(),
+});
+```
+
+## 3. {HandlerName}Adapter.test.ts
+
+Tests follow a consistent structure with describe blocks for validation and business logic.
+
+### Structure
+
+```typescript
+import { registerTestInfrastructure } from '@backend/infrastructure';
+import { {Model}Mother } from '@backend/models';
+import { token{UseCaseName}UseCase } from '@backend/useCases';
+import { register, reset } from '@trackit.io/di-container';
+
+import { EventMother } from '@backend/test-utils';
+import * as parseEventModule from '@backend/utils/parseEvent';
+import { {HandlerName}Adapter } from './{HandlerName}Adapter';
+import { {HandlerName}AdapterEventMother } from './{HandlerName}AdapterEventMother';
+
+describe('{handlerName} adapter', () => {
+  describe('args validation', () => {
+    it('should validate args', async () => {
+      const { adapter } = setup();
+      const event = {HandlerName}AdapterEventMother.basic().build();
+
+      const response = await adapter.handle(event);
+      expect(response.statusCode).not.toBe(400);
+    });
+
+    it('should call parseEvent with the correct parameters', async () => {
+      const { adapter, parseSpy } = setup();
+      const event = {HandlerName}AdapterEventMother.basic().build();
+
+      await adapter.handle(event);
+
+      expect(parseSpy).toHaveBeenCalledWith(
+        event,
+        expect.objectContaining({
+          paramsSchema: expect.anything(),
+          bodySchema: expect.anything(),
+        }),
+      );
+    });
+
+    it('should return a 400 status code without parameters', async () => {
+      const { adapter } = setup();
+      const event = EventMother.basic().build();
+
+      const response = await adapter.handle(event);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should return a 400 status code with invalid {paramName}', async () => {
+      const { adapter } = setup();
+      const event = {HandlerName}AdapterEventMother.basic()
+        .with{ParamName}('invalid-value')
+        .build();
+
+      const response = await adapter.handle(event);
+      expect(response.statusCode).toBe(400);
+    });
+  });
+
+  describe('useCase and return value', () => {
+    it('should call useCase with the correct parameters', async () => {
+      const { adapter, useCase } = setup();
+      const user = UserMother.basic().build();
+
+      const event = {HandlerName}AdapterEventMother.basic()
+        .withUser(user)
+        .build();
+
+      await adapter.handle(event);
+
+      expect(useCase.{methodName}).toHaveBeenCalledWith({
+        // expected parameters
+        user,
+      });
+    });
+
+    it('should return a 200 status code', async () => {
+      const { adapter } = setup();
+      const event = {HandlerName}AdapterEventMother.basic().build();
+
+      const response = await adapter.handle(event);
+      expect(response.statusCode).toBe(200);
+    });
+  });
+});
+
+const setup = () => {
+  reset();
+  registerTestInfrastructure();
+
+  const parseSpy = vitest.spyOn(parseEventModule, 'parseEvent');
+
+  const useCase = { {methodName}: vitest.fn() };
+  useCase.{methodName}.mockResolvedValueOnce(
+    {ResultMother}.basic().build(),
+  );
+  register(token{UseCaseName}UseCase, { useValue: useCase });
+
+  return { parseSpy, useCase, adapter: new {HandlerName}Adapter() };
+};
+```
+
+## 4. {HandlerName}AdapterEventMother.ts
+
+A builder class for creating test events with the specific parameters for this handler.
+
+```typescript
+import { UserMother, type User } from '@backend/models';
+import { EventMother } from '@backend/test-utils';
+
+export class {HandlerName}AdapterEventMother {
+  private params: {HandlerName}Params;
+  private body: {HandlerName}Body;
+  private user: User = UserMother.basic().build();
+
+  private constructor(params: {HandlerName}Params, body: {HandlerName}Body) {
+    this.params = params;
+    this.body = body;
+  }
+
+  // Factory method with sensible defaults
+  public static basic(): {HandlerName}AdapterEventMother {
+    return new {HandlerName}AdapterEventMother(
+      {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+      },
+      {
+        name: 'default-name',
+      },
+    );
+  }
+
+  // Builder methods for each parameter
+  public withId(id: string): {HandlerName}AdapterEventMother {
+    this.params.id = id;
+    return this;
+  }
+
+  public withName(name: string): {HandlerName}AdapterEventMother {
+    this.body.name = name;
+    return this;
+  }
+
+  public withUser(user: User): {HandlerName}AdapterEventMother {
+    this.user = user;
+    return this;
+  }
+
+  // Build the final event
+  public build(): Event {
+    return EventMother.basic()
+      .withParams(this.params)
+      .withBody(JSON.stringify(this.body))
+      .withUser(this.user)
+      .build();
+  }
+}
+```
+
+## Key Conventions
+
+1. **Naming**: Use PascalCase for class names matching the handler directory name
+2. **DI Tokens**: Use case tokens follow the pattern `token{UseCaseName}UseCase`
+3. **Status Codes**: Use 200 for success, 201 for creation, 400 for validation errors
+4. **User Extraction**: Always extract user/context from the event for authenticated requests
+5. **Test Coverage**: Test both validation (400 errors) and business logic (use case calls)

@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.turbo/
+dist/
+
+# Setup flag
+.setup-done
+
+# Environment variables (secrets) — all locations and variants
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Changesets are committed (no ignores needed)
+# .changeset/*.md files should be committed with PRs

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+[ -f ./scripts/.helpers/repo-norms.sh ] || exit 0
+. ./scripts/.helpers/repo-norms.sh
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Always validate branch name (cannot be bypassed)
+if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "master" ]; then
+  if ! echo "$BRANCH" | grep -qE "$BRANCH_PATTERN"; then
+    echo ""
+    echo "❌ Invalid branch name: $BRANCH"
+    echo "Expected: type/NUMBER/description"
+    echo "Example: feat/42/add-new-feature"
+    echo ""
+    exit 1
+  fi
+fi

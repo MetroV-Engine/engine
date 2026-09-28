@@ -1,0 +1,433 @@
+---
+alwaysApply: true
+---
+
+# Testing Guidelines
+
+Every piece of code must have accompanying tests. Tests should verify the behavior of the code being tested, not its dependencies. Use dependency injection (DI) to mock/fake dependencies.
+
+## Core Principles
+
+1. **Always write tests** - Every new feature, handler, use case, or service must have tests
+2. **Test isolation** - Tests must not depend on external services or real implementations
+3. **Mock dependencies** - Use DI container to inject fakes/mocks for all dependencies
+4. **Test behavior, not implementation** - Focus on inputs/outputs and side effects
+
+## DI Container for Testing
+
+### Key Functions
+
+```typescript
+import { inject, register, reset } from '@trackit.io/di-container';
+```
+
+- `reset()` - Clears all registered dependencies (call at start of each test setup)
+- `register(token, provider)` - Registers a dependency with the container
+- `inject(token)` - Retrieves a registered dependency
+
+### Provider Types
+
+```typescript
+// Value provider - for simple values or mock objects
+register(tokenMyService, { useValue: mockObject });
+
+// Class provider - for fake implementations
+register(tokenMyService, { useClass: FakeMyService });
+
+// Factory provider - for lazy instantiation
+register(tokenMyService, { useFactory: () => inject(tokenFakeMyService) });
+```
+
+## Test File Structure
+
+### File Naming
+
+- Test files: `{ClassName}.test.ts`
+- Mother classes (test data builders): `{ClassName}Mother.ts`
+- Use case args mothers: `{UseCaseName}UseCaseArgsMother.ts`
+
+### Standard Test Structure
+
+```typescript
+import { registerTestInfrastructure, tokenFake{Dependency} } from '@backend/infrastructure';
+import { {Model}Mother } from '@backend/models';
+import { token{UseCase}UseCase } from '@backend/useCases';
+import { inject, register, reset } from '@trackit.io/di-container';
+
+import { {ClassName} } from './{ClassName}';
+
+describe('{ClassName}', () => {
+  describe('{methodName}', () => {
+    it('should {expected behavior}', async () => {
+      const { className } = setup();
+
+      // Arrange - set up test data using Mothers
+      const input = {InputMother}.basic().build();
+
+      // Act - call the method being tested
+      const result = await className.{methodName}(input);
+
+      // Assert - verify the result
+      expect(result).toEqual(expected);
+    });
+
+    it('should throw {ErrorType} when {condition}', async () => {
+      const { className } = setup();
+
+      const input = {InputMother}.basic()
+        .with{InvalidField}('invalid')
+        .build();
+
+      await expect(className.{methodName}(input)).rejects.toThrow({ErrorType});
+    });
+  });
+});
+
+const setup = () => {
+  // Always reset and register test infrastructure first
+  reset();
+  registerTestInfrastructure();
+
+  return {
+    className: new {ClassName}(),
+    fakeDependency: inject(tokenFake{Dependency}),
+  };
+};
+```
+
+## Mocking Strategies
+
+### Strategy 1: Use Fake Implementations (Preferred for Infrastructure)
+
+Use pre-built fake implementations that provide in-memory behavior:
+
+```typescript
+const setup = () => {
+  reset();
+  registerTestInfrastructure();
+
+  // Get the fake repository to seed test data
+  const fakeRepository = inject(tokenFakeMyRepository);
+
+  return {
+    useCase: new MyUseCaseImpl(),
+    fakeRepository,
+  };
+};
+
+it('should return the entity', async () => {
+  const { useCase, fakeRepository } = setup();
+
+  // Seed test data into the fake
+  const entity = EntityMother.basic().build();
+  await fakeRepository.save(entity);
+
+  const result = await useCase.getEntity({ id: entity.id });
+
+  expect(result).toEqual(entity);
+});
+```
+
+### Strategy 2: Use vitest.fn() Mocks (Preferred for Use Cases in Adapters)
+
+For handler/adapter tests, mock the use case entirely:
+
+```typescript
+const setup = () => {
+  reset();
+  registerTestInfrastructure();
+
+  // Create mock use case
+  const useCase = { methodName: vitest.fn() };
+  useCase.methodName.mockResolvedValueOnce(
+    ExpectedMother.basic().build(),
+  );
+
+  // Register mock with DI
+  register(tokenMyUseCase, { useValue: useCase });
+
+  return {
+    adapter: new MyAdapter(),
+    useCase,
+  };
+};
+
+it('should call useCase with correct parameters', async () => {
+  const { adapter, useCase } = setup();
+
+  const event = MyAdapterEventMother.basic().build();
+  await adapter.handle(event);
+
+  expect(useCase.methodName).toHaveBeenCalledWith({
+    // expected parameters
+  });
+});
+```
+
+### Strategy 3: Spy on Functions
+
+For verifying internal function calls:
+
+```typescript
+import * as parseEventModule from '@backend/utils/parseEvent';
+
+const setup = () => {
+  reset();
+  registerTestInfrastructure();
+
+  const parseSpy = vitest.spyOn(parseEventModule, 'parseEvent');
+
+  return { parseSpy, adapter: new MyAdapter() };
+};
+
+it('should call parseEvent with correct schemas', async () => {
+  const { adapter, parseSpy } = setup();
+
+  await adapter.handle(event);
+
+  expect(parseSpy).toHaveBeenCalledWith(
+    event,
+    expect.objectContaining({
+      paramsSchema: expect.anything(),
+    }),
+  );
+});
+```
+
+## Mother Classes (Test Data Builders)
+
+Use the Object Mother pattern with builder methods for flexible test data creation.
+
+### Domain Model Mother
+
+```typescript
+import type { MyModel } from './MyModel';
+
+export class MyModelMother {
+  private data: MyModel;
+
+  private constructor(data: MyModel) {
+    this.data = data;
+  }
+
+  // Factory method with sensible defaults
+  public static basic(): MyModelMother {
+    return new MyModelMother({
+      id: 'default-id',
+      name: 'Default Name',
+      createdAt: new Date('2025-01-01'),
+    });
+  }
+
+  // Builder methods for each property
+  public withId(id: string): MyModelMother {
+    this.data.id = id;
+    return this;
+  }
+
+  public withName(name: string): MyModelMother {
+    this.data.name = name;
+    return this;
+  }
+
+  public withCreatedAt(createdAt: Date): MyModelMother {
+    this.data.createdAt = createdAt;
+    return this;
+  }
+
+  // Build method returns the final object
+  public build(): MyModel {
+    return this.data;
+  }
+}
+```
+
+### Use Case Args Mother
+
+```typescript
+import type { MyUseCaseArgs } from './MyUseCase';
+
+export class MyUseCaseArgsMother {
+  private data: MyUseCaseArgs;
+
+  private constructor(data: MyUseCaseArgs) {
+    this.data = data;
+  }
+
+  public static basic(): MyUseCaseArgsMother {
+    return new MyUseCaseArgsMother({
+      id: 'default-id',
+      user: UserMother.basic().build(),
+    });
+  }
+
+  public withId(id: string): MyUseCaseArgsMother {
+    this.data.id = id;
+    return this;
+  }
+
+  public withUser(user: User): MyUseCaseArgsMother {
+    this.data.user = user;
+    return this;
+  }
+
+  public build(): MyUseCaseArgs {
+    return this.data;
+  }
+}
+```
+
+## Test Categories
+
+### 1. Validation Tests
+
+Test input validation and error handling:
+
+```typescript
+describe('args validation', () => {
+  it('should return 400 without required parameters', async () => {
+    const { adapter } = setup();
+    const event = EventMother.basic().build(); // missing params
+
+    const response = await adapter.handle(event);
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('should return 400 with invalid UUID', async () => {
+    const { adapter } = setup();
+    const event = MyAdapterEventMother.basic()
+      .withId('not-a-uuid')
+      .build();
+
+    const response = await adapter.handle(event);
+    expect(response.statusCode).toBe(400);
+  });
+});
+```
+
+### 2. Business Logic Tests
+
+Test the core functionality:
+
+```typescript
+describe('useCase and return value', () => {
+  it('should call useCase with correct parameters', async () => {
+    const { adapter, useCase } = setup();
+    const user = UserMother.basic().build();
+
+    const event = MyAdapterEventMother.basic()
+      .withUser(user)
+      .build();
+
+    await adapter.handle(event);
+
+    expect(useCase.method).toHaveBeenCalledWith({
+      user,
+      // other expected params
+    });
+  });
+
+  it('should return 200 on success', async () => {
+    const { adapter } = setup();
+    const event = MyAdapterEventMother.basic().build();
+
+    const response = await adapter.handle(event);
+    expect(response.statusCode).toBe(200);
+  });
+});
+```
+
+### 3. Error Handling Tests
+
+Test error scenarios and custom errors:
+
+```typescript
+describe('error handling', () => {
+  it('should throw NotFoundError when resource does not exist', async () => {
+    const { useCase } = setup();
+
+    const input = MyUseCaseArgsMother.basic()
+      .withId('non-existent-id')
+      .build();
+
+    await expect(useCase.method(input)).rejects.toThrow(NotFoundError);
+  });
+});
+```
+
+### 4. Edge Case Tests
+
+Test boundary conditions and special cases:
+
+```typescript
+describe('edge cases', () => {
+  it('should handle empty list', async () => {
+    const { useCase, fakeRepository } = setup();
+    // Don't seed any data
+
+    const result = await useCase.getAll();
+
+    expect(result).toEqual([]);
+  });
+
+  it('should handle backward compatibility when field is undefined', async () => {
+    const { useCase, fakeRepository } = setup();
+
+    const model = ModelMother.basic()
+      .withOptionalField(undefined)
+      .build();
+    await fakeRepository.save(model);
+
+    const result = await useCase.method({ id: model.id });
+
+    expect(result.optionalField).toBeUndefined();
+  });
+});
+```
+
+## Fake Implementations
+
+When creating new infrastructure services, always create a corresponding fake:
+
+```typescript
+// Port interface
+export interface MyServicePort {
+  doSomething(args: MyArgs): Promise<MyResult>;
+}
+
+// Real implementation
+export class MyService implements MyServicePort {
+  async doSomething(args: MyArgs): Promise<MyResult> {
+    // Real implementation with external calls
+  }
+}
+
+// Fake implementation
+export class FakeMyService implements MyServicePort {
+  // In-memory storage for testing
+  public results: Map<string, MyResult> = new Map();
+
+  async doSomething(args: MyArgs): Promise<MyResult> {
+    return this.results.get(args.id) ?? defaultResult;
+  }
+}
+
+// Tokens
+export const tokenMyService = createInjectionToken<MyServicePort>('MyService');
+export const tokenFakeMyService = createInjectionToken<FakeMyService>(
+  'FakeMyService',
+  { useClass: FakeMyService },
+);
+```
+
+## Checklist for New Code
+
+When creating new code, ensure:
+
+- [ ] Test file created (`{ClassName}.test.ts`)
+- [ ] Mother class created for test data if needed
+- [ ] `setup()` function uses `reset()` and `registerTestInfrastructure()`
+- [ ] All dependencies are mocked/faked (not real implementations)
+- [ ] Tests cover: validation, business logic, error handling
+- [ ] Tests use Mothers for test data (not hardcoded objects)
+- [ ] Tests verify behavior, not implementation details

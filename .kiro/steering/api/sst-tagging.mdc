@@ -1,0 +1,272 @@
+---
+alwaysApply: false
+---
+
+# SST Resource Tagging Guidelines
+
+All SST resources must be tagged for proper resource management, cost allocation, and organization.
+
+## Core Principles
+
+1. **Always tag resources** - Every SST resource must include tags
+2. **Use the shared TAGS object** - Import from `shared/tags.js`
+3. **Redefine `Name` tag** - Override the `Name` tag with a descriptive resource-specific name
+4. **Apply tags at all levels** - Tag both the infrastructure resource and Lambda functions
+
+## Tag Structure
+
+### Default Tags (shared/tags.ts)
+
+```typescript
+export const TAGS = {
+  Name: 'ResourceManagementScheduling',  // Default - should be overridden per resource
+  Owner: process.env.OWNER || 'sst',
+  Project: 'resource-management-scheduling',
+};
+```
+
+### Redefining the Name Tag
+
+Each resource should have a unique, descriptive `Name` tag that identifies its specific purpose:
+
+```typescript
+import { TAGS } from '../shared/tags.js';
+
+const queue = new sst.aws.Queue('MessageQueue', {
+  transform: {
+    queue: {
+      tags: {
+        ...TAGS,
+        Name: 'MessageQueue',
+      },
+    },
+  },
+});
+```
+
+## Tagging Patterns by Resource Type
+
+### 1. Queue Resources
+
+Tag both the queue and any subscribers:
+
+```typescript
+export const queue = new sst.aws.Queue('MessageQueue', {
+  transform: {
+    queue: {
+      tags: {
+        ...TAGS,
+        Name: 'MessageQueue',
+      },
+    },
+  },
+});
+
+// Tag the subscriber function
+queue.subscribe({
+  handler: 'backend/src/handlers/queueSubscriber/handler.handler',
+  tags: {
+    ...TAGS,
+    Name: 'QueueSubscriber',
+  },
+  link: [queue],
+});
+```
+
+### 2. Scheduled Tasks (Cron)
+
+Tag both the EventBridge rule and the Lambda function:
+
+```typescript
+new sst.aws.Cron('WeeklySchedule', {
+  schedule: 'cron(0 10 ? * MON *)',
+  transform: {
+    rule: {
+      tags: {
+        ...TAGS,
+        Name: 'WeeklyScheduleRule',
+      },
+    },
+  },
+  function: {
+    handler: 'backend/src/handlers/sendAllocationForms/handler.handler',
+    tags: {
+      ...TAGS,
+      Name: 'SendAllocationFormsFunction',
+    },
+  },
+});
+```
+
+### 3. API Gateway
+
+Tag both the API Gateway and individual route handlers:
+
+```typescript
+export const api = new sst.aws.ApiGatewayV2('Api', {
+  transform: {
+    api: {
+      tags: {
+        ...TAGS,
+        Name: 'ResourceManagementApi',
+      },
+    },
+  },
+});
+
+api.route('POST /slack', {
+  handler: 'backend/src/handlers/slackWebhook/handler.handler',
+  tags: {
+    ...TAGS,
+    Name: 'SlackWebhookHandler',
+  },
+  link: [queue],
+});
+```
+
+### 4. DynamoDB Tables
+
+```typescript
+const table = new sst.aws.Dynamo('ResourceTable', {
+  fields: {
+    id: 'string',
+  },
+  primaryIndex: { hashKey: 'id' },
+  transform: {
+    table: {
+      tags: {
+        ...TAGS,
+        Name: 'ResourceTable',
+      },
+    },
+  },
+});
+```
+
+### 5. S3 Buckets
+
+```typescript
+const bucket = new sst.aws.Bucket('ResourceBucket', {
+  transform: {
+    bucket: {
+      tags: {
+        ...TAGS,
+        Name: 'ResourceBucket',
+      },
+    },
+  },
+});
+```
+
+### 6. SNS Topics
+
+```typescript
+const topic = new sst.aws.SnsTopic('NotificationTopic', {
+  transform: {
+    topic: {
+      tags: {
+        ...TAGS,
+        Name: 'NotificationTopic',
+      },
+    },
+  },
+});
+```
+
+## Naming Convention for Name Tag
+
+Use these patterns when defining the `Name` tag:
+
+- **Queues**: `{Purpose}Queue` - e.g., `MessageQueue`, `DeadLetterQueue`
+- **Functions**: `{Purpose}Function` or `{Handler}` - e.g., `QueueSubscriber`, `SendAllocationFormsFunction`
+- **APIs**: `{Project}Api` - e.g., `ResourceManagementApi`
+- **Handlers**: `{Purpose}Handler` - e.g., `SlackWebhookHandler`
+- **Tables**: `{Entity}Table` - e.g., `ResourceTable`, `AllocationTable`
+- **Buckets**: `{Purpose}Bucket` - e.g., `ResourceBucket`, `AssetsBucket`
+- **Cron Rules**: `{Frequency}{Purpose}Rule` - e.g., `WeeklyScheduleRule`, `DailyBackupRule`
+- **Topics**: `{Purpose}Topic` - e.g., `NotificationTopic`, `EventsTopic`
+
+## Adding Custom Tags
+
+You can add additional resource-specific tags as needed:
+
+```typescript
+const queue = new sst.aws.Queue('MessageQueue', {
+  transform: {
+    queue: {
+      tags: {
+        ...TAGS,
+        Name: 'MessageQueue',
+        Environment: process.env.STAGE || 'dev',
+        CostCenter: 'Engineering',
+        Purpose: 'Message Processing',
+      },
+    },
+  },
+});
+```
+
+## Complete Example
+
+```typescript
+import { TAGS } from '../shared/tags.js';
+
+// Apply tags to resources
+export const queue = new sst.aws.Queue('MessageQueue', {
+  transform: {
+    queue: {
+      tags: {
+        ...TAGS,
+        Name: 'MessageQueue',
+      },
+    },
+  },
+});
+
+queue.subscribe({
+  handler: 'backend/src/handlers/queueSubscriber/handler.handler',
+  tags: {
+    ...TAGS,
+    Name: 'QueueSubscriber',
+  },
+  link: [queue],
+});
+
+export const api = new sst.aws.ApiGatewayV2('Api', {
+  transform: {
+    api: {
+      tags: {
+        ...TAGS,
+        Name: 'ResourceManagementApi',
+      },
+    },
+  },
+});
+
+api.route('POST /slack', {
+  handler: 'backend/src/handlers/slackWebhook/handler.handler',
+  tags: {
+    ...TAGS,
+    Name: 'SlackWebhookHandler',
+  },
+  link: [queue],
+});
+```
+
+## Checklist for New SST Resources
+
+When creating a new SST resource:
+
+- [ ] Import `TAGS` from `shared/tags.js`
+- [ ] Apply tags to infrastructure resource using `transform.{resource}.tags` with spread operator
+- [ ] Override `Name` tag inline using `{ ...TAGS, Name: 'ResourceName' }`
+- [ ] Apply tags to any associated Lambda functions using `tags` property
+- [ ] Verify `Name` tag follows the naming convention for the resource type
+
+## Benefits of Proper Tagging
+
+1. **Cost Allocation** - Track costs per resource and team
+2. **Resource Management** - Easily identify and filter resources in AWS Console
+3. **Automation** - Enable automated operations based on tags
+4. **Compliance** - Meet organizational tagging requirements
+5. **Debugging** - Quickly identify resources during troubleshooting

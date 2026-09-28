@@ -1,0 +1,55 @@
+---
+alwaysApply: true
+---
+# Prettier Formatting
+
+Always ensure code is formatted with Prettier before completing any task.
+
+## When to Format
+
+Format code in these situations:
+1. After creating any new file
+2. After editing any existing file
+3. Before completing any coding task
+
+## How to Format
+
+Run prettier on the files you've modified:
+
+```bash
+npx prettier --write path/to/file.ts
+```
+
+Or format multiple files at once:
+
+```bash
+npx prettier --write "path/to/**/*.ts"
+```
+
+## Configuration
+
+The project uses Prettier with configuration in `.prettierrc`. Always respect the existing configuration.
+
+## Important Notes
+
+- **Always format before finishing**: Don't complete a task until all modified files are formatted
+- **Use the terminal tool**: Run prettier commands using the `run_terminal_cmd` tool
+- **Check formatting**: If there are formatting-related linter errors, run prettier immediately
+- **Batch formatting**: When editing multiple files in the same directory, format them together for efficiency
+
+## Examples
+
+### Single file edit:
+1. Edit `src/handlers/MyHandler.ts`
+2. Run: `npx prettier --write src/handlers/MyHandler.ts`
+
+### Multiple files in a feature:
+1. Edit multiple files in `src/handlers/myFeature/`
+2. Run: `npx prettier --write "src/handlers/myFeature/**/*.ts"`
+
+### Project-wide formatting (use sparingly):
+```bash
+npx prettier --write .
+```
+
+Only run project-wide formatting if explicitly requested by the user.
