@@ -8,6 +8,7 @@ set(ECS_TEST_FILES
 	ECS/TestComponentPool.cpp
 	ECS/TestSignature.cpp
 	ECS/TestZipper.cpp
+	ECS/TestZipperDriver.cpp
 	ECS/TestView.cpp
 	ECS/TestRegistry.cpp
 	ECS/TestDeferredMutations.cpp
