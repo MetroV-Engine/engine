@@ -4,6 +4,7 @@
 // is built only with -DENGINE_BUILD_BENCHMARKS=ON, and only meaningful in a
 // Release (optimized) build.
 //
+// Build and run commands: see benchmarks/README.md.
 // Usage: bench_zipper_driver [repetitions]
 
 #include <algorithm>
