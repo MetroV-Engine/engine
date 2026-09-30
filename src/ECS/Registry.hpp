@@ -14,6 +14,8 @@
 #include "ComponentStorage.hpp"
 #include "ComponentPool.hpp"
 #include "EntityManager.hpp"
+#include "ResourceHolder.hpp"
+#include "ResourceId.hpp"
 #include "Signature.hpp"
 #include "View.hpp"
 
@@ -276,6 +278,65 @@ namespace ECS {
                 return it == _entityNames.end() ? std::string{} : it->second;
             }
 
+            /**
+             * @brief Constructs or replaces the Resource-typed value held by this registry.
+             * @tparam Resource Resource type, distinct from any component's ID space.
+             * @param params Constructor arguments forwarded to Resource.
+             * @return Reference to the stored resource.
+             *
+             * Resources are not structural entity state, so this always applies
+             * immediately, even while a system is running under runDeferred.
+             */
+            template<typename Resource, typename... Params>
+            Resource& setResource(Params&&... params) {
+                const ResourceId id = resourceId<Resource>();
+                ensureResourceSlot(id);
+                auto holder = std::make_unique<ResourceHolder<Resource>>(std::forward<Params>(params)...);
+                Resource& ref = holder->value();
+                _resources[id] = std::move(holder);
+                return ref;
+            }
+
+            /**
+             * @brief Returns a previously set resource.
+             * @throws std::out_of_range when Resource has never been set.
+             */
+            template<typename Resource>
+            [[nodiscard]] Resource& getResource() {
+                const ResourceId id = resourceId<Resource>();
+                requireResourceSet(id);
+                return typedResource<Resource>(id).value();
+            }
+
+            /** @copydoc getResource() */
+            template<typename Resource>
+            [[nodiscard]] const Resource& getResource() const {
+                const ResourceId id = resourceId<Resource>();
+                requireResourceSet(id);
+                return typedResource<Resource>(id).value();
+            }
+
+            /** @brief Checks whether a resource of this type has been set. */
+            template<typename Resource>
+            [[nodiscard]] bool hasResource() const noexcept {
+                const ResourceId id = resourceId<Resource>();
+                return id < _resources.size() && _resources[id] != nullptr;
+            }
+
+            /**
+             * @brief Registers a callback fired with the exact instance right
+             *        before a Component is erased, from removeComponent or
+             *        killEntity alike.
+             * @tparam Component Component type whose pool receives the hook.
+             * @param callback Invoked once per erased instance; exceptions it
+             *        throws are caught and discarded, never propagated.
+             */
+            template<typename Component>
+            void onRemove(std::function<void(Component&)> callback) {
+                ensureStorage<Component>();
+                typedPool<Component>(componentId<Component>()).setOnRemove(std::move(callback));
+            }
+
         private:
             Entity spawnEntityImmediate(const std::string& name) {
                 _entitiesDirty = true;
@@ -472,6 +533,28 @@ namespace ECS {
                 return *static_cast<const ComponentPool<Component>*>(_pools[id].get());
             }
 
+            void ensureResourceSlot(ResourceId id) {
+                if (id >= _resources.size()) {
+                    _resources.resize(static_cast<std::size_t>(id) + 1);
+                }
+            }
+
+            void requireResourceSet(ResourceId id) const {
+                if (id >= _resources.size() || !_resources[id]) {
+                    throw std::out_of_range("ECS::Registry: resource not set");
+                }
+            }
+
+            template<typename Resource>
+            ResourceHolder<Resource>& typedResource(ResourceId id) {
+                return *static_cast<ResourceHolder<Resource>*>(_resources[id].get());
+            }
+
+            template<typename Resource>
+            const ResourceHolder<Resource>& typedResource(ResourceId id) const {
+                return *static_cast<const ResourceHolder<Resource>*>(_resources[id].get());
+            }
+
             EntityManager _entities;
             std::vector<std::unique_ptr<IComponentPool>> _pools;
             std::unordered_map<std::size_t, std::string> _entityNames;
@@ -480,6 +563,7 @@ namespace ECS {
             std::vector<Signature> _signatures;
             std::vector<std::function<void(Registry&)>> _commandQueue;
             std::vector<bool> _pendingSpawns;
+            std::vector<std::unique_ptr<IResourceHolder>> _resources;
             bool _deferring{false};
     };
 }

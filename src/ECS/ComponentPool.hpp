@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 
 #include "ComponentStorage.hpp"
@@ -46,10 +47,28 @@ namespace ECS {
 
             /** @copydoc IComponentPool::erase */
             void erase(std::size_t entityId) noexcept override {
+                if (_onRemove && _storage.has(entityId)) {
+                    try {
+                        _onRemove(_storage.get(entityId));
+                    } catch (...) {}
+                }
                 _storage.erase(entityId);
+            }
+
+            /**
+             * @brief Sets a callback invoked with the exact instance about to
+             *        be erased, right before the swap-and-pop destroys it.
+             *
+             * Fires from both removeComponent and killEntity, since both go
+             * through erase(). A throwing callback is caught and discarded so
+             * it can never leave erase(), which must stay noexcept.
+             */
+            void setOnRemove(std::function<void(Component&)> callback) {
+                _onRemove = std::move(callback);
             }
 
         private:
             ComponentStorage<Component> _storage;
+            std::function<void(Component&)> _onRemove;
     };
 }

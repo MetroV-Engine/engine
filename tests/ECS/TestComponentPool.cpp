@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 #include <type_traits>
 
 #include "ECS/ComponentPool.hpp"
@@ -194,6 +195,68 @@ void test_component_pool_does_not_expose_wrong_component_type() {
             ECS::ComponentStorage<Position>&
         >);
         expect(pool.storage().size() == std::size_t{0});
+    };
+}
+
+void test_component_pool_on_remove_fires_once_on_erase() {
+    "ComponentPool onRemove fires once when a component is erased"_test = [] {
+        ECS::ComponentPool<Position> pool;
+        pool.storage().emplaceAt(1, 2, 3);
+        int callCount = 0;
+        pool.setOnRemove([&callCount](Position&) { ++callCount; });
+
+        pool.erase(1);
+
+        expect(callCount == 1);
+    };
+}
+
+void test_component_pool_on_remove_receives_the_exact_instance() {
+    "ComponentPool onRemove receives the exact instance being erased"_test = [] {
+        ECS::ComponentPool<Position> pool;
+        pool.storage().emplaceAt(1, 10, 20);
+        Position seen{0, 0};
+        pool.setOnRemove([&seen](Position& position) { seen = position; });
+
+        pool.erase(1);
+
+        expect(seen.x == 10);
+        expect(seen.y == 20);
+    };
+}
+
+void test_component_pool_on_remove_does_not_fire_for_missing_entity() {
+    "ComponentPool onRemove does not fire when the entity has no component"_test = [] {
+        ECS::ComponentPool<Position> pool;
+        int callCount = 0;
+        pool.setOnRemove([&callCount](Position&) { ++callCount; });
+
+        pool.erase(99);
+
+        expect(callCount == 0);
+    };
+}
+
+void test_component_pool_on_remove_throwing_callback_is_contained() {
+    "ComponentPool onRemove exceptions never escape erase"_test = [] {
+        ECS::ComponentPool<Position> pool;
+        pool.storage().emplaceAt(1, 2, 3);
+        pool.setOnRemove([](Position&) { throw std::runtime_error("boom"); });
+
+        pool.erase(1);
+
+        expect(!pool.has(1));
+    };
+}
+
+void test_component_pool_without_hook_is_unaffected() {
+    "ComponentPool without a hook still erases normally"_test = [] {
+        ECS::ComponentPool<Position> pool;
+        pool.storage().emplaceAt(1, 2, 3);
+
+        pool.erase(1);
+
+        expect(!pool.has(1));
     };
 }
 
