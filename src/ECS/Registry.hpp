@@ -323,6 +323,9 @@ namespace ECS {
 
             void killEntityDeferred(Entity entity) {
                 _commandQueue.emplace_back([entity](Registry& world) {
+                    if (!world._entities.isAlive(entity)) {
+                        return;
+                    }
                     world.killEntityImmediate(entity);
                 });
             }
@@ -341,6 +344,9 @@ namespace ECS {
                 StoredComponent& ref = *staged;
                 _commandQueue.emplace_back(
                     [entity, staged](Registry& world) {
+                        if (!world._entities.isAlive(entity)) {
+                            return;
+                        }
                         world.addComponentImmediate<StoredComponent>(entity, std::move(*staged));
                     });
                 return ref;
@@ -360,6 +366,9 @@ namespace ECS {
                 Component& ref = *staged;
                 _commandQueue.emplace_back(
                     [entity, staged](Registry& world) {
+                        if (!world._entities.isAlive(entity)) {
+                            return;
+                        }
                         world.emplaceComponentImmediate<Component>(entity, std::move(*staged));
                     });
                 return ref;
@@ -379,6 +388,9 @@ namespace ECS {
             template<typename Component>
             void removeComponentDeferred(Entity entity) {
                 _commandQueue.emplace_back([entity](Registry& world) {
+                    if (!world._entities.isAlive(entity)) {
+                        return;
+                    }
                     world.removeComponentImmediate<Component>(entity);
                 });
             }

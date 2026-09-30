@@ -266,6 +266,66 @@ namespace {
             expect(registry.hasComponents<Position>(extra));
         };
     }
+    // --- Group C: dead entities inside a deferred batch are no-ops ---
+
+    void test_double_kill_in_same_deferred_batch_does_not_throw() {
+        "killing the same entity twice in one deferred batch does not throw"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                registry.killEntity(entity);
+            });
+
+            expect(!contains(registry.getAllEntities(), entity));
+        };
+    }
+
+    void test_add_component_after_kill_in_same_deferred_batch_is_a_no_op() {
+        "addComponent after killEntity on the same entity in one deferred batch is a no-op"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                registry.addComponent(entity, Position{1, 2});
+            });
+
+            auto reused = registry.spawnEntity();
+            expect(!registry.hasComponents<Position>(reused));
+        };
+    }
+
+    void test_emplace_component_after_kill_in_same_deferred_batch_is_a_no_op() {
+        "emplaceComponent after killEntity on the same entity in one deferred batch is a no-op"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                registry.emplaceComponent<Position>(entity, 1, 2);
+            });
+
+            auto reused = registry.spawnEntity();
+            expect(!registry.hasComponents<Position>(reused));
+        };
+    }
+
+    void test_remove_component_after_kill_in_same_deferred_batch_is_a_no_op() {
+        "removeComponent after killEntity on the same entity in one deferred batch does not throw"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+            registry.addComponent(entity, Position{1, 2});
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                registry.removeComponent<Position>(entity);
+            });
+
+            expect(!contains(registry.getAllEntities(), entity));
+        };
+    }
 }
 
 void run_deferred_mutations_tests() {
