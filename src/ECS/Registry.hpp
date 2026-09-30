@@ -323,6 +323,20 @@ namespace ECS {
                 return id < _resources.size() && _resources[id] != nullptr;
             }
 
+            /**
+             * @brief Registers a callback fired with the exact instance right
+             *        before a Component is erased, from removeComponent or
+             *        killEntity alike.
+             * @tparam Component Component type whose pool receives the hook.
+             * @param callback Invoked once per erased instance; exceptions it
+             *        throws are caught and discarded, never propagated.
+             */
+            template<typename Component>
+            void onRemove(std::function<void(Component&)> callback) {
+                ensureStorage<Component>();
+                typedPool<Component>(componentId<Component>()).setOnRemove(std::move(callback));
+            }
+
         private:
             Entity spawnEntityImmediate(const std::string& name) {
                 _entitiesDirty = true;

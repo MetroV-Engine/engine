@@ -343,6 +343,40 @@ namespace {
         };
     }
 
+    void test_on_remove_fires_via_remove_component() {
+        "onRemove fires when removeComponent erases the instance"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.emplaceComponent<Position>(entity, 5, 6);
+            int callCount = 0;
+            Position seen{0, 0};
+            registry.onRemove<Position>([&](Position& position) {
+                ++callCount;
+                seen = position;
+            });
+
+            registry.removeComponent<Position>(entity);
+
+            expect(callCount == 1);
+            expect(seen.x == 5);
+            expect(seen.y == 6);
+        };
+    }
+
+    void test_on_remove_fires_via_kill_entity() {
+        "onRemove fires when killEntity erases the instance"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.emplaceComponent<Health>(entity, 42);
+            int callCount = 0;
+            registry.onRemove<Health>([&callCount](Health&) { ++callCount; });
+
+            registry.killEntity(entity);
+
+            expect(callCount == 1);
+        };
+    }
+
     void test_has_components_requires_all_requested_types() {
         "hasComponents requires all requested types"_test = [] {
             ECS::Registry registry;
@@ -661,6 +695,8 @@ void run_registry_tests() {
     test_remove_component_clears_signature();
     test_remove_unregistered_component_is_noop();
     test_remove_component_does_not_remove_other_components();
+    test_on_remove_fires_via_remove_component();
+    test_on_remove_fires_via_kill_entity();
     test_has_components_requires_all_requested_types();
     test_has_components_is_false_for_dead_entity();
     test_get_if_returns_null_for_unregistered_component();
