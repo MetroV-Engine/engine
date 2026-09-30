@@ -1,0 +1,349 @@
+# ECS
+
+This directory contains the header-only Entity Component System used by the
+engine.
+
+The ECS headers contain detailed Doxygen documentation for classes, methods,
+parameters, ownership rules, and important implementation details. Reading the
+code is therefore also a useful way to understand the exact behavior of the
+system.
+
+## ECS Overview
+
+The ECS separates an entity's identity from the data attached to it:
+
+```text
+Entity
+  |
+  +-- Position component
+  +-- Velocity component
+  +-- Health component
+```
+
+An entity is only an identity. Components contain data, and systems operate on
+entities that contain the components they need.
+
+## Main Files
+
+| File | Purpose |
+| --- | --- |
+| [Entity.hpp](Entity.hpp) | Lightweight entity handle and identity access. |
+| [EntityManager.hpp](EntityManager.hpp) | Entity creation, destruction, validation, and ID reuse. |
+| [ComponentId.hpp](ComponentId.hpp) | Lazy runtime ID assignment for component types. |
+| [ComponentStorage.hpp](ComponentStorage.hpp) | Component storage and fast entity-to-component lookup. |
+| [ComponentPool.hpp](ComponentPool.hpp) | Type-erased access to different component pools. |
+| [Registry.hpp](Registry.hpp) | Main ECS API for entities and components. |
+| [View.hpp](View.hpp) | Public queries over entities sharing component types. |
+| [Systems.hpp](Systems.hpp) | `ISystem` interface and `SystemManager`, which owns and runs systems. |
+
+## Entity
+
+See [Entity.hpp](Entity.hpp).
+
+`Entity` is a lightweight handle containing an index, a generation and the
+world ID of the registry that issued it. It can be copied cheaply and passed to
+component operations. Display names are not
+stored in the handle; they are owned by `Registry`.
+
+```cpp
+ECS::Entity player = world.spawnEntity("Player");
+std::size_t id = player.value();
+```
+
+The entity handle does not create or destroy entities. That responsibility
+belongs to `EntityManager` and `Registry`. Only the default constructor is
+public: every other handle comes from `spawnEntity()`, a view, or
+`getAllEntities()`. A default-constructed `Entity` belongs to no world and is
+never alive.
+
+```text
+Entity handle -> world ID + index + generation
+               -> component pool lookup by index
+```
+
+An entity is valid only while its world ID, index and generation match the
+state held by `EntityManager`. When an index is recycled, its generation is
+incremented, so old handles are rejected instead of accessing the new entity.
+
+Each `Registry` draws its own world ID, so a handle belongs to the registry
+that issued it. Passing it to another registry is rejected like any other dead
+handle, even when a local entity has the same index and generation:
+
+```cpp
+ECS::Registry worldA;
+ECS::Registry worldB;
+ECS::Entity a = worldA.spawnEntity();
+worldB.spawnEntity();                   // same index and generation as a
+
+worldB.hasComponent<Position>(a);       // false
+worldB.getComponent<Position>(a);       // throws std::invalid_argument
+```
+
+## EntityManager
+
+See [EntityManager.hpp](EntityManager.hpp).
+
+`EntityManager` owns the lifecycle of entity IDs. It tracks live IDs and keeps a
+free list for IDs that can be reused.
+
+```cpp
+ECS::Entity first = manager.create();
+manager.destroy(first);
+ECS::Entity recycled = manager.create();
+```
+
+The usual flow is:
+
+```text
+create -> live entity
+destroy -> free ID
+create -> reuse free ID when available
+```
+
+Destroying an entity in `EntityManager` does not remove its components. The
+`Registry` performs both operations together.
+
+## Component IDs
+
+See [ComponentId.hpp](ComponentId.hpp).
+
+Each component type receives a numeric ID the first time `componentId<T>()` is
+used. No manual registration line is required for each component.
+
+```cpp
+ECS::ComponentId positionId = ECS::componentId<Position>();
+ECS::ComponentId velocityId = ECS::componentId<Velocity>();
+```
+
+The same type always returns the same ID during the process:
+
+```text
+Position -> ComponentId 0
+Velocity -> ComponentId 1
+Position -> ComponentId 0
+```
+
+These IDs are runtime implementation details. They must not be stored in scene
+files, save files, or network data.
+
+## ComponentStorage
+
+See [ComponentStorage.hpp](ComponentStorage.hpp).
+
+`ComponentStorage<Component>` stores components densely while keeping a lookup from an
+entity ID to the component's packed position.
+
+```text
+Entity ID       0     1     2
+Sparse lookup   -     0     1
+
+Packed data   [Position of entity 1][Position of entity 2]
+```
+
+Typical operations are:
+
+```cpp
+ECS::ComponentStorage<Position> positions;
+positions.emplaceAt(entityId, 10, 20);
+
+if (positions.has(entityId)) {
+    Position& position = positions.get(entityId);
+}
+```
+
+The packed storage improves iteration performance and cache locality. Removing
+a component uses swap-and-pop, so packed order is not stable after an erase.
+
+## ComponentPool
+
+See [ComponentPool.hpp](ComponentPool.hpp).
+
+The registry stores pools containing different component types. Since one
+container cannot directly store `ComponentStorage<Position>` and `ComponentStorage<Velocity>`
+as the same concrete type, `IComponentPool` provides a small type-erased
+interface.
+
+```text
+Registry
+  |
+  +-- ComponentPool<Position>
+  +-- ComponentPool<Velocity>
+  +-- ComponentPool<Health>
+```
+
+Typed access remains available through the registry, while type erasure is used
+for operations shared by every pool, such as removing a destroyed entity.
+
+## Registry
+
+See [Registry.hpp](Registry.hpp).
+
+`Registry` is the main entry point for the ECS. It coordinates entity lifecycle,
+component pools, and component access. System execution is handled by
+`SystemManager` (see [Systems](#systems) below), which calls
+`Registry::runDeferred` to protect an in-progress `view()` iteration from
+structural mutations.
+
+### Creating and destroying entities
+
+```cpp
+ECS::Registry world;
+
+ECS::Entity player = world.spawnEntity();
+world.killEntity(player);
+```
+
+An entity may receive an optional display name when it is created:
+
+```cpp
+ECS::Entity player = world.spawnEntity("Player");
+world.setEntityName(player, "MainPlayer");
+std::string name = world.getEntityName(player);
+```
+
+The name is registry metadata. It does not affect the entity ID or component
+storage.
+
+When `killEntity` is called, the registry:
+
+1. destroys the entity through `EntityManager`;
+2. removes the entity from every registered component pool;
+3. removes its optional name;
+4. returns its ID to the free list.
+
+### Adding components
+
+Use `emplaceComponent` when the registry should construct the component from
+constructor arguments:
+
+```cpp
+world.emplaceComponent<Position>(player, 100, 200);
+```
+
+Use `addComponent` when a component object already exists:
+
+```cpp
+Position randomPosition{randomX(), randomY()};
+world.addComponent(player, randomPosition);
+```
+
+Both operations add or replace the component for the selected entity.
+
+### Accessing and removing components
+
+```cpp
+if (world.hasComponents<Health>(player)) {
+    Health& health = world.getComponent<Health>(player);
+}
+
+world.removeComponent<Health>(player);
+```
+
+`getComponent` throws `std::out_of_range` when the component pool or component
+does not exist for the entity. `getIf` is available when a nullable lookup is
+preferred.
+
+## Systems
+
+Systems are stateful objects implementing `ECS::ISystem`, owned and run by
+`ECS::SystemManager` (see [Systems.hpp](Systems.hpp)). They are executed in
+registration order.
+
+```cpp
+class MovementSystem : public ECS::ISystem {
+    public:
+        void update(ECS::Registry& world, double dt) override {
+            for (auto [entity, position, velocity] :
+                 world.view<Position, Velocity>()) {
+                position.x += velocity.x * dt;
+                position.y += velocity.y * dt;
+            }
+        }
+};
+
+ECS::SystemManager systems;
+systems.addSystem<MovementSystem>();
+
+systems.update(world, dt);
+```
+
+`SystemManager::update` runs every registered system inside
+`Registry::runDeferred`, so structural mutations a system makes
+(spawnEntity, killEntity, addComponent, emplaceComponent, removeComponent)
+are queued and applied once every system has run, the same way
+`runDeferred` behaves for any other caller (see below).
+
+## View
+
+`Registry::view<Components...>()` is the public query API. It iterates the
+intersection of the requested component storages and returns an `Entity` plus
+references to each matching component. Internally, it uses `Zipper`.
+
+Gameplay code does not need to access `ComponentStorage` or `Zipper` directly.
+
+```cpp
+for (auto [entity, position, velocity] :
+  world.view<Position, Velocity>()) {
+    position.x += velocity.x;
+}
+```
+
+Only entities with both components are visited:
+
+```text
+Position: entity 0, entity 1, entity 2
+Velocity: entity 1, entity 2
+Result:   entity 1, entity 2
+```
+
+The order of component types does not affect cost: iteration is driven by
+whichever requested storage is smallest when the loop begins, and only the
+other storages are checked for membership. Ties go to the type listed first.
+The yielded tuple always follows the order the types were written in; the
+order entities are visited in follows the driving storage and should not be
+relied on.
+
+## Header-Only Design
+
+The ECS is implemented in headers so that its templates and generic operations
+are available wherever the ECS is included. There are no ECS `.cpp` files.
+
+The CMake target in [CMakeLists.txt](CMakeLists.txt) is an `INTERFACE` target and
+only exposes the include directory.
+
+```text
+ECS headers
+    |
+    +-- include directly from user code
+    +-- no ECS object file
+    +-- template code compiled where used
+```
+
+## Basic Usage
+
+The minimal ECS workflow is:
+
+```cpp
+ECS::Registry world;
+ECS::Entity entity = world.spawnEntity();
+
+world.emplaceComponent<Position>(entity, 0, 0);
+world.emplaceComponent<Velocity>(entity, 1, 0);
+
+ECS::SystemManager systems;
+systems.addSystem<MovementSystem>();
+systems.update(world, dt);
+
+world.killEntity(entity);
+```
+
+The important relationship is:
+
+```text
+Registry
+  -> EntityManager manages entity IDs
+  -> ComponentPool stores component data
+  -> ComponentStorage provides dense storage
+  -> View helps systems iterate matching entities
+  -> SystemManager runs ISystem instances against the registry
+```
