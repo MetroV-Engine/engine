@@ -5,6 +5,7 @@ void run_component_storage_tests();
 void run_component_pool_tests();
 void run_signature_tests();
 void run_zipper_tests();
+void run_zipper_driver_tests();
 void run_view_tests();
 void run_registry_tests();
 void run_deferred_mutations_tests();
@@ -19,6 +20,7 @@ int main()
     run_component_pool_tests();
     run_signature_tests();
     run_zipper_tests();
+    run_zipper_driver_tests();
     run_view_tests();
     run_deferred_mutations_tests();
     run_systems_tests();
