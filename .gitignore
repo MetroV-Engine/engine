@@ -26,3 +26,7 @@ vcpkg_installed/
 cmake-build-debug/
 a.out
 build
+docs/
+
+# Personal Makefile wrapper
+Makefile

@@ -54,6 +54,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ENGINE_BUILD_TESTS "Build unit tests" OFF)
 option(ENGINE_BUILD_APP "Build the engine executable" ON)
 option(ENGINE_ENABLE_COVERAGE "Enable code coverage" OFF)
+option(ENGINE_BUILD_BENCHMARKS "Build benchmarks (use a Release build)" OFF)
 
 if(ENGINE_ENABLE_COVERAGE AND NOT ENGINE_BUILD_TESTS)
   message(FATAL_ERROR
@@ -81,4 +82,8 @@ endif()
 if(ENGINE_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+if(ENGINE_BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
 endif()
