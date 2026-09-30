@@ -140,6 +140,15 @@ namespace ECS {
                 return _packedEntities.at(packedIndex);
             }
 
+            /**
+             * @brief Returns the entity IDs in dense order, parallel to the components.
+             *
+             * Element i is the entity owning the component at dense position i.
+             */
+            [[nodiscard]] const std::vector<size_type>& entities() const noexcept {
+                return _packedEntities;
+            }
+
             /** @brief Returns unchecked mutable access by dense position. */
             reference operator[](size_type packedIndex) noexcept { return _packed[packedIndex]; }
             /** @brief Returns unchecked read-only access by dense position. */

@@ -296,9 +296,12 @@ Velocity: entity 1, entity 2
 Result:   entity 1, entity 2
 ```
 
-The first component storage should generally be a small or selective storage
-when that choice is available, because it determines the number of membership
-checks.
+The order of component types does not affect cost: iteration is driven by
+whichever requested storage is smallest when the loop begins, and only the
+other storages are checked for membership. Ties go to the type listed first.
+The yielded tuple always follows the order the types were written in; the
+order entities are visited in follows the driving storage and should not be
+relied on.
 
 ## Header-Only Design
 
