@@ -26,6 +26,7 @@ Every benchmark executable ends up in `cmake-build-bench/benchmarks/`.
 | Executable | Source | Measures |
 | --- | --- | --- |
 | `bench_zipper_driver` | [BenchZipperDriver.cpp](BenchZipperDriver.cpp) | View/Zipper iteration driven by the smallest storage (#36) |
+| `bench_has_components` | [BenchHasComponents.cpp](BenchHasComponents.cpp) | `hasComponents`, spawn/kill and add/remove, which read or write entity signatures (#41) |
 
 ### bench_zipper_driver
 
@@ -43,9 +44,20 @@ To keep a result so you can compare it later:
 ./cmake-build-bench/benchmarks/bench_zipper_driver > zipper_driver_before.txt
 ```
 
+### bench_has_components
+
+```sh
+./cmake-build-bench/benchmarks/bench_has_components [repetitions]
+```
+
+`repetitions` defaults to 200. Scenarios 5 to 7 register 1,000 extra
+component types first, to show what a check costs when every entity's row
+of membership bits is much wider.
+
 ## Adding a benchmark
 
-1. Add `BenchSomething.cpp` to this directory.
+1. Add `BenchSomething.cpp` to this directory. Include
+   [BenchSupport.hpp](BenchSupport.hpp) for `measure` and `report`.
 2. Register it in [CMakeLists.txt](CMakeLists.txt):
    ```cmake
    add_executable(bench_something BenchSomething.cpp)
