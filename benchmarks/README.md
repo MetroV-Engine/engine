@@ -51,8 +51,8 @@ To keep a result so you can compare it later:
 ```
 
 `repetitions` defaults to 200. Scenarios 5 to 7 register 1,000 extra
-component types first, to show that the cost of a check does not depend on
-how many types exist.
+component types first, to show what a check costs when every entity's row
+of membership bits is much wider.
 
 ## Adding a benchmark
 
