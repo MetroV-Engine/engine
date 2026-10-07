@@ -16,7 +16,7 @@
 #include "EntityManager.hpp"
 #include "ResourceHolder.hpp"
 #include "ResourceId.hpp"
-#include "Signature.hpp"
+#include "SignatureTable.hpp"
 #include "View.hpp"
 
 namespace ECS {
@@ -28,10 +28,11 @@ namespace ECS {
      * entity lifecycle.
      *
      * The pools are the source of truth for which components an entity owns.
-     * Each entity's Signature mirrors them and is only updated here, which is
-     * why storages are handed out read-only: adding or removing a component
-     * must go through the Registry. The Signature's one authority is capacity:
-     * a component type whose ID does not fit in it is refused at registration.
+     * Each entity's row in the SignatureTable mirrors them and is only
+     * updated here, which is why storages are handed out read-only: adding
+     * or removing a component must go through the Registry. The table widens
+     * when a component type is registered, so there is no limit on how many
+     * types a registry can hold.
      */
     class Registry {
         public:
@@ -78,8 +79,6 @@ namespace ECS {
              * @brief Registers a component pool if absent and returns its storage.
              * @tparam Component Component type to register.
              * @return Read-only typed dense storage for Component.
-             * @throws std::out_of_range when Component's ID does not fit in a
-             *         Signature (see MaxComponentTypes). Nothing is registered.
              */
             template<typename Component>
             const ComponentStorage<Component>& registerComponent() {
@@ -161,22 +160,17 @@ namespace ECS {
             /**
              * @brief Checks whether an entity owns every requested component type.
              * @tparam Components Component types the entity must all own.
-             * @return True when the entity is alive and its Signature has every
-             *         requested type's bit set. The Signature mirrors the pools;
-             *         a type whose ID does not fit in it can never have been
-             *         registered, so no entity owns it.
+             * @return True when the entity is alive and its signature row has
+             *         every requested type's bit set. The row mirrors the
+             *         pools; a type never registered here has no bit set for
+             *         any entity.
              */
             template<typename... Components>
             [[nodiscard]] bool hasComponents(Entity entity) const {
                 if (!_entities.isAlive(entity)) {
                     return false;
                 }
-                if (((componentId<Components>() >= MaxComponentTypes) || ...)) {
-                    return false;
-                }
-                Signature mask;
-                (mask.set(componentId<Components>()), ...);
-                return (_signatures[entity.value()] & mask) == mask;
+                return (_signatures.test(entity.value(), componentId<Components>()) && ...);
             }
 
             /**
@@ -341,8 +335,8 @@ namespace ECS {
             Entity spawnEntityImmediate(const std::string& name) {
                 _entitiesDirty = true;
                 const Entity entity = _entities.create();
-                ensureSignatureSlot(entity.value());
-                _signatures[entity.value()].reset();
+                _signatures.ensureEntity(entity.value());
+                _signatures.clear(entity.value());
                 if (!name.empty()) {
                     _entityNames[entity.value()] = name;
                 }
@@ -363,8 +357,8 @@ namespace ECS {
                 _entitiesDirty = true;
                 _entities.commit(entity);
                 _pendingSpawns[entity.value()] = false;
-                ensureSignatureSlot(entity.value());
-                _signatures[entity.value()].reset();
+                _signatures.ensureEntity(entity.value());
+                _signatures.clear(entity.value());
                 if (!name.empty()) {
                     _entityNames[entity.value()] = name;
                 }
@@ -377,7 +371,7 @@ namespace ECS {
                         pool->erase(entity.value());
                     }
                 }
-                _signatures[entity.value()].reset();
+                _signatures.clear(entity.value());
                 _entityNames.erase(entity.value());
                 _entitiesDirty = true;
             }
@@ -394,7 +388,7 @@ namespace ECS {
             template<typename StoredComponent>
             StoredComponent& addComponentImmediate(Entity entity, StoredComponent value) {
                 auto& stored = ensureStorage<StoredComponent>().insertAt(entity.value(), std::move(value));
-                _signatures[entity.value()].set(componentId<StoredComponent>());
+                _signatures.set(entity.value(), componentId<StoredComponent>());
                 return stored;
             }
 
@@ -416,7 +410,7 @@ namespace ECS {
             template<typename Component>
             Component& emplaceComponentImmediate(Entity entity, Component value) {
                 auto& stored = ensureStorage<Component>().emplaceAt(entity.value(), std::move(value));
-                _signatures[entity.value()].set(componentId<Component>());
+                _signatures.set(entity.value(), componentId<Component>());
                 return stored;
             }
 
@@ -442,8 +436,8 @@ namespace ECS {
                     return;
                 }
                 _pools[id]->erase(entity.value());
-                // Safe: a registered pool implies id < MaxComponentTypes.
-                _signatures[entity.value()].reset(id);
+                // Safe: registering the pool widened the table for this id.
+                _signatures.reset(entity.value(), id);
             }
 
             template<typename Component>
@@ -492,12 +486,9 @@ namespace ECS {
             template<typename Component>
             ComponentStorage<Component>& ensureStorage() {
                 const ComponentId id = componentId<Component>();
-                if (id >= MaxComponentTypes) {
-                    throw std::out_of_range(
-                        "ECS::Registry: too many component types (see MaxComponentTypes)");
-                }
                 ensurePoolSlot(id);
                 if (!_pools[id]) {
+                    _signatures.ensureComponent(id);
                     _pools[id] = std::make_unique<ComponentPool<Component>>();
                 }
                 return typedPool<Component>(id).storage();
@@ -514,12 +505,6 @@ namespace ECS {
             void ensurePoolSlot(ComponentId id) {
                 if (id >= _pools.size()) {
                     _pools.resize(static_cast<std::size_t>(id) + 1);
-                }
-            }
-
-            void ensureSignatureSlot(std::size_t id) {
-                if (id >= _signatures.size()) {
-                    _signatures.resize(id + 1);
                 }
             }
 
@@ -560,7 +545,7 @@ namespace ECS {
             std::unordered_map<std::size_t, std::string> _entityNames;
             mutable std::vector<Entity> _cachedEntities;
             mutable bool _entitiesDirty{true};
-            std::vector<Signature> _signatures;
+            SignatureTable _signatures;
             std::vector<std::function<void(Registry&)>> _commandQueue;
             std::vector<bool> _pendingSpawns;
             std::vector<std::unique_ptr<IResourceHolder>> _resources;
