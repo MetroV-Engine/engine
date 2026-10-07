@@ -68,6 +68,9 @@ def main() -> None:
         str(ROOT),
         "--filter",
         str(ROOT / "src"),
+        # GCC >= 14 reports each template instantiation separately; count each
+        # source line once (covered if any instantiation ran it), as older gcov did.
+        "--merge-lines",
         "--html-details",
         str(coverage_dir / "index.html"),
         "--print-summary",
