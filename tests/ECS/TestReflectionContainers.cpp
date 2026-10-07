@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -42,6 +43,24 @@ namespace {
         int value;
     };
 
+    // Map keys that path() cannot build from text.
+    struct RcKeyNoDefault {
+        explicit RcKeyNoDefault(int v) : value(v) {}
+        int value;
+        bool operator<(const RcKeyNoDefault& other) const { return value < other.value; }
+    };
+
+    struct RcThrowingKey {
+        RcThrowingKey() { throw std::runtime_error("RcThrowingKey"); }
+        explicit RcThrowingKey(int v) : value(v) {}
+        int value = 0;
+        bool operator<(const RcThrowingKey& other) const { return value < other.value; }
+    };
+
+    // Self-references through a map and through an optional.
+    struct RcGraph { std::map<std::string, std::vector<RcGraph>> links; };
+    struct RcChain { std::optional<std::vector<RcChain>> next; };
+
     // A user container made inspectable through its own ContainerTraits.
     struct RcStack { std::vector<int> data; };
 }
@@ -77,6 +96,14 @@ E_END
 
 E_REFLECT(RcNoDefault)
     E_FIELD(value, int)
+E_END
+
+E_REFLECT(RcGraph)
+    E_FIELD(links, std::map<std::string, std::vector<RcGraph>>)
+E_END
+
+E_REFLECT(RcChain)
+    E_FIELD(next, std::optional<std::vector<RcChain>>)
 E_END
 
 template<>
@@ -370,6 +397,62 @@ void test_self_referencing_types() {
     };
 }
 
+void test_self_reference_through_map_and_optional() {
+    "self-references through a map or an optional register container first"_test = [] {
+        using Links = std::map<std::string, std::vector<RcGraph>>;
+        using Next = std::optional<std::vector<RcChain>>;
+        const TypeInfo& links = registry().get<Links>();
+        const TypeInfo& next = registry().get<Next>();
+
+        expect(registry().get<RcGraph>().findField("links")->type == &links);
+        expect(registry().get<RcChain>().findField("next")->type == &next);
+
+        RcGraph graph{{{"a", {RcGraph{}}}}};
+        expect(Ref::make(graph).path("links[a][0].links").is(TypeKind::Map));
+    };
+}
+
+void test_operations_on_the_wrong_kind() {
+    "container, optional and enum operations fail on another kind"_test = [] {
+        RcInventory inventory = makeInventory();
+        Ref root = Ref::make(inventory);
+        bool called = false;
+
+        expect(root.size() == 0_ul);
+        root.field("items").forEachEntry([&](Ref, Ref) { called = true; });
+        expect(!called);
+        expect(!root.emplace().valid());
+        expect(!root.reset());
+        expect(!root.field("items").setEnumValue(1));
+        expect(!root.field("items").find(Ref::make(inventory)).valid());
+    };
+}
+
+void test_optional_without_default_value() {
+    "emplace fails on an optional of a non default-constructible type"_test = [] {
+        std::optional<RcNoDefault> maybe;
+
+        expect(!Ref::make(maybe).emplace().valid());
+        expect(!maybe.has_value());
+    };
+}
+
+void test_path_key_without_default_constructor() {
+    "path cannot look up a map whose key has no default constructor"_test = [] {
+        std::map<RcKeyNoDefault, int> values{{RcKeyNoDefault{1}, 2}};
+
+        expect(!Ref::make(values).path("[1]").valid());
+    };
+}
+
+void test_path_key_constructor_throws() {
+    "path propagates an exception thrown while building a key"_test = [] {
+        std::map<RcThrowingKey, int> values;
+
+        expect(throws<std::runtime_error>([&] { (void)Ref::make(values).path("[1]"); }));
+    };
+}
+
 void test_vector_bool_stays_opaque() {
     "std::vector<bool> is Opaque since its elements have no address"_test = [] {
         expect(registry().get<std::vector<bool>>().kind == TypeKind::Opaque);
@@ -424,6 +507,11 @@ void run_reflection_containers_tests() {
     test_path_on_root_container();
     test_nested_container_in_map();
     test_self_referencing_types();
+    test_self_reference_through_map_and_optional();
+    test_operations_on_the_wrong_kind();
+    test_optional_without_default_value();
+    test_path_key_without_default_constructor();
+    test_path_key_constructor_throws();
     test_vector_bool_stays_opaque();
     test_copy_respects_element_copyability();
     test_user_container_traits();

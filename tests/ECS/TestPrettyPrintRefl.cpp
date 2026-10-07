@@ -120,6 +120,36 @@ void test_nested_indentation() {
     };
 }
 
+void test_compact_leaf_sequences() {
+    "a sequence of leaves stays on one line when indenting"_test = [] {
+        PpAll all{"n", false, 0, 'x', PpMode::A, {0.0f, 0.0f}, {1, 2, 3}, {}, 4, {}};
+        const std::string text = toPrettyString(Ref::make(all));
+
+        expect(text.find("\n  list: [ 1, 2, 3 ],\n") != std::string::npos);
+        expect(text.find("\n  empty: []\n") != std::string::npos);
+        expect(text.find("\n  maybe: 4,\n") != std::string::npos);
+    };
+}
+
+void test_compact_leaf_sequences_can_be_disabled() {
+    "compactLeafSequences = false prints one element per line"_test = [] {
+        std::vector<int> list{1, 2};
+
+        expect(toPrettyString(Ref::make(list)) == std::string("[ 1, 2 ]"));
+        expect(toPrettyString(Ref::make(list), {.compactLeafSequences = false}) ==
+               std::string("[\n  1,\n  2\n]"));
+    };
+}
+
+void test_compact_leaf_sequences_with_max_elements() {
+    "a compact sequence still honours maxElements"_test = [] {
+        std::vector<int> list{1, 2, 3};
+
+        expect(toPrettyString(Ref::make(list), {.maxElements = 1}) ==
+               std::string("[ 1, ... (2 more) ]"));
+    };
+}
+
 void test_custom_indent_width() {
     "the indent option sets the spaces per level"_test = [] {
         PpVec vec{1.0f, 2.0f};
@@ -216,6 +246,9 @@ void run_pretty_print_refl_tests() {
     test_multi_line_struct();
     test_every_kind();
     test_nested_indentation();
+    test_compact_leaf_sequences();
+    test_compact_leaf_sequences_can_be_disabled();
+    test_compact_leaf_sequences_with_max_elements();
     test_custom_indent_width();
     test_show_types();
     test_max_elements();

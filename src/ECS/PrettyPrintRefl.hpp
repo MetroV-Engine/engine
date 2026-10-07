@@ -20,6 +20,8 @@ namespace ECS::reflect {
         bool showTypes = false;
         /** @brief Maximum elements shown per Sequence/Map (struct fields are never cut); 0 shows them all. */
         std::size_t maxElements = 0;
+        /** @brief Prints a Sequence of leaves (scalars, enums, opaques) on one line even when indenting. */
+        bool compactLeafSequences = true;
     };
 
     namespace detail {
@@ -58,9 +60,19 @@ namespace ECS::reflect {
 
                 void sequence(Ref ref, int depth) {
                     typePrefix(ref);
+                    // Leaves never open a nested block, so a flag is enough to inline them.
+                    const bool wasInline = _inline;
+                    _inline = _inline || (_options.compactLeafSequences &&
+                                          isLeaf(*ref.type().sequenceOps->element));
                     block('[', ']', ref.size(), _options.maxElements, depth, [&](std::size_t i) {
                         value(ref.at(i), depth + 1);
                     });
+                    _inline = wasInline;
+                }
+
+                static bool isLeaf(const TypeInfo& type) noexcept {
+                    return type.kind == TypeKind::Scalar || type.kind == TypeKind::Enum ||
+                           type.kind == TypeKind::Opaque;
                 }
 
                 void map(Ref ref, int depth) {
@@ -138,7 +150,7 @@ namespace ECS::reflect {
                 }
 
                 void breakLine(int depth) {
-                    if (_options.indent > 0) {
+                    if (_options.indent > 0 && !_inline) {
                         _os << '\n' << std::string(static_cast<std::size_t>(depth * _options.indent), ' ');
                     } else {
                         _os << ' ';
@@ -164,6 +176,7 @@ namespace ECS::reflect {
 
                 std::ostream& _os;
                 const PrettyPrintOptions& _options;
+                bool _inline = false;
         };
     }
 
