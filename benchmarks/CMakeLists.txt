@@ -1,2 +1,5 @@
 add_executable(bench_zipper_driver BenchZipperDriver.cpp)
 target_link_libraries(bench_zipper_driver PRIVATE engine_ecs)
+
+add_executable(bench_has_components BenchHasComponents.cpp)
+target_link_libraries(bench_has_components PRIVATE engine_ecs)
