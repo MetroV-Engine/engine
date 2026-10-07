@@ -14,6 +14,8 @@ set(ECS_TEST_FILES
 	ECS/TestRegistry.cpp
 	ECS/TestDeferredMutations.cpp
 	ECS/TestSystems.cpp
+	ECS/TestReflection.cpp
+	ECS/TestTypeRegistry.cpp
 	main.cpp
 )
 
