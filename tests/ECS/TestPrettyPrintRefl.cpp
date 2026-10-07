@@ -229,6 +229,26 @@ void test_string_escaping() {
     };
 }
 
+void test_escaping_tabs_and_char_quotes() {
+    "tabs and the quote character of a char are escaped"_test = [] {
+        std::string text = "a\tb";
+        char quote = '\'';
+
+        expect(toPrettyString(Ref::make(text)) == std::string("\"a\\tb\""));
+        expect(toPrettyString(Ref::make(quote)) == std::string("'\\''"));
+    };
+}
+
+void test_compact_sequences_of_enums_and_opaques() {
+    "sequences of enums and of opaque values are leaves, printed on one line"_test = [] {
+        std::vector<PpMode> modes{PpMode::A, PpMode::B};
+        std::vector<PpStreamable> values{{1}, {2}};
+
+        expect(toPrettyString(Ref::make(modes)) == std::string("[ 0, 1 ]"));
+        expect(toPrettyString(Ref::make(values)) == std::string("[ S(1), S(2) ]"));
+    };
+}
+
 void test_stream_operator() {
     "operator<< on a Ref prints with the default options"_test = [] {
         PpVec vec{1.0f, 2.0f};
@@ -257,5 +277,7 @@ void run_pretty_print_refl_tests() {
     test_opaque_values();
     test_empty_struct_and_invalid_ref();
     test_string_escaping();
+    test_escaping_tabs_and_char_quotes();
+    test_compact_sequences_of_enums_and_opaques();
     test_stream_operator();
 }

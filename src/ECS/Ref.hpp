@@ -100,8 +100,10 @@ namespace ECS::reflect {
                     const std::string_view name = path.substr(pos, end - pos);
                     if (!name.empty()) {
                         current = current.unwrapped().field(name);
-                    } else if (pos != 0 || end == path.size() || path[end] != '[') {
-                        return {};   // empty segment; only "[i]..." may start a path
+                    } else if (pos != 0 || path[end] != '[') {
+                        // Empty segment; only "[i]..." may start a path. At pos 0 the path is
+                        // non-empty and starts with '.' or '[', so path[end] is in range.
+                        return {};
                     }
                     pos = end;
                     while (pos < path.size() && path[pos] == '[') {
@@ -366,7 +368,7 @@ namespace ECS::reflect {
             static bool parseNumber(std::string_view text, N& out) noexcept {
                 const char* last = text.data() + text.size();
                 const auto [ptr, error] = std::from_chars(text.data(), last, out);
-                return error == std::errc{} && ptr == last && !text.empty();
+                return error == std::errc{} && ptr == last;   // from_chars rejects empty text
             }
 
             template<typename N>
@@ -390,7 +392,11 @@ namespace ECS::reflect {
                 }
                 if (target.is(TypeKind::Enum)) {
                     std::int64_t raw = 0;
-                    return parseNumber(text, raw) && target.setEnumValue(raw);
+                    if (!parseNumber(text, raw)) {
+                        return false;
+                    }
+                    target.setEnumValue(raw);   // cannot fail: target is an Enum
+                    return true;
                 }
                 bool matched = false;
                 const bool parsed =

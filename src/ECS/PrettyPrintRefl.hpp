@@ -60,14 +60,14 @@ namespace ECS::reflect {
 
                 void sequence(Ref ref, int depth) {
                     typePrefix(ref);
-                    // Leaves never open a nested block, so a flag is enough to inline them.
-                    const bool wasInline = _inline;
-                    _inline = _inline || (_options.compactLeafSequences &&
-                                          isLeaf(*ref.type().sequenceOps->element));
+                    // An inlined sequence only holds leaves, so sequence() is never
+                    // re-entered while _inline is set: no need to save/restore it.
+                    _inline = _options.compactLeafSequences &&
+                              isLeaf(*ref.type().sequenceOps->element);
                     block('[', ']', ref.size(), _options.maxElements, depth, [&](std::size_t i) {
                         value(ref.at(i), depth + 1);
                     });
-                    _inline = wasInline;
+                    _inline = false;
                 }
 
                 static bool isLeaf(const TypeInfo& type) noexcept {

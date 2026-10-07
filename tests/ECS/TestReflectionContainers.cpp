@@ -453,6 +453,70 @@ void test_path_key_constructor_throws() {
     };
 }
 
+void test_ref_with_type_but_no_data_is_invalid() {
+    "a Ref with a type but a null address is invalid"_test = [] {
+        Ref ref(*registry().find<int>(), nullptr);
+
+        expect(!ref.valid());
+        expect(!ref.is(TypeKind::Scalar));
+        expect(ref.tryAs<int>() == nullptr);
+    };
+}
+
+void test_kind_queries_on_the_wrong_kind() {
+    "resizable, erase and hasValue are false on another kind"_test = [] {
+        RcInventory inventory = makeInventory();
+        Ref root = Ref::make(inventory);
+
+        expect(!root.resizable());
+        expect(!root.erase(0));
+        expect(!root.hasValue());
+        expect(!root.value().valid());
+    };
+}
+
+void test_map_insert_without_default_value() {
+    "insert fails on a map whose value has no default constructor"_test = [] {
+        std::map<std::string, RcNoDefault> values;
+        std::string key = "a";
+
+        expect(!Ref::make(values).insert(Ref::make(key)).valid());
+        expect(values.empty());
+    };
+}
+
+template<typename Key>
+bool pathFindsIntegerKey(Key key, std::string_view text) {
+    std::map<Key, int> values{{key, 42}};
+    Ref found = Ref::make(values).path("[" + std::string(text) + "]");
+    return found.valid() && found.template as<int>() == 42;
+}
+
+void test_path_integer_key_types() {
+    "path parses map keys of every integer type"_test = [] {
+        expect(pathFindsIntegerKey<std::int8_t>(-8, "-8"));
+        expect(pathFindsIntegerKey<std::int16_t>(-16, "-16"));
+        expect(pathFindsIntegerKey<std::int32_t>(-32, "-32"));
+        expect(pathFindsIntegerKey<std::int64_t>(-64, "-64"));
+        expect(pathFindsIntegerKey<std::uint8_t>(8, "8"));
+        expect(pathFindsIntegerKey<std::uint16_t>(16, "16"));
+        expect(pathFindsIntegerKey<std::uint32_t>(32, "32"));
+        expect(pathFindsIntegerKey<std::uint64_t>(64, "64"));
+        expect(!pathFindsIntegerKey<std::uint8_t>(8, "-8"));    // out of range for the key type
+        expect(!pathFindsIntegerKey<std::int16_t>(1, "1x"));    // trailing garbage
+    };
+}
+
+void test_path_key_parse_failures() {
+    "path rejects keys that cannot be parsed into the key type"_test = [] {
+        RcInventory inventory = makeInventory();
+        std::map<float, int> floatKeys{{1.0f, 2}};
+
+        expect(!Ref::make(inventory).path("perState[abc]").valid());   // enum key, not a number
+        expect(!Ref::make(floatKeys).path("[1]").valid());              // unsupported key type
+    };
+}
+
 void test_vector_bool_stays_opaque() {
     "std::vector<bool> is Opaque since its elements have no address"_test = [] {
         expect(registry().get<std::vector<bool>>().kind == TypeKind::Opaque);
@@ -512,6 +576,11 @@ void run_reflection_containers_tests() {
     test_optional_without_default_value();
     test_path_key_without_default_constructor();
     test_path_key_constructor_throws();
+    test_ref_with_type_but_no_data_is_invalid();
+    test_kind_queries_on_the_wrong_kind();
+    test_map_insert_without_default_value();
+    test_path_integer_key_types();
+    test_path_key_parse_failures();
     test_vector_bool_stays_opaque();
     test_copy_respects_element_copyability();
     test_user_container_traits();
