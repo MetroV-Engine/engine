@@ -16,6 +16,8 @@ set(ECS_TEST_FILES
 	ECS/TestSystems.cpp
 	ECS/TestReflection.cpp
 	ECS/TestTypeRegistry.cpp
+	ECS/TestReflectionContainers.cpp
+	ECS/TestPrettyPrintRefl.cpp
 	main.cpp
 )
 

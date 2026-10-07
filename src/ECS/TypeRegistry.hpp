@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <new>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -12,6 +13,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ContainerTraits.hpp"
 #include "Reflection.hpp"
 #include "TypeInfo.hpp"
 
@@ -23,8 +25,12 @@ namespace ECS::reflect {
      * registered on demand by registerType<T>(), which also registers the
      * types of its fields, recursively:
      *  - E_REFLECT types become TypeKind::Struct with their fields;
-     *  - anything else becomes TypeKind::Opaque (named after typeid(T).name(),
-     *    which is compiler-specific: do not persist the id of an Opaque type).
+     *  - types with a ContainerTraits specialisation become Sequence, Map or
+     *    Optional, named after their elements ("vector<float>");
+     *  - enums become TypeKind::Enum;
+     *  - anything else becomes TypeKind::Opaque.
+     * Enum and Opaque names come from typeid(T).name(), which is
+     * compiler-specific: do not persist the id of such a type.
      *
      * Registration is not thread-safe; do it at startup, before systems run.
      */
@@ -48,15 +54,22 @@ namespace ECS::reflect {
             const TypeInfo& registerType() {
                 using U = std::remove_cv_t<T>;
                 static_assert(!std::is_reference_v<U>, "references cannot be registered");
+                static_assert(!std::is_array_v<U>, "C arrays are not supported, use std::array");
 
                 if (const TypeInfo* existing = find<U>()) {
                     return *existing;
                 }
                 if constexpr (Reflected<U>) {
+                    // Inserted before its fields so self-referencing types
+                    // (struct Node { std::vector<Node> children; }) terminate.
                     TypeInfo& info = insert<U>(std::string(Descriptor<U>::name), TypeKind::Struct);
                     FieldBuilder<U> builder{*this, info.fields};
                     forEachField<U>(builder);
                     return info;
+                } else if constexpr (HasContainerTraits<U>) {
+                    return registerContainer<U>();
+                } else if constexpr (std::is_enum_v<U>) {
+                    return registerEnum<U>();
                 } else {
                     return insert<U>(typeid(U).name(), TypeKind::Opaque);
                 }
@@ -127,9 +140,131 @@ namespace ECS::reflect {
                 }
             };
 
+            // Container names are built from their element names, so the
+            // element types are registered first. Registering them may have
+            // registered T itself (Node -> vector<Node> -> Node), hence the
+            // second lookup before inserting.
+            template<typename T>
+            const TypeInfo& registerContainer() {
+                using Traits = ContainerTraits<T>;
+
+                if constexpr (Traits::kind == TypeKind::Sequence) {
+                    const TypeInfo& element = registerType<typename Traits::Element>();
+                    if (const TypeInfo* existing = find<T>()) {
+                        return *existing;
+                    }
+                    TypeInfo& info = insert<T>(Traits::name(element.name), TypeKind::Sequence);
+                    SequenceOps ops;
+                    ops.element = &element;
+                    ops.size = [](const void* c) noexcept {
+                        return Traits::size(*static_cast<const T*>(c));
+                    };
+                    ops.at = [](void* c, std::size_t index) noexcept -> void* {
+                        return Traits::at(*static_cast<T*>(c), index);
+                    };
+                    if constexpr (requires(T& c) { Traits::resize(c, std::size_t{}); }) {
+                        ops.resize = [](void* c, std::size_t count) {
+                            Traits::resize(*static_cast<T*>(c), count);
+                        };
+                    }
+                    if constexpr (requires(T& c) { Traits::erase(c, std::size_t{}); }) {
+                        ops.erase = [](void* c, std::size_t index) {
+                            Traits::erase(*static_cast<T*>(c), index);
+                        };
+                    }
+                    info.sequenceOps = ops;
+                    return info;
+                } else if constexpr (Traits::kind == TypeKind::Map) {
+                    using Key = typename Traits::Key;
+                    const TypeInfo& key = registerType<Key>();
+                    const TypeInfo& value = registerType<typename Traits::Value>();
+                    if (const TypeInfo* existing = find<T>()) {
+                        return *existing;
+                    }
+                    TypeInfo& info = insert<T>(Traits::name(key.name, value.name), TypeKind::Map);
+                    MapOps ops;
+                    ops.key = &key;
+                    ops.value = &value;
+                    ops.size = [](const void* m) noexcept {
+                        return Traits::size(*static_cast<const T*>(m));
+                    };
+                    ops.find = [](void* m, const void* k) -> void* {
+                        return Traits::find(*static_cast<T*>(m), *static_cast<const Key*>(k));
+                    };
+                    if constexpr (requires(T& m, const Key& k) { Traits::insert(m, k); }) {
+                        ops.insert = [](void* m, const void* k) -> void* {
+                            return Traits::insert(*static_cast<T*>(m), *static_cast<const Key*>(k));
+                        };
+                    }
+                    ops.erase = [](void* m, const void* k) {
+                        return Traits::erase(*static_cast<T*>(m), *static_cast<const Key*>(k));
+                    };
+                    ops.forEach = [](void* m, void* ctx,
+                                     void (*fn)(void*, const void*, void*)) {
+                        Traits::forEach(*static_cast<T*>(m), [&](const auto& k, auto& v) {
+                            fn(ctx, &k, &v);
+                        });
+                    };
+                    info.mapOps = ops;
+                    return info;
+                } else if constexpr (Traits::kind == TypeKind::Optional) {
+                    const TypeInfo& value = registerType<typename Traits::Value>();
+                    if (const TypeInfo* existing = find<T>()) {
+                        return *existing;
+                    }
+                    TypeInfo& info = insert<T>(Traits::name(value.name), TypeKind::Optional);
+                    OptionalOps ops;
+                    ops.value = &value;
+                    ops.hasValue = [](const void* o) noexcept {
+                        return Traits::hasValue(*static_cast<const T*>(o));
+                    };
+                    ops.get = [](void* o) noexcept -> void* {
+                        return Traits::get(*static_cast<T*>(o));
+                    };
+                    if constexpr (requires(T& o) { Traits::emplace(o); }) {
+                        ops.emplace = [](void* o) -> void* {
+                            return Traits::emplace(*static_cast<T*>(o));
+                        };
+                    }
+                    ops.reset = [](void* o) noexcept { Traits::reset(*static_cast<T*>(o)); };
+                    info.optionalOps = ops;
+                    return info;
+                } else {
+                    static_assert(sizeof(T) == 0, "ContainerTraits<T>::kind must be Sequence, Map or Optional");
+                }
+            }
+
+            // Enums are exposed through their integer value. Their name comes
+            // from typeid (compiler-specific) until enum reflection exists.
+            template<typename T>
+            const TypeInfo& registerEnum() {
+                const TypeInfo& underlying = registerType<std::underlying_type_t<T>>();
+                TypeInfo& info = insert<T>(typeid(T).name(), TypeKind::Enum);
+                EnumOps ops;
+                ops.underlying = &underlying;
+                ops.get = [](const void* e) noexcept {
+                    return static_cast<std::int64_t>(*static_cast<const T*>(e));
+                };
+                ops.set = [](void* e, std::int64_t raw) noexcept {
+                    *static_cast<T*>(e) = static_cast<T>(raw);
+                };
+                info.enumOps = ops;
+                return info;
+            }
+
             template<typename T>
             void registerScalar(std::string name) {
-                insert<T>(std::move(name), TypeKind::Scalar);
+                TypeInfo& info = insert<T>(std::move(name), TypeKind::Scalar);
+                // operator<< would print these as characters or 1/0.
+                if constexpr (std::is_same_v<T, std::int8_t> || std::is_same_v<T, std::uint8_t>) {
+                    info.print = [](std::ostream& os, const void* obj) {
+                        os << static_cast<int>(*static_cast<const T*>(obj));
+                    };
+                } else if constexpr (std::is_same_v<T, bool>) {
+                    info.print = [](std::ostream& os, const void* obj) {
+                        os << (*static_cast<const bool*>(obj) ? "true" : "false");
+                    };
+                }
             }
 
             template<typename T>
@@ -151,9 +286,14 @@ namespace ECS::reflect {
                     info->construct = [](void* dst) { ::new (dst) T(); };
                 }
                 info->destroy = [](void* obj) noexcept { static_cast<T*>(obj)->~T(); };
-                if constexpr (std::is_copy_constructible_v<T>) {
+                if constexpr (detail::isDeepCopyable<T>()) {
                     info->copy = [](void* dst, const void* src) {
                         ::new (dst) T(*static_cast<const T*>(src));
+                    };
+                }
+                if constexpr (requires(std::ostream& os, const T& value) { os << value; }) {
+                    info->print = [](std::ostream& os, const void* obj) {
+                        os << *static_cast<const T*>(obj);
                     };
                 }
 

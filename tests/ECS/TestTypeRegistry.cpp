@@ -168,14 +168,15 @@ void test_field_types_are_registered_recursively() {
     };
 }
 
-void test_unreflected_field_type_is_opaque() {
-    "a field type that is neither scalar nor reflected is Opaque"_test = [] {
-        const TypeInfo* tags = registry().get<TrBody>().findField("tags")->type;
+void test_unreflected_type_is_opaque() {
+    "a type that is neither scalar, reflected, container nor enum is Opaque"_test = [] {
+        struct Unreflected { int a; double b; };
+        const TypeInfo& info = registry().get<Unreflected>();
 
-        expect(tags->kind == TypeKind::Opaque);
-        expect(tags->fields.empty());
-        expect(tags->size == sizeof(std::vector<int>));
-        expect(tags == registry().find<std::vector<int>>());
+        expect(info.kind == TypeKind::Opaque);
+        expect(info.fields.empty());
+        expect(info.size == sizeof(Unreflected));
+        expect(!info.sequenceOps && !info.mapOps && !info.optionalOps && !info.enumOps);
     };
 }
 
@@ -365,7 +366,7 @@ void run_type_registry_tests() {
     test_lookup_by_name_and_id();
     test_struct_fields();
     test_field_types_are_registered_recursively();
-    test_unreflected_field_type_is_opaque();
+    test_unreflected_type_is_opaque();
     test_find_field();
     test_field_accessor();
     test_name_collision_throws();
