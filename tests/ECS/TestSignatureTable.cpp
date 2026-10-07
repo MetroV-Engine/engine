@@ -210,6 +210,28 @@ namespace {
         };
     }
 
+    void test_second_growth_keeps_bits_above_the_first_word() {
+        "growing again keeps bits stored above the first word"_test = [] {
+            ECS::SignatureTable table;
+            table.ensureEntity(1);
+            table.ensureComponent(100);
+            table.set(0, 3);
+            table.set(0, 82);
+            table.set(1, 100);
+
+            table.ensureComponent(333);
+
+            expect(table.wordsPerEntity() == std::size_t{8});
+            expect(table.test(0, 3));
+            expect(table.test(0, 82));
+            expect(!table.test(0, 100));
+            expect(table.test(1, 100));
+            expect(!table.test(1, 82));
+            expect(!table.test(0, 333));
+            expect(!table.test(1, 333));
+        };
+    }
+
     void test_rows_added_after_growth_are_empty_and_wide() {
         "a row added after growing is empty and as wide as the others"_test = [] {
             ECS::SignatureTable table;
@@ -284,6 +306,7 @@ void run_signature_table_tests() {
     test_ensure_component_jumps_several_doublings();
     test_ids_at_word_boundaries();
     test_growth_keeps_every_entitys_bits();
+    test_second_growth_keeps_bits_above_the_first_word();
     test_rows_added_after_growth_are_empty_and_wide();
     test_growth_with_no_entities();
     test_clear_after_growth_clears_high_ids();

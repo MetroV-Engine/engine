@@ -667,6 +667,9 @@ namespace {
     void test_growing_signatures_keeps_existing_components() {
         "registering a high-id type keeps every entity's components"_test = [] {
             push_component_ids_past_256();
+            // The registry must start narrower than BeyondLimit needs.
+            expect(ECS::componentId<Position>() < ECS::ComponentId{64});
+            expect(ECS::componentId<Velocity>() < ECS::ComponentId{64});
 
             ECS::Registry registry;
             const auto first = registry.spawnEntity();
@@ -730,6 +733,8 @@ namespace {
     void test_type_registered_in_another_registry_is_absent() {
         "a type registered in another registry is simply absent"_test = [] {
             push_component_ids_past_256();
+            // narrow must stay narrower than BeyondLimit needs.
+            expect(ECS::componentId<Position>() < ECS::ComponentId{64});
 
             ECS::Registry wide;
             ECS::Registry narrow;
