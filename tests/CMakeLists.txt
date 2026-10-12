@@ -14,12 +14,12 @@ set(ECS_TEST_FILES
 	ECS/TestRegistry.cpp
 	ECS/TestDeferredMutations.cpp
 	ECS/TestSystems.cpp
-	ECS/TestReflection.cpp
-	ECS/TestTypeRegistry.cpp
-	ECS/TestReflectionContainers.cpp
-	ECS/TestPrettyPrintRefl.cpp
 	ECS/TestRegistryComponentId.cpp
-	ECS/TestComponentReflection.cpp
+	ECS/Reflection/TestDescriptor.cpp
+	ECS/Reflection/TestTypeRegistry.cpp
+	ECS/Reflection/TestContainers.cpp
+	ECS/Reflection/TestPrettyPrint.cpp
+	ECS/Reflection/TestRegistryInspector.cpp
 	main.cpp
 )
 

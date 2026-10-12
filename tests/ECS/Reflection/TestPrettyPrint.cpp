@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "ECS/PrettyPrintRefl.hpp"
+#include "ECS/Reflection/PrettyPrint.hpp"
 
 using namespace boost::ut;
 
@@ -261,7 +261,7 @@ void test_stream_operator() {
 
 }
 
-void run_pretty_print_refl_tests() {
+void run_pretty_print_tests() {
     test_single_line_struct();
     test_multi_line_struct();
     test_every_kind();

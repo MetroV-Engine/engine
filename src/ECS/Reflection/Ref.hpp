@@ -168,8 +168,8 @@ namespace ECS::reflect {
                 return resize(count + 1) ? at(count) : Ref{};
             }
 
-            /** @brief Removes the element at index; returns false if impossible. */
-            bool erase(std::size_t index) const {
+            /** @brief Removes the element at index of a Sequence; returns false if impossible. */
+            bool eraseAt(std::size_t index) const {
                 if (!is(TypeKind::Sequence) || !_type->sequenceOps->erase || index >= size()) {
                     return false;
                 }
@@ -198,8 +198,8 @@ namespace ECS::reflect {
                 return Ref(*ops.value, ops.insert(_data, key._data));
             }
 
-            /** @brief Removes key; returns whether it was present. */
-            bool erase(Ref key) const {
+            /** @brief Removes key from a Map; returns whether it was present. */
+            bool eraseKey(Ref key) const {
                 return acceptsKey(key) && _type->mapOps->erase(_data, key._data);
             }
 
@@ -415,7 +415,3 @@ namespace ECS::reflect {
             void* _data = nullptr;
     };
 }
-
-// Included last, once Ref is complete: it defines the registration that every
-// E_REFLECT calls, so any file that can use Ref can also use E_REFLECT.
-#include "ComponentReflection.hpp"

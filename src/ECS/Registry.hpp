@@ -21,6 +21,16 @@
 #include "View.hpp"
 
 namespace ECS {
+    namespace reflect {
+        class RegistryInspector;
+    }
+
+#ifdef ENGINE_TESTING
+    namespace TestAccess {
+        struct RegistryIdAccess;
+    }
+#endif
+
     /**
      * @brief Header-only ECS registry for entities, component pools and systems.
      *
@@ -151,7 +161,7 @@ namespace ECS {
              */
             template<typename Component>
             void removeComponent(Entity entity) {
-                removeComponent(entity, componentId<Component>());
+                removeComponentById(entity, componentId<Component>());
             }
 
             /**
@@ -164,7 +174,7 @@ namespace ECS {
              */
             template<typename... Components>
             [[nodiscard]] bool hasComponents(Entity entity) const {
-                return hasComponents(entity, {componentId<Components>()...});
+                return hasComponentsById(entity, {componentId<Components>()...});
             }
 
             /**
@@ -325,15 +335,35 @@ namespace ECS {
                 typedPool<Component>(componentId<Component>()).setOnRemove(std::move(callback));
             }
 
+            /**
+             * @brief Access to this registry's components without knowing their types.
+             *
+             * For code that only has a component's TypeInfo (editor, scripting,
+             * scene loading, serialization). Code that knows its types uses the
+             * typed API above instead.
+             *
+             * Returns a lightweight handle referencing this registry: create it
+             * where needed, it must not outlive the registry. Defined in
+             * ECS/Reflection/RegistryInspector.hpp, which must be included to
+             * call it (the ECS core does not depend on the reflection layer).
+             */
+            [[nodiscard]] reflect::RegistryInspector inspect();
+
+        private:
+            friend class reflect::RegistryInspector;
+#ifdef ENGINE_TESTING
+            friend struct TestAccess::RegistryIdAccess;
+#endif
+
             // ----------------------------------------------------------------
-            // ComponentId-based access
+            // ComponentId-based access (private)
             //
-            // The same operations as above, for callers that only know a
-            // component's ComponentId (the reflection layer, used by the
-            // editor, scripts and scene loading: see ECS/ComponentReflection.hpp).
-            // They are the single implementation of has/remove, which the
-            // typed API forwards to. Kept together so they can move to a
-            // dedicated ComponentStore (see REFACTOR_REGISTRY.md).
+            // The same operations as the typed API, for code that only knows
+            // a component's ComponentId. They are the single implementation
+            // of has/remove, which the typed API forwards to. Only
+            // reflect::RegistryInspector (a friend) uses them. Kept together
+            // so they can move to a dedicated ComponentStore (see
+            // REFACTOR_REGISTRY.md).
             // ----------------------------------------------------------------
 
             /**
@@ -341,7 +371,7 @@ namespace ECS {
              * @param factory Must create the pool of the type whose componentId() is id.
              * @throws std::out_of_range when id does not fit in a Signature.
              */
-            void ensurePool(ComponentId id, PoolFactory factory) {
+            void ensurePoolById(ComponentId id, PoolFactory factory) {
                 if (id >= MaxComponentTypes) {
                     throw std::out_of_range(
                         "ECS::Registry: too many component types (see MaxComponentTypes)");
@@ -353,7 +383,7 @@ namespace ECS {
             }
 
             /** @brief Checks whether this registry has a pool for id. */
-            [[nodiscard]] bool hasPool(ComponentId id) const noexcept {
+            [[nodiscard]] bool hasPoolById(ComponentId id) const noexcept {
                 return id < _pools.size() && _pools[id] != nullptr;
             }
 
@@ -363,7 +393,7 @@ namespace ECS {
              *         id's bit set. An id that does not fit in the Signature can
              *         never have been registered, so no entity owns it.
              */
-            [[nodiscard]] bool hasComponents(Entity entity, std::initializer_list<ComponentId> ids) const {
+            [[nodiscard]] bool hasComponentsById(Entity entity, std::initializer_list<ComponentId> ids) const {
                 if (!_entities.isAlive(entity)) {
                     return false;
                 }
@@ -381,9 +411,9 @@ namespace ECS {
              * @brief Address of an entity's component, or nullptr when absent.
              * @throws std::invalid_argument if entity is not alive.
              */
-            [[nodiscard]] void* getComponent(Entity entity, ComponentId id) {
+            [[nodiscard]] void* getComponentById(Entity entity, ComponentId id) {
                 ensureEntityAlive(entity);
-                return hasPool(id) ? _pools[id]->getRaw(entity.value()) : nullptr;
+                return hasPoolById(id) ? _pools[id]->getRaw(entity.value()) : nullptr;
             }
 
             /**
@@ -394,7 +424,7 @@ namespace ECS {
              * @throws std::invalid_argument if entity is not alive.
              * @throws std::out_of_range when this registry has no pool for id.
              */
-            void* addDefaultComponent(Entity entity, ComponentId id) {
+            void* addDefaultComponentById(Entity entity, ComponentId id) {
                 ensureEntityAlive(entity);
                 requireRegistered(id);
                 std::shared_ptr<void> value = _pools[id]->makeDefault();
@@ -418,7 +448,7 @@ namespace ECS {
              * @brief Removes an entity's component when this registry has its pool.
              * @throws std::invalid_argument if entity is not alive.
              */
-            void removeComponent(Entity entity, ComponentId id) {
+            void removeComponentById(Entity entity, ComponentId id) {
                 ensureEntityAlive(entity);
                 if (!_deferring) {
                     removeComponentImmediate(entity, id);
@@ -450,7 +480,6 @@ namespace ECS {
                 return ids;
             }
 
-        private:
             Entity spawnEntityImmediate(const std::string& name) {
                 _entitiesDirty = true;
                 const Entity entity = _entities.create();
@@ -549,7 +578,7 @@ namespace ECS {
             }
 
             void removeComponentImmediate(Entity entity, ComponentId id) {
-                if (!hasPool(id)) {
+                if (!hasPoolById(id)) {
                     return;
                 }
                 _pools[id]->erase(entity.value());

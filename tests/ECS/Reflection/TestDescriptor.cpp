@@ -6,7 +6,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "ECS/Reflection.hpp"
+#include "ECS/Reflection/Reflection.hpp"
 
 using namespace boost::ut;
 
@@ -269,7 +269,7 @@ void test_private_fields_with_friend() {
 
 }
 
-void run_reflection_tests() {
+void run_descriptor_tests() {
     test_reflected_concept();
     test_type_name();
     test_type_only_visit_order();

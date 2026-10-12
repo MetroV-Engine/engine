@@ -35,13 +35,7 @@ entities that contain the components they need.
 | [Registry.hpp](Registry.hpp) | Main ECS API for entities and components. |
 | [View.hpp](View.hpp) | Public queries over entities sharing component types. |
 | [Systems.hpp](Systems.hpp) | `ISystem` interface and `SystemManager`, which owns and runs systems. |
-| [Reflection.hpp](Reflection.hpp) | Entry point of the reflection layer: include it to use `E_REFLECT`. |
-| [Descriptor.hpp](Descriptor.hpp) | `E_REFLECT` / `E_FIELD` / `E_END` macros and compile-time field visitors. |
-| [TypeRegistry.hpp](TypeRegistry.hpp), [TypeInfo.hpp](TypeInfo.hpp) | Runtime description of types (fields, containers, enums, lifetime operations). |
-| [ContainerTraits.hpp](ContainerTraits.hpp) | Customisation point making a container inspectable at runtime. |
-| [Ref.hpp](Ref.hpp) | Type-erased view on a value: fields, elements and paths by name. |
-| [ComponentReflection.hpp](ComponentReflection.hpp) | Component access on a `Registry` from a `TypeInfo` (editor, scripts, scenes). |
-| [PrettyPrintRefl.hpp](PrettyPrintRefl.hpp) | Readable printing of any reflected value, for logs and debugging. |
+| [Reflection/](Reflection/README.md) | Runtime reflection: `E_REFLECT`, `Ref`, and `Registry::inspect()` for code that does not know component types. |
 
 ## Entity
 
@@ -252,26 +246,21 @@ world.removeComponent<Health>(player);
 does not exist for the entity. `getIf` is available when a nullable lookup is
 preferred.
 
-### Access by ComponentId
+### Access without knowing the types
 
-Code that does not know a component's type at compile time can use its
-`ComponentId` instead. These overloads are the single implementation of
-`hasComponents` and `removeComponent`, which the typed API forwards to:
+Code that knows its component types (gameplay systems, C++ scripts) uses the
+typed API above. Code that only has a type name or `TypeInfo` (editor,
+interpreted scripting, scene loading, serialization) calls `world.inspect()`,
+which returns a `reflect::RegistryInspector` (see [Reflection](Reflection/README.md)):
 
 ```cpp
-const ECS::ComponentId id = ECS::componentId<Health>();
-
-world.hasComponents(player, {id});
-void* health = world.getComponent(player, id);      // nullptr when absent
-world.removeComponent(player, id);
-
-world.ensurePool(id, &ECS::ComponentPool<Health>::create);
-void* added = world.addDefaultComponent(player, id); // default-constructed
-std::vector<ECS::ComponentId> ids = world.componentIdsOf(player);
+world.inspect().get(player, *ECS::reflect::RegistryInspector::findType("Health"));
 ```
 
-They follow the same rules as the typed API, including deferred mode. In
-practice they are used through the reflection layer (see [Reflection](#reflection)).
+`inspect()` is declared here and defined by the reflection layer, so the ECS
+core does not depend on it. Both APIs share one implementation: private,
+`ComponentId`-based methods of the Registry (`…ById`), used by the typed
+`hasComponents` / `removeComponent` and by `RegistryInspector`, its friend.
 
 ## Systems
 
@@ -335,58 +324,11 @@ relied on.
 
 ## Reflection
 
-See [Reflection.hpp](Reflection.hpp) and the headers it includes.
+See [Reflection/README.md](Reflection/README.md).
 
-Reflection describes types at runtime, so that tools that do not know a
-component's type at compile time (editor, scripts, scene loading) can still
-read and modify it:
-
-```cpp
-#include "ECS/Reflection.hpp"
-
-struct Health { int current = 100; int max = 100; };
-
-E_REFLECT(Health)
-    E_FIELD(current, int)
-    E_FIELD(max, int)
-E_END
-```
-
-In this ECS a component is any data struct attached to an entity, so every
-`E_REFLECT` type is also registered as a component, before `main`, without any
-registration call. A component is then reachable from its name:
-
-```cpp
-namespace reflect = ECS::reflect;
-
-const reflect::TypeInfo& health = *reflect::TypeRegistry::instance().find("Health");
-
-reflect::Ref ref = reflect::addComponent(world, player, health);   // creates the pool if needed
-ref.path("current").as<int>() -= 10;
-
-for (reflect::Ref component : reflect::componentsOf(world, player)) {
-    std::cout << component << "\n";                                // PrettyPrintRefl.hpp
-}
-```
-
-Fields can be structs, `std::vector`, `std::array`, `std::map`,
-`std::unordered_map`, `std::optional` and enums; `Ref::path` accepts
-`"inventory[0].count"` or `"stats[strength]"`.
-
-Rules to keep in mind:
-
-- A `Ref` to a component is invalidated by any structural change of that
-  component type, like a reference from `getComponent<T>`: fetch it again
-  instead of keeping it across frames.
-- `addComponent` by type needs a default constructor; a type that cannot live
-  in a pool (e.g. a `const` member) is reflected but is not a component.
-- Automatic registration runs from static initialisation. A translation unit
-  dropped by the linker (an unreferenced object file of a static library) never
-  registers its types: link such a library with `WHOLE_ARCHIVE`, or call
-  `reflect::registerComponent<T>()`.
-- Registration errors (e.g. two types reflected under the same name) cannot
-  throw before `main`: they are listed by
-  `ComponentCatalog::instance().registrationErrors()`.
+Every `E_REFLECT` type is described at runtime and is usable as a component by
+code that does not know its type at compile time, through `world.inspect()`.
+The ECS core does not depend on the reflection layer.
 
 ## Header-Only Design
 

@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "ECS/Ref.hpp"
+#include "ECS/Reflection/Reflection.hpp"
 
 using namespace boost::ut;
 
@@ -212,9 +212,9 @@ void test_vector_resize_push_erase() {
         expect(inventory.items.size() == 3_ul);
         expect(inventory.items[2].id == std::string("shield"));
 
-        expect(items.erase(0));
+        expect(items.eraseAt(0));
         expect(inventory.items.front().id == std::string("potion"));
-        expect(!items.erase(5));
+        expect(!items.eraseAt(5));
 
         expect(items.resize(0));
         expect(inventory.items.empty());
@@ -230,7 +230,7 @@ void test_array_is_fixed_size() {
         expect(!color.resizable());
         expect(!color.resize(4));
         expect(!color.push().valid());
-        expect(!color.erase(0));
+        expect(!color.eraseAt(0));
 
         color.at(2).as<float>() = 1.0f;
         expect(inventory.color[2] == 1.0_f);
@@ -244,7 +244,7 @@ void test_vector_without_default_element() {
 
         expect(!ref.resizable());
         expect(!ref.push().valid());
-        expect(ref.erase(0));
+        expect(ref.eraseAt(0));
         expect(values.size() == 1_ul);
         expect(ref.at(0).field("value").as<int>() == 2_i);
     };
@@ -264,8 +264,8 @@ void test_map_find_insert_erase() {
         counters.insert(Ref::make(wood)).as<int>() = 4;
         expect(inventory.counters.at("wood") == 4_i);
 
-        expect(counters.erase(Ref::make(gold)));
-        expect(!counters.erase(Ref::make(gold)));
+        expect(counters.eraseKey(Ref::make(gold)));
+        expect(!counters.eraseKey(Ref::make(gold)));
         expect(inventory.counters.count("gold") == 0_ul);
     };
 }
@@ -278,7 +278,7 @@ void test_map_rejects_wrong_key_type() {
 
         expect(!counters.find(Ref::make(notAString)).valid());
         expect(!counters.insert(Ref::make(notAString)).valid());
-        expect(!counters.erase(Ref::make(notAString)));
+        expect(!counters.eraseKey(Ref::make(notAString)));
         expect(!counters.find(Ref{}).valid());
     };
 }
@@ -489,7 +489,7 @@ void test_kind_queries_on_the_wrong_kind() {
         Ref root = Ref::make(inventory);
 
         expect(!root.resizable());
-        expect(!root.erase(0));
+        expect(!root.eraseAt(0));
         expect(!root.hasValue());
         expect(!root.value().valid());
     };
@@ -573,7 +573,7 @@ void test_user_container_traits() {
 
 }
 
-void run_reflection_containers_tests() {
+void run_containers_tests() {
     test_container_kinds_and_names();
     test_container_ops_describe_element_types();
     test_sequence_size_and_at();

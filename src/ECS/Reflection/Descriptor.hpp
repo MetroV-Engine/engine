@@ -21,12 +21,13 @@ namespace ECS::reflect {
     namespace detail {
         /**
          * @brief Registers T as a runtime type and a component (see
-         *        ECS/ComponentReflection.hpp, which defines it).
+         *        detail/ComponentCatalog.hpp, which defines it).
          *
          * Called by every E_REFLECT before main. Declared here so that the
          * macro compiles; a translation unit using E_REFLECT must include
-         * ECS/Reflection.hpp (or Ref.hpp) to get the definition, otherwise
-         * the link fails with an undefined reference to this function.
+         * ECS/Reflection/Reflection.hpp (or any other reflection header than
+         * this one) to get the definition, otherwise the link fails with an
+         * undefined reference to this function.
          */
         template<typename T>
         void registerReflectedType() noexcept;
@@ -124,8 +125,8 @@ namespace ECS::reflect {
  * ECS::reflect::Descriptor<T>).
  *
  * The type is registered before main as a runtime type (TypeRegistry) and
- * as a component usable by name (ComponentCatalog): see
- * ECS/ComponentReflection.hpp. Include ECS/Reflection.hpp to use it.
+ * as a component usable by TypeInfo (see RegistryInspector). Include
+ * ECS/Reflection/Reflection.hpp to use it.
  */
 #define E_REFLECT(T)                                                          \
     template<> struct ECS::reflect::Descriptor<T> {                           \

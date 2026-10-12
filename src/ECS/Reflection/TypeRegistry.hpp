@@ -313,3 +313,8 @@ namespace ECS::reflect {
             std::vector<const TypeInfo*> _ordered;
     };
 }
+
+// Included last, once TypeRegistry is complete: the catalog defines the
+// registration that every E_REFLECT calls, so any reflection header except
+// Descriptor.hpp alone is enough to use E_REFLECT.
+#include "detail/ComponentCatalog.hpp"
