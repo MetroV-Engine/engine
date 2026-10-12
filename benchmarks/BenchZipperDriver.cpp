@@ -7,14 +7,10 @@
 // Build and run commands: see benchmarks/README.md.
 // Usage: bench_zipper_driver [repetitions]
 
-#include <algorithm>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <vector>
 
+#include "BenchSupport.hpp"
 #include "ECS/Registry.hpp"
 
 namespace {
@@ -26,38 +22,8 @@ namespace {
     // delete the loop being measured.
     volatile std::int64_t g_sink = 0;
 
-    struct Result {
-        double medianMicros;
-        double minMicros;
-        std::size_t matched;
-    };
-
-    template<typename Query>
-    Result measure(Query&& query, int repetitions) {
-        const int warmup = std::max(1, repetitions / 10);
-        std::size_t matched = 0;
-        for (int i = 0; i < warmup; ++i) {
-            matched = query();
-        }
-
-        std::vector<double> samples;
-        samples.reserve(static_cast<std::size_t>(repetitions));
-        for (int i = 0; i < repetitions; ++i) {
-            const auto start = std::chrono::steady_clock::now();
-            matched = query();
-            const auto end = std::chrono::steady_clock::now();
-            samples.push_back(
-                std::chrono::duration<double, std::micro>(end - start).count());
-        }
-
-        std::sort(samples.begin(), samples.end());
-        return {samples[samples.size() / 2], samples.front(), matched};
-    }
-
-    void report(const char* name, const Result& result) {
-        std::printf("%-52s median %10.2f us   min %10.2f us   matched %zu\n",
-                    name, result.medianMicros, result.minMicros, result.matched);
-    }
+    using Bench::measure;
+    using Bench::report;
 
     template<typename... Components>
     std::size_t iterate(ECS::Registry& registry) {
@@ -136,8 +102,7 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-    const int repetitions = argc > 1 ? std::max(1, std::atoi(argv[1])) : 200;
-    std::printf("repetitions per scenario: %d\n", repetitions);
+    const int repetitions = Bench::repetitionsFromArgs(argc, argv);
 
     scenarioOneOverlap(repetitions);
     scenarioFullOverlap(repetitions);

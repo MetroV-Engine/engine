@@ -243,6 +243,21 @@ world.removeComponent<Health>(player);
 does not exist for the entity. `getIf` is available when a nullable lookup is
 preferred.
 
+### Number of component types
+
+There is no fixed limit on how many component types can be registered.
+
+Each registry keeps a row of membership bits per entity, one bit per
+component type, to answer `hasComponents` quickly. Rows start 64 types wide.
+When a new type does not fit, the registry doubles the width of every row.
+
+Widening copies the membership bits only. Component data does not move, so
+references and pointers to components stay valid.
+
+Widening costs one copy of every entity's bits. To keep it out of gameplay,
+register component types up front with `registerComponent<T>()`, for example
+while loading.
+
 ## Systems
 
 Systems are stateful objects implementing `ECS::ISystem`, owned and run by
