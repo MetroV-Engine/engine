@@ -89,22 +89,40 @@ E_REFLECT(RcNode)
     E_FIELD(children, std::vector<RcNode>)
 E_END
 
-E_REFLECT(RcTree)
-    E_FIELD(value, int)
-    E_FIELD(children, std::vector<RcTree>)
-E_END
 
 E_REFLECT(RcNoDefault)
     E_FIELD(value, int)
 E_END
 
-E_REFLECT(RcGraph)
-    E_FIELD(links, std::map<std::string, std::vector<RcGraph>>)
-E_END
 
-E_REFLECT(RcChain)
-    E_FIELD(next, std::optional<std::vector<RcChain>>)
-E_END
+
+// RcTree, RcGraph and RcChain test registering a container *before* the struct
+// it holds. E_REFLECT registers the struct before main, so their Descriptors are
+// written by hand, without that automatic registration.
+template<> struct ECS::reflect::Descriptor<RcTree> {
+    using Self = RcTree;
+    static constexpr std::string_view name = "RcTree";
+    template<typename Visitor> static void forEach(Visitor& v) {
+        detail::visitField<&Self::value>(v, "value");
+        detail::visitField<&Self::children>(v, "children");
+    }
+};
+
+template<> struct ECS::reflect::Descriptor<RcGraph> {
+    using Self = RcGraph;
+    static constexpr std::string_view name = "RcGraph";
+    template<typename Visitor> static void forEach(Visitor& v) {
+        detail::visitField<&Self::links>(v, "links");
+    }
+};
+
+template<> struct ECS::reflect::Descriptor<RcChain> {
+    using Self = RcChain;
+    static constexpr std::string_view name = "RcChain";
+    template<typename Visitor> static void forEach(Visitor& v) {
+        detail::visitField<&Self::next>(v, "next");
+    }
+};
 
 template<>
 struct ECS::reflect::ContainerTraits<RcStack> {
@@ -384,6 +402,7 @@ void test_nested_container_in_map() {
 
 void test_self_referencing_types() {
     "self-referencing types register in either order"_test = [] {
+        expect((registry().find<RcTree>() == nullptr) >> fatal);   // not registered yet
         (void)registry().get<RcNode>();                       // struct first
         (void)registry().get<std::vector<RcTree>>();          // container first
 
@@ -401,6 +420,7 @@ void test_self_reference_through_map_and_optional() {
     "self-references through a map or an optional register container first"_test = [] {
         using Links = std::map<std::string, std::vector<RcGraph>>;
         using Next = std::optional<std::vector<RcChain>>;
+        expect((registry().find<RcGraph>() == nullptr && registry().find<RcChain>() == nullptr) >> fatal);
         const TypeInfo& links = registry().get<Links>();
         const TypeInfo& next = registry().get<Next>();
 

@@ -45,6 +45,7 @@ namespace {
         int value = 7;
         TrCounted() { ++alive; }
         TrCounted(const TrCounted& other) : value(other.value) { ++alive; }
+        TrCounted& operator=(const TrCounted&) = default;
         ~TrCounted() { --alive; }
     };
 }
@@ -156,6 +157,7 @@ void test_struct_fields() {
         expect(body.fields[1].name == "mass");
         expect(body.fields[1].type == registry().find<double>());
         expect(body.fields[2].name == "tags");
+        expect(!body.fields[0].readOnly);
     };
 }
 

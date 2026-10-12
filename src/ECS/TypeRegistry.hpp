@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "ContainerTraits.hpp"
-#include "Reflection.hpp"
+#include "Descriptor.hpp"
 #include "TypeInfo.hpp"
 
 namespace ECS::reflect {
@@ -131,11 +131,14 @@ namespace ECS::reflect {
                     using F = typename detail::MemberPointerTraits<decltype(Member)>::Field;
                     const TypeInfo& fieldType = registry.registerType<F>();
                     out.push_back(FieldInfo{
-                        name,
+                        std::string(name),
                         &fieldType,
                         [](void* obj) noexcept -> void* {
-                            return &(static_cast<T*>(obj)->*Member);
+                            // const_cast for const members: readOnly tells callers not to write.
+                            return const_cast<void*>(
+                                static_cast<const void*>(&(static_cast<T*>(obj)->*Member)));
                         },
+                        std::is_const_v<F>,
                     });
                 }
             };

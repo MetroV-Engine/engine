@@ -415,3 +415,7 @@ namespace ECS::reflect {
             void* _data = nullptr;
     };
 }
+
+// Included last, once Ref is complete: it defines the registration that every
+// E_REFLECT calls, so any file that can use Ref can also use E_REFLECT.
+#include "ComponentReflection.hpp"

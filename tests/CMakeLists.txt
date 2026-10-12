@@ -18,6 +18,8 @@ set(ECS_TEST_FILES
 	ECS/TestTypeRegistry.cpp
 	ECS/TestReflectionContainers.cpp
 	ECS/TestPrettyPrintRefl.cpp
+	ECS/TestRegistryComponentId.cpp
+	ECS/TestComponentReflection.cpp
 	main.cpp
 )
 

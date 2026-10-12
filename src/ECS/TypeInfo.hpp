@@ -89,10 +89,16 @@ namespace ECS::reflect {
 
     /** @brief Runtime description of one reflected field. */
     struct FieldInfo {
-        std::string_view name;
+        /** @brief Owned copy: must not point into a module that may be unloaded. */
+        std::string name;
         const TypeInfo* type = nullptr;
         /** @brief Returns the address of this field inside the object at obj. */
         void* (*access)(void* obj) noexcept = nullptr;
+        /**
+         * @brief True for a const member. Its value can be read through a Ref,
+         *        but writing to it is undefined behaviour: tools must not.
+         */
+        bool readOnly = false;
     };
 
     /**

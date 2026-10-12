@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -150,12 +151,7 @@ namespace ECS {
              */
             template<typename Component>
             void removeComponent(Entity entity) {
-                ensureEntityAlive(entity);
-                if (_deferring) {
-                    removeComponentDeferred<Component>(entity);
-                    return;
-                }
-                removeComponentImmediate<Component>(entity);
+                removeComponent(entity, componentId<Component>());
             }
 
             /**
@@ -168,15 +164,7 @@ namespace ECS {
              */
             template<typename... Components>
             [[nodiscard]] bool hasComponents(Entity entity) const {
-                if (!_entities.isAlive(entity)) {
-                    return false;
-                }
-                if (((componentId<Components>() >= MaxComponentTypes) || ...)) {
-                    return false;
-                }
-                Signature mask;
-                (mask.set(componentId<Components>()), ...);
-                return (_signatures[entity.value()] & mask) == mask;
+                return hasComponents(entity, {componentId<Components>()...});
             }
 
             /**
@@ -337,6 +325,131 @@ namespace ECS {
                 typedPool<Component>(componentId<Component>()).setOnRemove(std::move(callback));
             }
 
+            // ----------------------------------------------------------------
+            // ComponentId-based access
+            //
+            // The same operations as above, for callers that only know a
+            // component's ComponentId (the reflection layer, used by the
+            // editor, scripts and scene loading: see ECS/ComponentReflection.hpp).
+            // They are the single implementation of has/remove, which the
+            // typed API forwards to. Kept together so they can move to a
+            // dedicated ComponentStore (see REFACTOR_REGISTRY.md).
+            // ----------------------------------------------------------------
+
+            /**
+             * @brief Creates the pool for id with factory, unless this registry already has one.
+             * @param factory Must create the pool of the type whose componentId() is id.
+             * @throws std::out_of_range when id does not fit in a Signature.
+             */
+            void ensurePool(ComponentId id, PoolFactory factory) {
+                if (id >= MaxComponentTypes) {
+                    throw std::out_of_range(
+                        "ECS::Registry: too many component types (see MaxComponentTypes)");
+                }
+                ensurePoolSlot(id);
+                if (!_pools[id]) {
+                    _pools[id] = factory();
+                }
+            }
+
+            /** @brief Checks whether this registry has a pool for id. */
+            [[nodiscard]] bool hasPool(ComponentId id) const noexcept {
+                return id < _pools.size() && _pools[id] != nullptr;
+            }
+
+            /**
+             * @brief Checks whether an entity owns every listed component.
+             * @return True when the entity is alive and its Signature has every
+             *         id's bit set. An id that does not fit in the Signature can
+             *         never have been registered, so no entity owns it.
+             */
+            [[nodiscard]] bool hasComponents(Entity entity, std::initializer_list<ComponentId> ids) const {
+                if (!_entities.isAlive(entity)) {
+                    return false;
+                }
+                Signature mask;
+                for (const ComponentId id : ids) {
+                    if (id >= MaxComponentTypes) {
+                        return false;
+                    }
+                    mask.set(id);
+                }
+                return (_signatures[entity.value()] & mask) == mask;
+            }
+
+            /**
+             * @brief Address of an entity's component, or nullptr when absent.
+             * @throws std::invalid_argument if entity is not alive.
+             */
+            [[nodiscard]] void* getComponent(Entity entity, ComponentId id) {
+                ensureEntityAlive(entity);
+                return hasPool(id) ? _pools[id]->getRaw(entity.value()) : nullptr;
+            }
+
+            /**
+             * @brief Adds (or replaces) a default-constructed component.
+             * @return Address of the component; under runDeferred, of the
+             *         value that will be moved in at flush (like addComponent).
+             *         nullptr when the type has no default constructor.
+             * @throws std::invalid_argument if entity is not alive.
+             * @throws std::out_of_range when this registry has no pool for id.
+             */
+            void* addDefaultComponent(Entity entity, ComponentId id) {
+                ensureEntityAlive(entity);
+                requireRegistered(id);
+                std::shared_ptr<void> value = _pools[id]->makeDefault();
+                if (!value) {
+                    return nullptr;
+                }
+                if (!_deferring) {
+                    return insertMovedImmediate(entity, id, value.get());
+                }
+                void* staged = value.get();
+                _commandQueue.emplace_back([entity, id, value](Registry& world) {
+                    if (!world._entities.isAlive(entity)) {
+                        return;
+                    }
+                    world.insertMovedImmediate(entity, id, value.get());
+                });
+                return staged;
+            }
+
+            /**
+             * @brief Removes an entity's component when this registry has its pool.
+             * @throws std::invalid_argument if entity is not alive.
+             */
+            void removeComponent(Entity entity, ComponentId id) {
+                ensureEntityAlive(entity);
+                if (!_deferring) {
+                    removeComponentImmediate(entity, id);
+                    return;
+                }
+                _commandQueue.emplace_back([entity, id](Registry& world) {
+                    if (!world._entities.isAlive(entity)) {
+                        return;
+                    }
+                    world.removeComponentImmediate(entity, id);
+                });
+            }
+
+            /**
+             * @brief ComponentIds of every component an entity owns, ascending.
+             * @return Empty when the entity is not alive.
+             */
+            [[nodiscard]] std::vector<ComponentId> componentIdsOf(Entity entity) const {
+                std::vector<ComponentId> ids;
+                if (!_entities.isAlive(entity)) {
+                    return ids;
+                }
+                const Signature& signature = _signatures[entity.value()];
+                for (ComponentId id = 0; id < _pools.size(); ++id) {
+                    if (signature.test(id)) {
+                        ids.push_back(id);
+                    }
+                }
+                return ids;
+            }
+
         private:
             Entity spawnEntityImmediate(const std::string& name) {
                 _entitiesDirty = true;
@@ -435,10 +548,8 @@ namespace ECS {
                 return ref;
             }
 
-            template<typename Component>
-            void removeComponentImmediate(Entity entity) {
-                const ComponentId id = componentId<Component>();
-                if (id >= _pools.size() || !_pools[id]) {
+            void removeComponentImmediate(Entity entity, ComponentId id) {
+                if (!hasPool(id)) {
                     return;
                 }
                 _pools[id]->erase(entity.value());
@@ -446,14 +557,10 @@ namespace ECS {
                 _signatures[entity.value()].reset(id);
             }
 
-            template<typename Component>
-            void removeComponentDeferred(Entity entity) {
-                _commandQueue.emplace_back([entity](Registry& world) {
-                    if (!world._entities.isAlive(entity)) {
-                        return;
-                    }
-                    world.removeComponentImmediate<Component>(entity);
-                });
+            void* insertMovedImmediate(Entity entity, ComponentId id, void* value) {
+                void* stored = _pools[id]->insertMoved(entity.value(), value);
+                _signatures[entity.value()].set(id);
+                return stored;
             }
 
             void flushCommands() {
