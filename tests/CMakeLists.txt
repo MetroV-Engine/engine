@@ -20,6 +20,8 @@ set(ECS_TEST_FILES
 	ECS/Reflection/TestContainers.cpp
 	ECS/Reflection/TestPrettyPrint.cpp
 	ECS/Reflection/TestRegistryInspector.cpp
+	ECS/Reflection/Unknown/Treasure.cpp
+	ECS/Reflection/Unknown/TestUnknownType.cpp
 	main.cpp
 )
 

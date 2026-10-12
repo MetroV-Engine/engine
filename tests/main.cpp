@@ -17,6 +17,7 @@ void run_containers_tests();
 void run_pretty_print_tests();
 void run_registry_component_id_tests();
 void run_registry_inspector_tests();
+void run_unknown_type_tests();
 
 int main()
 {
@@ -38,6 +39,7 @@ int main()
     run_pretty_print_tests();
     run_registry_component_id_tests();
     run_registry_inspector_tests();
+    run_unknown_type_tests();
     // run_registry_tests() exhausts componentId's process-wide counter (it
     // verifies the MaxComponentTypes boundary), so nothing that registers a
     // component type it hasn't used before can run after it.
