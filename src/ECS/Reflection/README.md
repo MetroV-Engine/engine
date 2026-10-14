@@ -120,16 +120,32 @@ an "Add component" menu.
 
 ### 3. Get it back without knowing its type
 
-```cpp
-for (reflect::Ref component : inspector.list(player)) {   // every component of the entity
-    std::cout << component.type().name << "\n";
-}
+**All of an entity's components**, for example to show them in an editor
+panel:
 
-const reflect::TypeInfo* health = reflect::RegistryInspector::findType("Health");
-if (inspector.has(player, *health)) {
-    reflect::Ref ref = inspector.get(player, *health);
+```cpp
+for (reflect::Ref component : inspector.list(player)) {
+    std::cout << component.type().name << "\n";   // "Health", "Inventory"
 }
-inspector.remove(player, *health);
+```
+
+**One component, by type name**:
+
+```cpp
+const reflect::TypeInfo* health = reflect::RegistryInspector::findType("Health");   // nullptr if unknown
+
+if (health && inspector.has(player, *health)) {
+    reflect::Ref ref = inspector.get(player, *health);   // see step 4 to use it
+}
+```
+
+`get` returns an invalid `Ref` when the entity does not have the component, so
+the `has` check is optional.
+
+**Removing a component** works the same way:
+
+```cpp
+inspector.remove(player, *health);   // same as world.removeComponent<Health>(player)
 ```
 
 `world.inspect()` returns a lightweight handle that references `world`. Create
