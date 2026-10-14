@@ -63,6 +63,45 @@ namespace {
 
     // A user container made inspectable through its own ContainerTraits.
     struct RcStack { std::vector<int> data; };
+
+    // Copy/move-constructible but not assignable: vector::erase cannot shift.
+    struct RcNoAssign {
+        RcNoAssign() = default;
+        explicit RcNoAssign(int v) : value(v) {}
+        RcNoAssign(const RcNoAssign&) = default;
+        RcNoAssign(RcNoAssign&&) = default;
+        RcNoAssign& operator=(const RcNoAssign&) = delete;
+        RcNoAssign& operator=(RcNoAssign&&) = delete;
+        ~RcNoAssign() = default;
+        int value = 0;
+    };
+
+    // Neither copyable nor movable: vector can neither reallocate nor shift.
+    struct RcPinned {
+        RcPinned() = default;
+        RcPinned(const RcPinned&) = delete;
+        RcPinned(RcPinned&&) = delete;
+        RcPinned& operator=(const RcPinned&) = delete;
+        RcPinned& operator=(RcPinned&&) = delete;
+        ~RcPinned() = default;
+        int value = 7;
+    };
+}
+
+namespace {
+    template<typename E>
+    using VectorTraits = ECS::reflect::ContainerTraits<std::vector<E>>;
+
+    template<typename E>
+    constexpr bool hasResize = requires(std::vector<E>& c) { VectorTraits<E>::resize(c, std::size_t{}); };
+
+    template<typename E>
+    constexpr bool hasErase = requires(std::vector<E>& c) { VectorTraits<E>::erase(c, std::size_t{}); };
+
+    static_assert(hasResize<int> && hasErase<int>);
+    static_assert(hasResize<RcNoAssign> && !hasErase<RcNoAssign>);
+    static_assert(!hasResize<RcPinned> && !hasErase<RcPinned>);
+    static_assert(!hasResize<RcNoDefault> && hasErase<RcNoDefault>);
 }
 
 E_REFLECT(RcItem)
@@ -91,6 +130,14 @@ E_END
 
 
 E_REFLECT(RcNoDefault)
+    E_FIELD(value, int)
+E_END
+
+E_REFLECT(RcNoAssign)
+    E_FIELD(value, int)
+E_END
+
+E_REFLECT(RcPinned)
     E_FIELD(value, int)
 E_END
 
@@ -571,6 +618,75 @@ void test_user_container_traits() {
     };
 }
 
+void test_vector_ops_present_for_regular_elements() {
+    "a vector of regular elements registers resize and erase"_test = [] {
+        const TypeInfo& ints = registry().get<std::vector<int>>();
+        expect((ints.sequenceOps.has_value()) >> fatal);
+        expect((ints.sequenceOps->resize != nullptr && ints.sequenceOps->erase != nullptr) >> fatal);
+
+        std::vector<int> values{1, 2, 3};
+        ints.sequenceOps->resize(&values, 5);
+        expect(values == std::vector<int>{1, 2, 3, 0, 0});
+        ints.sequenceOps->erase(&values, 1);
+        expect(values == std::vector<int>{1, 3, 0, 0});
+    };
+}
+
+void test_vector_without_assignable_element() {
+    "a vector of non move-assignable elements can resize but not erase"_test = [] {
+        const TypeInfo& type = registry().get<std::vector<RcNoAssign>>();
+        expect((type.sequenceOps.has_value()) >> fatal);
+        expect(type.sequenceOps->resize != nullptr);
+        expect(type.sequenceOps->erase == nullptr);
+
+        std::vector<RcNoAssign> values;
+        values.emplace_back(4);
+        Ref ref = Ref::make(values);
+
+        expect(ref.resizable());
+        expect(ref.resize(3));
+        expect(values.size() == 3_ul);
+        expect(ref.at(0).field("value").as<int>() == 4_i);   // survived reallocation
+        expect(ref.at(2).field("value").as<int>() == 0_i);
+        expect(!ref.eraseAt(0));
+        expect(values.size() == 3_ul);
+    };
+}
+
+void test_vector_without_movable_element() {
+    "a vector of non-movable elements can neither resize nor erase"_test = [] {
+        const TypeInfo& type = registry().get<std::vector<RcPinned>>();
+        expect((type.sequenceOps.has_value()) >> fatal);
+        expect(type.sequenceOps->resize == nullptr);
+        expect(type.sequenceOps->erase == nullptr);
+
+        std::vector<RcPinned> values(2);
+        values[1].value = 9;
+        Ref ref = Ref::make(values);
+
+        expect(!ref.resizable());
+        expect(!ref.resize(4));
+        expect(!ref.push().valid());
+        expect(!ref.eraseAt(0));
+        expect(ref.size() == 2_ul);
+        expect(ref.at(1).field("value").as<int>() == 9_i);
+        expect(!ref.at(2).valid());
+    };
+}
+
+void test_vector_ops_without_default_element() {
+    "a vector of non default-constructible elements registers erase but not resize"_test = [] {
+        const TypeInfo& type = registry().get<std::vector<RcNoDefault>>();
+        expect((type.sequenceOps.has_value()) >> fatal);
+        expect(type.sequenceOps->resize == nullptr);
+        expect(type.sequenceOps->erase != nullptr);
+
+        std::vector<RcNoDefault> values{RcNoDefault{1}, RcNoDefault{2}};
+        expect(!Ref::make(values).resize(0));
+        expect(values.size() == 2_ul);
+    };
+}
+
 }
 
 void run_containers_tests() {
@@ -604,4 +720,8 @@ void run_containers_tests() {
     test_vector_bool_stays_opaque();
     test_copy_respects_element_copyability();
     test_user_container_traits();
+    test_vector_ops_present_for_regular_elements();
+    test_vector_without_assignable_element();
+    test_vector_without_movable_element();
+    test_vector_ops_without_default_element();
 }
