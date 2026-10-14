@@ -34,9 +34,7 @@ namespace ECS {
             template<typename Component>
             ComponentStorage<Component>& ensure() {
                 const ComponentId id = componentId<Component>();
-                ensurePool(id, [] () -> std::unique_ptr<IComponentPool> {
-                    return std::make_unique<ComponentPool<Component>>();
-                });
+                ensurePool(id, &makePool<Component>);
                 return typedPool<Component>(id).storage();
             }
 
@@ -111,6 +109,13 @@ namespace ECS {
                 if (!_pools[id]) {
                     _signatures.ensureComponent(id);
                     _pools[id] = factory();
+                }
+            }
+
+            /** @throws std::out_of_range when there is no pool for id. */
+            void requireRegistered(ComponentId id) const {
+                if (!hasPool(id)) {
+                    throw std::out_of_range("ECS::ComponentStore: component not registered");
                 }
             }
 
@@ -197,12 +202,6 @@ namespace ECS {
             void markOwned(std::size_t entity, ComponentId id) {
                 _signatures.ensureEntity(entity);
                 _signatures.set(entity, id);
-            }
-
-            void requireRegistered(ComponentId id) const {
-                if (!hasPool(id)) {
-                    throw std::out_of_range("ECS::ComponentStore: component not registered");
-                }
             }
 
             template<typename Component>

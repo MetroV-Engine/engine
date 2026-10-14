@@ -106,9 +106,11 @@ namespace ECS::reflect {
              */
             [[nodiscard]] std::string displayName(Entity entity) const {
                 _registry.ensureEntityAlive(entity);
-                if (const ComponentStorage<Name>* names = _registry.getIf<Name>()) {
-                    if (names->has(entity.value()) && !names->get(entity.value()).value.empty()) {
-                        return names->get(entity.value()).value;
+                const ComponentStorage<Name>* names = _registry.getIf<Name>();
+                if (names && names->has(entity.index())) {
+                    const std::string& name = names->get(entity.index()).value;
+                    if (!name.empty()) {
+                        return name;
                     }
                 }
                 return "Entity " + std::to_string(entity.index());

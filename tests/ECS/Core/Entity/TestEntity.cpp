@@ -1,5 +1,7 @@
 #include <boost/ut.hpp>
 
+#include <sstream>
+
 #include <compare>
 #include <cstddef>
 #include <type_traits>
@@ -14,7 +16,7 @@ void test_default_constructor() {
     "default constructor initializes the identity to zero"_test = [] {
         const ECS::Entity entity;
 
-        expect(entity.value() == std::size_t{0});
+        expect(entity.index() == std::size_t{0});
         expect(entity.index() == std::size_t{0});
         expect(entity.generation() == ECS::EntityGeneration{0});
     };
@@ -44,28 +46,10 @@ void test_index_generation_world_constructor() {
     "index, generation and world constructor stores all values"_test = [] {
         const ECS::Entity entity = EntityAccess::make(42, 7, 3);
 
-        expect(entity.value() == std::size_t{42});
+        expect(entity.index() == std::size_t{42});
         expect(entity.index() == std::size_t{42});
         expect(entity.generation() == ECS::EntityGeneration{7});
         expect(entity.world() == ECS::WorldId{3});
-    };
-}
-
-void test_conversion_operator() {
-    "conversion operator returns the index"_test = [] {
-        const ECS::Entity entity = EntityAccess::make(42, 7);
-
-        const std::size_t identity = entity;
-
-        expect(identity == std::size_t{42});
-    };
-}
-
-void test_value() {
-    "value returns the index"_test = [] {
-        const ECS::Entity entity = EntityAccess::make(42, 7);
-
-        expect(entity.value() == std::size_t{42});
     };
 }
 
@@ -148,14 +132,37 @@ void test_strong_ordering_generation() {
     };
 }
 
+void test_stream_output() {
+    "an Entity prints its index and generation"_test = [] {
+        std::ostringstream out;
+        out << EntityAccess::make(42, 7);
+
+        expect(out.str() == "Entity(42:7)");
+    };
+}
+
+void test_stream_output_of_default_entity() {
+    "a default Entity prints index and generation zero"_test = [] {
+        std::ostringstream out;
+        out << ECS::Entity{};
+
+        expect(out.str() == "Entity(0:0)");
+    };
+}
+
+void test_entity_is_not_a_number() {
+    "an Entity does not convert implicitly to a number"_test = [] {
+        static_assert(!std::is_convertible_v<ECS::Entity, std::size_t>);
+        expect(EntityAccess::make(42, 7).index() == std::size_t{42});
+    };
+}
+
 void run_entity_tests()
 {
     test_default_constructor();
     test_default_constructor_has_invalid_world();
     test_constructors_are_private();
     test_index_generation_world_constructor();
-    test_conversion_operator();
-    test_value();
     test_index();
     test_generation();
     test_strong_ordering_equality();
@@ -164,4 +171,7 @@ void run_entity_tests()
     test_strong_ordering_world();
     test_strong_ordering_index();
     test_strong_ordering_generation();
+    test_stream_output();
+    test_stream_output_of_default_entity();
+    test_entity_is_not_a_number();
 }

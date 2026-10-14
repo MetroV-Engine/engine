@@ -3,10 +3,18 @@
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 namespace ECS {
+    /**
+     * @brief What a type needs to be a component: the dense storage moves
+     *        components around (insertion, swap-and-pop on removal).
+     */
+    template<typename T>
+    concept ComponentStorable = std::is_move_constructible_v<T> && std::is_move_assignable_v<T>;
+
     /**
      * @brief Component storage with dense iteration and entity lookup.
      * @tparam Component Component value stored by this storage.
@@ -17,12 +25,14 @@ namespace ECS {
      */
     template<typename Component, typename Allocator = std::allocator<Component>>
     class ComponentStorage {
+        static_assert(ComponentStorable<Component>,
+            "ECS: a component must be move-constructible and move-assignable "
+            "(components are moved inside their dense storage)");
+
         public:
             using value_type = Component;
             using reference = value_type&;
             using const_reference = const value_type&;
-            using reference_type = reference;
-            using const_reference_type = const_reference;
             using size_type = std::size_t;
 
             /** @brief Sentinel used by the entity-to-packed-index lookup. */
@@ -174,8 +184,4 @@ namespace ECS {
             std::vector<size_type> _packedEntities;
             std::vector<size_type> _sparse;
     };
-
-    template<typename Component, typename Allocator>
-    constexpr typename ComponentStorage<Component, Allocator>::size_type
-        ComponentStorage<Component, Allocator>::npos;
 }

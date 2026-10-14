@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <compare>
 #include <cstdint>
+#include <ostream>
 
 namespace ECS {
     using EntityGeneration = std::uint32_t;
@@ -52,25 +53,18 @@ namespace ECS {
             Entity() noexcept = default;
 
             /**
-             * @brief Converts the handle to its numeric identity.
-             * @return The identity stored by this handle.
+             * @brief Slot index of the entity, used as the key of component storages.
+             *
+             * Not an identity on its own: the index of a killed entity is
+             * reused by a later one, with a higher generation.
              */
-            operator std::size_t() const noexcept { return _index; }
+            [[nodiscard]] std::size_t index() const noexcept { return _index; }
 
-            /**
-             * @brief Reads the numeric identity without conversion syntax.
-             * @return The identity stored by this handle.
-             */
-            std::size_t value() const noexcept { return _index; }
+            /** @brief Generation of the slot when this handle was issued. */
+            [[nodiscard]] EntityGeneration generation() const noexcept { return _generation; }
 
-            /** @brief Reads the stable slot index stored by this handle. */
-            std::size_t index() const noexcept { return _index; }
-
-            /** @brief Reads the slot generation stored by this handle. */
-            EntityGeneration generation() const noexcept { return _generation; }
-
-            /** @brief Reads the WorldId of the manager that issued this handle. */
-            WorldId world() const noexcept { return _world; }
+            /** @brief WorldId of the manager that issued this handle. */
+            [[nodiscard]] WorldId world() const noexcept { return _world; }
 
             /**
              * @brief Compares entity identities using three-way comparison.
@@ -90,12 +84,7 @@ namespace ECS {
                 return _generation <=> other._generation;
             }
 
-            /**
-             * @brief Compares every field of two handles.
-             *
-             * Declared explicitly: without it, `a == b` would convert both
-             * handles to std::size_t and compare indexes only.
-             */
+            /** @brief Two handles are equal when their world, index and generation match. */
             bool operator==(const Entity& other) const noexcept = default;
 
         private:
@@ -106,6 +95,11 @@ namespace ECS {
             EntityGeneration _generation{0};
             WorldId _world{InvalidWorld};
     };
+
+    /** @brief Writes "Entity(<index>:<generation>)", for logs and test messages. */
+    inline std::ostream& operator<<(std::ostream& os, const Entity& entity) {
+        return os << "Entity(" << entity.index() << ':' << entity.generation() << ')';
+    }
 
     static_assert(sizeof(std::size_t) != 8 || sizeof(Entity) == 16,
         "ECS::Entity: the WorldId must fit in the padding after the generation");

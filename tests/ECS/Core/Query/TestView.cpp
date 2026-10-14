@@ -1,6 +1,9 @@
 #include <boost/ut.hpp>
 
+#include <algorithm>
 #include <cstddef>
+#include <iterator>
+#include <ranges>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -380,6 +383,65 @@ namespace {
             expect(std::get<0>(*query.begin()).generation() != oldEntity.generation());
         };
     }
+    void test_const_view_can_be_iterated() {
+        "a const View can be iterated"_test = [] {
+            ECS::EntityManager manager;
+            ECS::ComponentStorage<Position> positions;
+            const auto entity = manager.create();
+            positions.insertAt(entity.index(), Position{4});
+            const ECS::View<Position> query(manager, positions);
+
+            std::size_t count = 0;
+            for (auto [e, position] : query) {
+                expect(e == entity);
+                expect(position.value == 4_i);
+                ++count;
+            }
+            expect(count == 1_ul);
+        };
+    }
+
+    void test_view_is_a_standard_range() {
+        "View and ReadOnlyView are std::ranges input ranges"_test = [] {
+            static_assert(std::input_iterator<ECS::View<Position>::iterator>);
+            static_assert(std::ranges::input_range<const ECS::View<Position, Velocity>>);
+            static_assert(std::ranges::input_range<const ECS::ReadOnlyView<Position>>);
+
+            ECS::EntityManager manager;
+            ECS::ComponentStorage<Position> positions;
+            for (int i = 0; i < 4; ++i) {
+                positions.insertAt(manager.create().index(), Position{i});
+            }
+            ECS::View<Position> query(manager, positions);
+
+            const auto odd = std::ranges::count_if(query, [](const auto& row) {
+                return std::get<1>(row).value % 2 == 1;
+            });
+            expect(odd == 2);
+        };
+    }
+
+    void test_view_iterators_compare_and_post_increment() {
+        "View iterators support ==, != and post-increment"_test = [] {
+            ECS::EntityManager manager;
+            ECS::ComponentStorage<Position> positions;
+            const auto first = manager.create();
+            const auto second = manager.create();
+            positions.insertAt(first.index(), Position{1});
+            positions.insertAt(second.index(), Position{2});
+            ECS::View<Position> query(manager, positions);
+
+            auto it = query.begin();
+            expect(it == query.begin());
+            const auto previous = it++;
+            expect(std::get<0>(*previous) == first);
+            expect(std::get<0>(*it) == second);
+            ++it;
+            expect(it == query.end());
+            expect(!(it != query.end()));
+            expect(ECS::View<Position>::iterator{} == ECS::View<Position>::iterator{});
+        };
+    }
 }
 
 void run_view_tests() {
@@ -406,4 +468,7 @@ void run_view_tests() {
     test_view_iterator_stops_at_end();
     test_view_with_sparse_entity_ids();
     test_view_returns_current_generation_after_entity_reuse();
+    test_const_view_can_be_iterated();
+    test_view_is_a_standard_range();
+    test_view_iterators_compare_and_post_increment();
 }

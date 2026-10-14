@@ -17,15 +17,6 @@
 #include "../TypeInfo.hpp"
 #include "../TypeRegistry.hpp"
 
-namespace ECS::reflect {
-    /**
-     * @brief What a type needs to live in a component pool: the dense
-     *        storage moves components around (insertion, swap-and-pop).
-     */
-    template<typename T>
-    concept ComponentStorable = std::is_move_constructible_v<T> && std::is_move_assignable_v<T>;
-}
-
 /**
  * @file
  * @brief Internal: the list of types usable as components by TypeInfo.
@@ -47,7 +38,7 @@ namespace ECS::reflect::detail {
      *
      * In this ECS a component is any data struct attached to an entity, so
      * every E_REFLECT type is added automatically, before main, provided it
-     * can be stored in a pool (see ComponentStorable). Other types are added
+     * can be stored in a pool (see ECS::ComponentStorable). Other types are added
      * with registerComponentType<T>().
      *
      * Entries are keyed by TypeId (the stable name hash) rather than by

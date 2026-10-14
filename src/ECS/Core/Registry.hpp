@@ -90,11 +90,12 @@ namespace ECS {
             /**
              * @brief Destroys an entity and removes it from every component pool.
              * @param entity Entity to destroy.
-             * @throws std::invalid_argument if entity is not alive. Under
-             *         runDeferred the kill is queued instead, and ignored at
-             *         flush if the entity is already dead.
+             * @throws std::invalid_argument if entity is not alive, in both
+             *         modes. Under runDeferred the kill is queued; killing the
+             *         same entity twice in one batch kills it once.
              */
             void killEntity(Entity entity) {
+                ensureEntityAlive(entity);
                 mutate(entity, [this, entity] { killEntityImmediate(entity); });
             }
 
@@ -129,14 +130,14 @@ namespace ECS {
             template<typename Component>
             Component& getComponent(Entity entity) {
                 ensureEntityAlive(entity);
-                return _components.storage<Component>().get(entity.value());
+                return _components.storage<Component>().get(entity.index());
             }
 
             /** @copydoc getComponent(Entity) */
             template<typename Component>
             const Component& getComponent(Entity entity) const {
                 ensureEntityAlive(entity);
-                return getComponents<Component>().get(entity.value());
+                return getComponents<Component>().get(entity.index());
             }
 
             /**
@@ -148,12 +149,12 @@ namespace ECS {
              */
             template<typename Component>
             std::decay_t<Component>& addComponent(Entity entity, Component&& component) {
-                ensureEntityAlive(entity);
                 using StoredComponent = std::decay_t<Component>;
-                StoredComponent value(std::forward<Component>(component));
-                return addOrStage(entity, std::move(value), [this, entity](StoredComponent&& added) -> StoredComponent& {
-                    return _components.insert<StoredComponent>(entity.value(), std::move(added));
-                });
+                static_assert(ComponentStorable<StoredComponent>,
+                    "ECS: a component must be move-constructible and move-assignable "
+                    "(components are moved inside their dense storage)");
+                ensureEntityAlive(entity);
+                return addOrStage(entity, StoredComponent(std::forward<Component>(component)));
             }
 
             /**
@@ -162,6 +163,9 @@ namespace ECS {
              */
             template<typename Component, typename... Params>
             Component& emplaceComponent(Entity entity, Params&&... params) {
+                static_assert(ComponentStorable<Component>,
+                    "ECS: a component must be move-constructible and move-assignable "
+                    "(components are moved inside their dense storage)");
                 return addComponent(entity, Component(std::forward<Params>(params)...));
             }
 
@@ -339,7 +343,7 @@ namespace ECS {
              *         bit set for any entity.
              */
             [[nodiscard]] bool hasComponentsById(Entity entity, std::initializer_list<ComponentId> ids) const {
-                return _entities.isAlive(entity) && _components.has(entity.value(), ids);
+                return _entities.isAlive(entity) && _components.has(entity.index(), ids);
             }
 
             /**
@@ -349,7 +353,7 @@ namespace ECS {
              */
             [[nodiscard]] void* getComponentById(Entity entity, ComponentId id, const ComponentOps& ops) {
                 ensureEntityAlive(entity);
-                return _components.get(entity.value(), id, ops);
+                return _components.get(entity.index(), id, ops);
             }
 
             /**
@@ -363,9 +367,7 @@ namespace ECS {
              */
             void* addDefaultComponentById(Entity entity, ComponentId id, const ComponentOps& ops) {
                 ensureEntityAlive(entity);
-                if (!_components.hasPool(id)) {
-                    throw std::out_of_range("ECS::Registry: component not registered");
-                }
+                _components.requireRegistered(id);   // fail now, not at flush
                 void* raw = ops.newDefault();
                 if (!raw) {
                     return nullptr;
@@ -373,10 +375,10 @@ namespace ECS {
                 // Owns the value until it is moved into the pool (now or at flush).
                 std::shared_ptr<void> value(raw, ops.deleteValue);
                 if (!_commands.recording()) {
-                    return _components.insertMoved(entity.value(), id, value.get(), ops);
+                    return _components.insertMoved(entity.index(), id, value.get(), ops);
                 }
                 mutate(entity, [this, entity, id, value, ops] {
-                    _components.insertMoved(entity.value(), id, value.get(), ops);
+                    _components.insertMoved(entity.index(), id, value.get(), ops);
                 });
                 return value.get();
             }
@@ -387,7 +389,7 @@ namespace ECS {
              */
             void removeComponentById(Entity entity, ComponentId id) {
                 ensureEntityAlive(entity);
-                mutate(entity, [this, entity, id] { _components.remove(entity.value(), id); });
+                mutate(entity, [this, entity, id] { _components.remove(entity.index(), id); });
             }
 
             /**
@@ -398,12 +400,12 @@ namespace ECS {
                 if (!_entities.isAlive(entity)) {
                     return {};
                 }
-                return _components.idsOf(entity.value());
+                return _components.idsOf(entity.index());
             }
 
             Entity spawnEntityImmediate(const std::string& name) {
                 const Entity entity = _entities.create();
-                _components.addEntity(entity.value());
+                _components.addEntity(entity.index());
                 addName(entity, name);
                 return entity;
             }
@@ -417,19 +419,19 @@ namespace ECS {
 
             void addName(Entity entity, const std::string& name) {
                 if (!name.empty()) {
-                    _components.insert(entity.value(), Name{name});
+                    _components.insert(entity.index(), Name{name});
                 }
             }
 
             void commitSpawn(Entity entity, const std::string& name) {
                 _entities.commit(entity);
-                _components.addEntity(entity.value());
+                _components.addEntity(entity.index());
                 addName(entity, name);
             }
 
             void killEntityImmediate(Entity entity) {
                 _entities.destroy(entity);
-                _components.removeEntity(entity.value());
+                _components.removeEntity(entity.index());
             }
 
             /**
@@ -454,21 +456,22 @@ namespace ECS {
 
             /**
              * @brief Adds value now, or keeps it until flush while runDeferred records.
-             * @param insert Moves its argument into the store and returns the stored component.
              * @return The stored component; under runDeferred, the staged value,
              *         so the caller can still modify it before it is applied.
              *
              * When deferred, the pool is created at once, so the type is
              * registered (and queryable) as soon as the add is requested.
              */
-            template<typename Component, typename Insert>
-            Component& addOrStage(Entity entity, Component value, Insert insert) {
+            template<typename Component>
+            Component& addOrStage(Entity entity, Component value) {
                 if (!_commands.recording()) {
-                    return insert(std::move(value));
+                    return _components.insert(entity.index(), std::move(value));
                 }
                 _components.ensure<Component>();
                 auto staged = std::make_shared<Component>(std::move(value));
-                mutate(entity, [staged, insert]() mutable { insert(std::move(*staged)); });
+                mutate(entity, [this, entity, staged] {
+                    _components.insert(entity.index(), std::move(*staged));
+                });
                 return *staged;
             }
 

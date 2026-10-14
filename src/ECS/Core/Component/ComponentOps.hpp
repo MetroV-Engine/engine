@@ -34,9 +34,7 @@ namespace ECS {
         template<typename Component>
         [[nodiscard]] static ComponentOps of() noexcept {
             ComponentOps ops;
-            ops.makePool = []() -> std::unique_ptr<IComponentPool> {
-                return std::make_unique<ComponentPool<Component>>();
-            };
+            ops.makePool = &ECS::makePool<Component>;
             ops.get = [](IComponentPool& pool, std::size_t entityId) noexcept -> void* {
                 auto& storage = static_cast<ComponentPool<Component>&>(pool).storage();
                 return storage.has(entityId) ? &storage.get(entityId) : nullptr;

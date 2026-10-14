@@ -677,6 +677,29 @@ void test_storage_supports_large_entity_ids() {
     };
 }
 
+void test_component_storable_concept() {
+    "ComponentStorable accepts movable types and rejects the others"_test = [] {
+        struct MoveOnly {
+            MoveOnly() = default;
+            MoveOnly(MoveOnly&&) = default;
+            MoveOnly& operator=(MoveOnly&&) = default;
+        };
+        struct Locked {
+            Locked() = default;
+            Locked(const Locked&) = delete;
+            Locked& operator=(const Locked&) = delete;
+        };
+        struct ConstMember { const int version = 1; };
+
+        static_assert(ECS::ComponentStorable<Position>);
+        static_assert(ECS::ComponentStorable<MoveOnly>);
+        static_assert(ECS::ComponentStorable<std::string>);
+        static_assert(!ECS::ComponentStorable<Locked>);
+        static_assert(!ECS::ComponentStorable<ConstMember>);
+        expect(true);
+    };
+}
+
 }
 
 void run_component_storage_tests() {
@@ -740,4 +763,5 @@ void run_component_storage_tests() {
     test_storage_supports_empty_component_type();
     test_storage_supports_repeated_empty_component_insertion();
     test_storage_supports_large_entity_ids();
+    test_component_storable_concept();
 }

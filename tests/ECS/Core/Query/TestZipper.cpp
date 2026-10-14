@@ -1,6 +1,8 @@
 #include <boost/ut.hpp>
 
 #include <cstddef>
+#include <iterator>
+#include <ranges>
 #include <tuple>
 #include <vector>
 
@@ -269,6 +271,26 @@ namespace {
             expect(entityIds(query) == std::vector<std::size_t>{2});
         };
     }
+    void test_zipper_is_a_standard_range() {
+        "a zipper is a std::ranges input range with comparable iterators"_test = [] {
+            ECS::ComponentStorage<Position> positions;
+            positions.emplaceAt(1, 10);
+            positions.emplaceAt(2, 20);
+            const auto query = ECS::zipper(positions);
+            using Iterator = decltype(query.begin());
+
+            static_assert(std::input_iterator<Iterator>);
+            static_assert(std::ranges::input_range<decltype(query)>);
+
+            auto it = query.begin();
+            const auto previous = it++;
+            expect(std::get<1>(*previous) == 1_ul);
+            expect(std::get<1>(*it) == 2_ul);
+            ++it;
+            expect(it == query.end());
+            expect(Iterator{} == Iterator{});
+        };
+    }
 }
 
 void run_zipper_tests() {
@@ -290,4 +312,5 @@ void run_zipper_tests() {
     test_zipper_reflects_storage_changes_before_iteration();
     test_zipper_does_not_return_removed_entities();
     test_zipper_updates_after_swap_and_pop();
+    test_zipper_is_a_standard_range();
 }

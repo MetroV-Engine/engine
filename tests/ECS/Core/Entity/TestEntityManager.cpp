@@ -443,74 +443,74 @@ void test_size_counts_multiple_destroyed_entities() {
 	};
 }
 
-void test_get_all_is_empty_for_empty_manager() {
-	"getAll is empty for an empty manager"_test = [] {
+void test_snapshot_lists_is_empty_for_empty_manager() {
+	"snapshot is empty for an empty manager"_test = [] {
 		const ECS::EntityManager manager;
 
-		expect(manager.getAll().empty());
+		expect(manager.snapshot()->empty());
 	};
 }
 
-void test_get_all_returns_all_live_entities() {
-	"getAll returns all live entities"_test = [] {
+void test_snapshot_lists_returns_all_live_entities() {
+	"snapshot returns all live entities"_test = [] {
 		ECS::EntityManager manager;
 		const ECS::Entity first = manager.create();
 		const ECS::Entity second = manager.create();
 
-		const auto entities = manager.getAll();
+		const auto entities = *manager.snapshot();
 		expect(entities.size() == std::size_t{2});
 		expect(entities[0] == first);
 		expect(entities[1] == second);
 	};
 }
 
-void test_get_all_returns_entities_in_ascending_index_order() {
-	"getAll returns entities in ascending index order"_test = [] {
+void test_snapshot_lists_returns_entities_in_ascending_index_order() {
+	"snapshot returns entities in ascending index order"_test = [] {
 		ECS::EntityManager manager;
 		manager.create();
 		manager.create();
 		manager.create();
 
-		const auto entities = manager.getAll();
+		const auto entities = *manager.snapshot();
 		expect(entities[0].index() < entities[1].index());
 		expect(entities[1].index() < entities[2].index());
 	};
 }
 
-void test_get_all_excludes_destroyed_entities() {
-	"getAll excludes destroyed entities"_test = [] {
+void test_snapshot_lists_excludes_destroyed_entities() {
+	"snapshot excludes destroyed entities"_test = [] {
 		ECS::EntityManager manager;
 		const ECS::Entity first = manager.create();
 		const ECS::Entity second = manager.create();
 		manager.destroy(first);
 
-		const auto entities = manager.getAll();
+		const auto entities = *manager.snapshot();
 		expect(entities.size() == std::size_t{1});
 		expect(entities[0] == second);
 	};
 }
 
-void test_get_all_preserves_generations() {
-	"getAll preserves current generations"_test = [] {
+void test_snapshot_lists_preserves_generations() {
+	"snapshot preserves current generations"_test = [] {
 		ECS::EntityManager manager;
 		const ECS::Entity first = manager.create();
 		manager.destroy(first);
 		const ECS::Entity second = manager.create();
 
-		const auto entities = manager.getAll();
+		const auto entities = *manager.snapshot();
 		expect(entities.size() == std::size_t{1});
 		expect(entities[0] == second);
 	};
 }
 
-void test_get_all_returns_only_current_handles() {
-	"getAll excludes stale handles"_test = [] {
+void test_snapshot_lists_returns_only_current_handles() {
+	"snapshot excludes stale handles"_test = [] {
 		ECS::EntityManager manager;
 		const ECS::Entity oldEntity = manager.create();
 		manager.destroy(oldEntity);
 		const ECS::Entity newEntity = manager.create();
 
-		const auto entities = manager.getAll();
+		const auto entities = *manager.snapshot();
 		expect(entities.size() == std::size_t{1});
 		expect(entities[0].index() == oldEntity.index());
 		expect(entities[0].generation() != oldEntity.generation());
@@ -518,41 +518,41 @@ void test_get_all_returns_only_current_handles() {
 	};
 }
 
-void test_get_all_is_correct_after_destroying_first_entity() {
-	"getAll remains ordered after destroying the first entity"_test = [] {
+void test_snapshot_lists_is_correct_after_destroying_first_entity() {
+	"snapshot remains ordered after destroying the first entity"_test = [] {
 		ECS::EntityManager manager;
 		const ECS::Entity first = manager.create();
 		const ECS::Entity second = manager.create();
 		const ECS::Entity third = manager.create();
 		manager.destroy(first);
 
-		const auto entities = manager.getAll();
+		const auto entities = *manager.snapshot();
 		expect(entities.size() == std::size_t{2});
 		expect(entities[0] == second);
 		expect(entities[1] == third);
 	};
 }
 
-void test_get_all_is_correct_after_destroying_last_entity() {
-	"getAll remains ordered after destroying the last entity"_test = [] {
+void test_snapshot_lists_is_correct_after_destroying_last_entity() {
+	"snapshot remains ordered after destroying the last entity"_test = [] {
 		ECS::EntityManager manager;
 		const ECS::Entity first = manager.create();
 		const ECS::Entity second = manager.create();
 		const ECS::Entity third = manager.create();
 		manager.destroy(third);
 
-		const auto entities = manager.getAll();
+		const auto entities = *manager.snapshot();
 		expect(entities.size() == std::size_t{2});
 		expect(entities[0] == first);
 		expect(entities[1] == second);
 	};
 }
 
-void test_get_all_result_is_independent_from_later_manager_changes() {
-	"getAll returns an independent snapshot"_test = [] {
+void test_snapshot_lists_result_is_independent_from_later_manager_changes() {
+	"a copy of the snapshot is independent of later changes"_test = [] {
 		ECS::EntityManager manager;
 		const ECS::Entity first = manager.create();
-		auto entities = manager.getAll();
+		auto entities = *manager.snapshot();
 		manager.destroy(first);
 
 		expect(entities.size() == std::size_t{1});
@@ -574,7 +574,7 @@ void test_reserve_does_not_create_entities() {
 		ECS::EntityManager manager;
 		manager.reserve(10);
 
-		expect(manager.getAll().empty());
+		expect(manager.snapshot()->empty());
 	};
 }
 
@@ -665,7 +665,7 @@ void test_reserve_identity_is_invisible() {
 		(void)manager.reserveIdentity();
 
 		expect(manager.size() == std::size_t{1});
-		expect(manager.getAll().size() == std::size_t{1});
+		expect(manager.snapshot()->size() == std::size_t{1});
 	};
 }
 
@@ -702,7 +702,7 @@ void test_commit_makes_a_reserved_identity_alive() {
 		expect(manager.isAlive(entity));
 		expect(!manager.isReserved(entity));
 		expect(manager.size() == std::size_t{1});
-		expect(manager.getAll().size() == std::size_t{1});
+		expect(manager.snapshot()->size() == std::size_t{1});
 	};
 }
 
@@ -835,13 +835,6 @@ void test_snapshot_follows_commit() {
 	};
 }
 
-void test_snapshot_is_empty_for_empty_manager() {
-	"snapshot is empty for an empty manager"_test = [] {
-		const ECS::EntityManager manager;
-		expect(manager.snapshot()->empty());
-	};
-}
-
 void run_entity_manager_tests()
 {
 	test_create_empty_manager();
@@ -882,15 +875,15 @@ void run_entity_manager_tests()
 	test_size_decreases_after_destroy();
 	test_size_is_unchanged_when_reusing_an_index();
 	test_size_counts_multiple_destroyed_entities();
-	test_get_all_is_empty_for_empty_manager();
-	test_get_all_returns_all_live_entities();
-	test_get_all_returns_entities_in_ascending_index_order();
-	test_get_all_excludes_destroyed_entities();
-	test_get_all_preserves_generations();
-	test_get_all_returns_only_current_handles();
-	test_get_all_is_correct_after_destroying_first_entity();
-	test_get_all_is_correct_after_destroying_last_entity();
-	test_get_all_result_is_independent_from_later_manager_changes();
+	test_snapshot_lists_is_empty_for_empty_manager();
+	test_snapshot_lists_returns_all_live_entities();
+	test_snapshot_lists_returns_entities_in_ascending_index_order();
+	test_snapshot_lists_excludes_destroyed_entities();
+	test_snapshot_lists_preserves_generations();
+	test_snapshot_lists_returns_only_current_handles();
+	test_snapshot_lists_is_correct_after_destroying_first_entity();
+	test_snapshot_lists_is_correct_after_destroying_last_entity();
+	test_snapshot_lists_result_is_independent_from_later_manager_changes();
 	test_reserve_does_not_change_size();
 	test_reserve_does_not_create_entities();
 	test_reserve_supports_creation_after_reservation();
@@ -913,5 +906,4 @@ void run_entity_manager_tests()
 	test_snapshot_held_list_is_never_modified();
 	test_snapshot_is_rebuilt_in_place_when_not_held();
 	test_snapshot_follows_commit();
-	test_snapshot_is_empty_for_empty_manager();
 }

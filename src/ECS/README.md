@@ -53,7 +53,7 @@ stored in the handle: they are an optional `ECS::Name` component.
 
 ```cpp
 ECS::Entity player = world.spawnEntity("Player");
-std::size_t id = player.value();
+std::size_t index = player.index();
 ```
 
 The entity handle does not create or destroy entities. That responsibility

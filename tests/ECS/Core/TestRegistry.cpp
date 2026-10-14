@@ -1,6 +1,5 @@
 #include <boost/ut.hpp>
 
-#include <algorithm>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
@@ -8,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "ECS/Core/Component/ComponentPool.hpp"
 #include "ECS/Core/Registry.hpp"
 #include "../Support/RegistryTestAccess.hpp"
 
@@ -155,6 +153,34 @@ namespace {
         };
     }
 
+    void test_deferred_kill_of_dead_entity_throws() {
+        "killEntity throws for a dead entity under runDeferred too"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.killEntity(entity);
+
+            expect(throws<std::invalid_argument>([&] {
+                registry.runDeferred([&] { registry.killEntity(entity); });
+            }));
+            expect(registry.entityCount() == std::size_t{0});
+        };
+    }
+
+    void test_deferred_kill_of_deferred_spawn() {
+        "an entity spawned and killed in the same batch never appears"_test = [] {
+            ECS::Registry registry;
+            ECS::Entity spawned{};
+
+            registry.runDeferred([&] {
+                spawned = registry.spawnEntity();
+                registry.killEntity(spawned);
+            });
+
+            expect(!registry.isAlive(spawned));
+            expect(registry.entityCount() == std::size_t{0});
+        };
+    }
+
     void test_kill_entity_rejects_invalid_entity() {
         "killEntity rejects an invalid entity"_test = [] {
             ECS::Registry registry;
@@ -195,7 +221,7 @@ namespace {
             const auto& second = registry.registerComponent<Position>();
 
             expect(&first == &second);
-            expect(second.get(entity.value()).x == 1);
+            expect(second.get(entity.index()).x == 1);
         };
     }
 
@@ -206,8 +232,8 @@ namespace {
             registry.emplaceComponent<Position>(entity, 1, 2);
             registry.emplaceComponent<Velocity>(entity, 3, 4);
 
-            expect(registry.getComponents<Position>().get(entity.value()).x == 1);
-            expect(registry.getComponents<Velocity>().get(entity.value()).x == 3);
+            expect(registry.getComponents<Position>().get(entity.index()).x == 1);
+            expect(registry.getComponents<Velocity>().get(entity.index()).x == 3);
         };
     }
 
@@ -1566,4 +1592,6 @@ void run_registry_tests() {
     test_entity_count_is_zero_for_a_new_registry();
     test_entity_count_follows_spawns_and_kills();
     test_entity_count_ignores_queued_spawns();
+    test_deferred_kill_of_dead_entity_throws();
+    test_deferred_kill_of_deferred_spawn();
 }

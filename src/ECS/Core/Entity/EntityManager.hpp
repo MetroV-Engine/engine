@@ -69,7 +69,7 @@ namespace ECS {
              *
              * Pairs with commit(). Lets a caller hand out a stable, usable
              * handle before the identity should become visible to isAlive()
-             * or getAll() -- used by deferred entity creation, where the
+             * or snapshot() -- used by deferred entity creation, where the
              * handle must exist immediately but must not be observable
              * until the queued command actually applies.
              */
@@ -99,7 +99,7 @@ namespace ECS {
                 if (!isReserved(entity)) {
                     throw std::invalid_argument("ECS::EntityManager: entity is not reserved");
                 }
-                _states[entity.value()] = State::Alive;
+                _states[entity.index()] = State::Alive;
                 --_reservedCount;
                 _snapshotDirty = true;
             }
@@ -113,7 +113,7 @@ namespace ECS {
              * responsibility because it knows which component pools exist.
              */
             void destroy(Entity entity) {
-                const std::size_t id = entity.value();
+                const std::size_t id = entity.index();
                 if (!isAlive(entity)) {
                     throw std::invalid_argument("ECS::EntityManager: entity is not alive");
                 }
@@ -175,19 +175,10 @@ namespace ECS {
             }
 
             /**
-             * @brief Returns handles for every currently live identity.
-             * @return Live entities in ascending identity order.
-             *
-             * This helper is intended for editor-style enumeration. Hot
-             * systems should iterate component pools instead of rebuilding this
-             * list every frame.
-             */
-            [[nodiscard]] std::vector<Entity> getAll() const {
-                return *snapshot();
-            }
-
-            /**
              * @brief Returns the live entities as an immutable list, shared.
+             *
+             * Meant for tools, through EntityList (RegistryInspector::entities()).
+             * Game systems iterate views instead.
              * @return Live entities in ascending identity order. The list is
              *         never modified: after a commit() or destroy(), the next
              *         call returns a new one, so a holder (an iteration in
@@ -229,7 +220,7 @@ namespace ECS {
             enum class State : std::uint8_t { Free, Reserved, Alive };
 
             [[nodiscard]] bool hasState(Entity entity, State state) const noexcept {
-                const std::size_t id = entity.value();
+                const std::size_t id = entity.index();
                 return entity.world() == _world
                     && id < _states.size()
                     && _states[id] == state

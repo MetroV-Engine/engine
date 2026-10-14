@@ -11,16 +11,13 @@ namespace ECS {
     /**
      * @brief Type-erased interface shared by all runtime component pools.
      *
-     * The interface intentionally exposes only operations needed by the
-     * registry to destroy an entity. Typed access remains in ComponentPool<T>,
-     * so the gameplay path does not require a base component class.
+     * Exposes only what the ComponentStore needs without knowing the type:
+     * erasing an entity's component when the entity is killed. Membership
+     * is answered by the SignatureTable, typed access by ComponentPool<T>.
      */
     class IComponentPool {
         public:
             virtual ~IComponentPool() = default;
-
-            /** @brief Checks whether the pool contains an entity identity. */
-            [[nodiscard]] virtual bool has(std::size_t entityId) const noexcept = 0;
 
             /** @brief Removes an entity's component if it exists. */
             virtual void erase(std::size_t entityId) noexcept = 0;
@@ -39,11 +36,6 @@ namespace ECS {
             /** @copydoc storage() */
             [[nodiscard]] const ComponentStorage<Component>& storage() const noexcept {
                 return _storage;
-            }
-
-            /** @copydoc IComponentPool::has */
-            [[nodiscard]] bool has(std::size_t entityId) const noexcept override {
-                return _storage.has(entityId);
             }
 
             /** @copydoc IComponentPool::erase */
@@ -75,4 +67,10 @@ namespace ECS {
 
     /** @brief Creates an empty pool for one component type, without naming it. */
     using PoolFactory = std::unique_ptr<IComponentPool> (*)();
+
+    /** @brief The PoolFactory of Component: creates an empty ComponentPool<Component>. */
+    template<typename Component>
+    [[nodiscard]] std::unique_ptr<IComponentPool> makePool() {
+        return std::make_unique<ComponentPool<Component>>();
+    }
 }

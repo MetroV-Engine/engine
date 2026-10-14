@@ -40,11 +40,16 @@ namespace ECS {
             /** @brief Iterator over matching entity/component tuples. */
             class iterator {
                 public:
+                    using value_type = ZipperN::value_type;
+                    using difference_type = std::ptrdiff_t;
+
+                    iterator() = default;
+
                     iterator(std::tuple<Sets&...> sets,
                              std::size_t driver,
                              const std::vector<EntityType>* driverEntities,
                              std::size_t index)
-                        : _sets(sets),
+                        : _sets(std::apply([](Sets&... each) { return std::tuple<Sets*...>(&each...); }, sets)),
                           _driver(driver),
                           _driverEntities(driverEntities),
                           _index(index) {
@@ -58,9 +63,15 @@ namespace ECS {
                         return *this;
                     }
 
+                    iterator operator++(int) {
+                        iterator previous = *this;
+                        ++*this;
+                        return previous;
+                    }
+
                     /** @brief Compares dense positions in the driving storage. */
-                    [[nodiscard]] bool operator!=(const iterator& other) const {
-                        return _index != other._index;
+                    [[nodiscard]] bool operator==(const iterator& other) const noexcept {
+                        return _index == other._index;
                     }
 
                     /**
@@ -68,7 +79,7 @@ namespace ECS {
                      * @return Tuple in argument order, followed by the entity.
                      */
                     value_type operator*() const {
-                        const EntityType entity = _driverEntities->at(_index);
+                        const EntityType entity = (*_driverEntities)[_index];
                         return dereference(entity, std::index_sequence_for<Sets...>{});
                     }
 
@@ -88,7 +99,7 @@ namespace ECS {
                     [[nodiscard]] bool hasAll(EntityType entity,
                                               std::index_sequence<Indices...>) const {
                         return (... && (Indices == _driver
-                                        || std::get<Indices>(_sets).has(entity)));
+                                        || std::get<Indices>(_sets)->has(entity)));
                     }
 
                     template<std::size_t... Indices>
@@ -100,24 +111,26 @@ namespace ECS {
                     /** @brief The driver is read by dense position; the others by entity lookup. */
                     template<std::size_t Index>
                     decltype(auto) component(EntityType entity) const {
-                        auto& set = std::get<Index>(_sets);
+                        auto& set = *std::get<Index>(_sets);
                         return Index == _driver ? set[_index] : set.get(entity);
                     }
 
-                    std::tuple<Sets&...> _sets;
-                    std::size_t _driver;
-                    const std::vector<EntityType>* _driverEntities;
-                    std::size_t _index;
+                    // Pointers rather than references, so the iterator is
+                    // default-constructible and assignable (std::ranges).
+                    std::tuple<Sets*...> _sets{};
+                    std::size_t _driver = 0;
+                    const std::vector<EntityType>* _driverEntities = nullptr;
+                    std::size_t _index = 0;
             };
 
             /** @brief Returns an iterator to the first matching entity. */
-            iterator begin() {
+            iterator begin() const {
                 const Driver driver = selectDriver(std::index_sequence_for<Sets...>{});
                 return iterator(_sets, driver.index, driver.entities, 0);
             }
 
-            /** @brief Returns the sentinel iterator after the driving storage. */
-            iterator end() {
+            /** @brief Returns the end iterator after the driving storage. */
+            iterator end() const {
                 const Driver driver = selectDriver(std::index_sequence_for<Sets...>{});
                 return iterator(_sets, driver.index, driver.entities, driver.entities->size());
             }

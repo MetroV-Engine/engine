@@ -37,8 +37,12 @@ void test_component_pool_can_be_owned_by_unique_ptr_to_interface() {
     "ComponentPool can be owned through its interface"_test = [] {
         std::unique_ptr<ECS::IComponentPool> pool =
             std::make_unique<ECS::ComponentPool<Position>>();
+        auto& typed = static_cast<ECS::ComponentPool<Position>&>(*pool);
+        typed.storage().emplaceAt(0, 1, 2);
 
-        expect(!pool->has(0));
+        pool->erase(0);
+
+        expect(!typed.storage().has(0));
     };
 }
 
@@ -76,45 +80,9 @@ void test_component_pool_storage_is_the_same_underlying_storage() {
         ECS::ComponentPool<Position> pool;
         pool.storage().emplaceAt(4, 7, 8);
 
-        expect(pool.has(4));
+        expect(pool.storage().has(4));
         pool.erase(4);
         expect(!pool.storage().has(4));
-    };
-}
-
-void test_component_pool_has_returns_false_when_empty() {
-    "ComponentPool has is false when empty"_test = [] {
-        const ECS::ComponentPool<Position> pool;
-
-        expect(!pool.has(0));
-    };
-}
-
-void test_component_pool_has_returns_true_for_stored_component() {
-    "ComponentPool has is true for a stored component"_test = [] {
-        ECS::ComponentPool<Position> pool;
-        pool.storage().emplaceAt(5, 1, 2);
-
-        expect(pool.has(5));
-    };
-}
-
-void test_component_pool_has_returns_false_after_erase() {
-    "ComponentPool has is false after erase"_test = [] {
-        ECS::ComponentPool<Position> pool;
-        pool.storage().emplaceAt(5, 1, 2);
-        pool.erase(5);
-
-        expect(!pool.has(5));
-    };
-}
-
-void test_component_pool_has_returns_false_for_unknown_entity() {
-    "ComponentPool has is false for an unknown entity"_test = [] {
-        ECS::ComponentPool<Position> pool;
-        pool.storage().emplaceAt(5, 1, 2);
-
-        expect(!pool.has(6));
     };
 }
 
@@ -144,7 +112,7 @@ void test_component_pool_erase_out_of_range_entity_is_noop() {
         pool.erase(1000);
 
         expect(pool.storage().size() == std::size_t{1});
-        expect(pool.has(1));
+        expect(pool.storage().has(1));
     };
 }
 
@@ -155,7 +123,7 @@ void test_component_pool_erase_updates_swap_and_pop_lookup() {
         pool.storage().emplaceAt(2, 2, 2);
         pool.erase(1);
 
-        expect(pool.has(2));
+        expect(pool.storage().has(2));
         expect(pool.storage().get(2).x == 2);
     };
 }
@@ -166,9 +134,9 @@ void test_component_pool_can_be_used_through_interface() {
         concrete.storage().emplaceAt(7, 4, 5);
         ECS::IComponentPool& pool = concrete;
 
-        expect(pool.has(7));
+        expect(concrete.storage().has(7));
         pool.erase(7);
-        expect(!pool.has(7));
+        expect(!concrete.storage().has(7));
     };
 }
 
@@ -179,8 +147,8 @@ void test_different_component_pools_have_independent_storage() {
         positions.storage().emplaceAt(1, 2, 3);
         health.storage().emplaceAt(1, 100);
 
-        expect(positions.has(1));
-        expect(health.has(1));
+        expect(positions.storage().has(1));
+        expect(health.storage().has(1));
         expect(positions.storage().get(1).x == 2);
         expect(health.storage().get(1).value == 100);
     };
@@ -245,7 +213,7 @@ void test_component_pool_on_remove_throwing_callback_is_contained() {
 
         pool.erase(1);
 
-        expect(!pool.has(1));
+        expect(!pool.storage().has(1));
     };
 }
 
@@ -256,7 +224,7 @@ void test_component_pool_without_hook_is_unaffected() {
 
         pool.erase(1);
 
-        expect(!pool.has(1));
+        expect(!pool.storage().has(1));
     };
 }
 
@@ -276,6 +244,26 @@ void test_component_pool_set_on_remove_replaces_previous_callback() {
     };
 }
 
+void test_make_pool_creates_an_empty_typed_pool() {
+    "makePool creates an empty pool of its component type"_test = [] {
+        const ECS::PoolFactory factory = &ECS::makePool<Position>;
+        std::unique_ptr<ECS::IComponentPool> pool = factory();
+
+        auto* typed = dynamic_cast<ECS::ComponentPool<Position>*>(pool.get());
+        expect((typed != nullptr) >> fatal);
+        expect(typed->storage().size() == std::size_t{0});
+        expect(dynamic_cast<ECS::ComponentPool<Health>*>(pool.get()) == nullptr);
+    };
+}
+
+void test_make_pool_returns_a_new_pool_each_call() {
+    "makePool returns a distinct pool on each call"_test = [] {
+        auto first = ECS::makePool<Position>();
+        auto second = ECS::makePool<Position>();
+
+        expect(first.get() != second.get());
+    };
+}
 }
 
 void run_component_pool_tests() {
@@ -286,10 +274,6 @@ void run_component_pool_tests() {
     test_component_pool_storage_returns_mutable_storage();
     test_component_pool_const_storage_returns_const_storage();
     test_component_pool_storage_is_the_same_underlying_storage();
-    test_component_pool_has_returns_false_when_empty();
-    test_component_pool_has_returns_true_for_stored_component();
-    test_component_pool_has_returns_false_after_erase();
-    test_component_pool_has_returns_false_for_unknown_entity();
     test_component_pool_erase_removes_existing_component();
     test_component_pool_erase_missing_component_is_noop();
     test_component_pool_erase_out_of_range_entity_is_noop();
@@ -303,4 +287,6 @@ void run_component_pool_tests() {
     test_component_pool_on_remove_throwing_callback_is_contained();
     test_component_pool_without_hook_is_unaffected();
     test_component_pool_set_on_remove_replaces_previous_callback();
+    test_make_pool_creates_an_empty_typed_pool();
+    test_make_pool_returns_a_new_pool_each_call();
 }

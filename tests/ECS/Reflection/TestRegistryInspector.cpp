@@ -302,7 +302,7 @@ void test_manual_registration() {
 
 void test_unstorable_type_is_reflected_but_not_a_component() {
     "a reflected type that cannot live in a pool is reflected but not a component"_test = [] {
-        static_assert(!ECS::reflect::ComponentStorable<CrConstant>);
+        static_assert(!ECS::ComponentStorable<CrConstant>);
         const TypeInfo& constant = typeNamed("CrConstant");
 
         expect(constant.kind == TypeKind::Struct);

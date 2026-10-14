@@ -21,21 +21,27 @@ namespace ECS {
         template<typename ZipperIterator, typename ValueType, std::size_t ComponentCount>
         class ViewIterator {
             public:
-                ViewIterator() = delete;
+                using value_type = ValueType;
+                using difference_type = std::ptrdiff_t;
 
-                                explicit ViewIterator(
-                                        ZipperIterator zipperIterator,
-                                        const EntityManager& entityManager)
-                                        : _iterator(std::move(zipperIterator)),
-                                            _entityManager(entityManager) {}
+                ViewIterator() = default;
+
+                explicit ViewIterator(ZipperIterator zipperIterator, const EntityManager& entityManager)
+                    : _iterator(std::move(zipperIterator)), _entityManager(&entityManager) {}
 
                 ViewIterator& operator++() {
                     ++_iterator;
                     return *this;
                 }
 
-                [[nodiscard]] bool operator!=(const ViewIterator& other) const {
-                    return _iterator != other._iterator;
+                ViewIterator operator++(int) {
+                    ViewIterator previous = *this;
+                    ++*this;
+                    return previous;
+                }
+
+                [[nodiscard]] bool operator==(const ViewIterator& other) const {
+                    return _iterator == other._iterator;
                 }
 
                 /** @brief Returns the entity and references to its components. */
@@ -50,13 +56,13 @@ namespace ECS {
                     const auto& values,
                     std::index_sequence<Indices...>) const {
                     return ValueType(
-                        _entityManager.entityFromIndex(
+                        _entityManager->entityFromIndex(
                             std::get<ComponentCount>(values)),
                         std::get<Indices>(values)...);
                 }
 
                 ZipperIterator _iterator;
-                const EntityManager& _entityManager;
+                const EntityManager* _entityManager = nullptr;
         };
 
         /**
@@ -104,14 +110,14 @@ namespace ECS {
                     : _entityManager(entityManager), _storages(storages...) {}
 
                 /** @brief Returns an iterator to the first matching entity. */
-                iterator begin() {
+                iterator begin() const {
                     return makeIterator([](auto&... storages) {
                         return zipper(storages...).begin();
                     });
                 }
 
                 /** @brief Returns the end iterator for this view. */
-                iterator end() {
+                iterator end() const {
                     return makeIterator([](auto&... storages) {
                         return zipper(storages...).end();
                     });
@@ -119,7 +125,7 @@ namespace ECS {
 
             private:
                 template<typename Factory>
-                iterator makeIterator(Factory&& factory) {
+                iterator makeIterator(Factory&& factory) const {
                     return iterator(
                         std::apply(std::forward<Factory>(factory), _storages),
                         _entityManager);

@@ -104,7 +104,7 @@ void test_ops_insert_moved_inserts_a_new_component() {
 
         void* stored = ops.insertMoved(pool, 2, &value);
 
-        expect(pool.has(2));
+        expect(pool.storage().has(2));
         expect(stored == static_cast<void*>(&pool.storage().get(2)));
         expect(pool.storage().get(2).x == 4_i);
     };

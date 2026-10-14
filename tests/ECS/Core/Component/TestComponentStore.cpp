@@ -212,6 +212,17 @@ void test_store_has_pool_is_false_for_unknown_ids() {
     };
 }
 
+void test_store_require_registered() {
+    "ComponentStore::requireRegistered throws only for an id without a pool"_test = [] {
+        ECS::ComponentStore store;
+        store.ensure<StorePosition>();
+
+        store.requireRegistered(idOf<StorePosition>());   // no throw
+        expect(throws<std::out_of_range>([&] { store.requireRegistered(idOf<StoreUnregistered>()); }));
+        expect(throws<std::out_of_range>([&] { store.requireRegistered(100000); }));
+    };
+}
+
 void test_store_has_checks_every_id() {
     "ComponentStore::has is true only when the entity owns every id"_test = [] {
         ECS::ComponentStore store;
@@ -399,6 +410,7 @@ void run_component_store_tests() {
     test_store_on_remove_does_not_fire_without_component();
     test_store_ensure_pool_creates_once();
     test_store_has_pool_is_false_for_unknown_ids();
+    test_store_require_registered();
     test_store_has_checks_every_id();
     test_store_has_edge_cases();
     test_store_get_returns_address_or_null();
