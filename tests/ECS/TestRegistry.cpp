@@ -67,18 +67,20 @@ namespace {
     }
 
     void test_spawn_entity_with_name_stores_name() {
-        "spawnEntity stores an optional name"_test = [] {
+        "spawnEntity with a name adds a Name component"_test = [] {
             ECS::Registry registry;
             const auto entity = registry.spawnEntity("Player");
-            expect(registry.getEntityName(entity) == "Player");
+            expect(registry.getComponent<ECS::Name>(entity).value == "Player");
         };
     }
 
     void test_spawn_entity_without_name_has_empty_name() {
-        "unnamed entities have an empty name"_test = [] {
+        "spawnEntity without a name, or with an empty one, adds no Name"_test = [] {
             ECS::Registry registry;
-            const auto entity = registry.spawnEntity();
-            expect(registry.getEntityName(entity).empty());
+            const auto unnamed = registry.spawnEntity();
+            const auto empty = registry.spawnEntity("");
+            expect(!registry.hasComponents<ECS::Name>(unnamed));
+            expect(!registry.hasComponents<ECS::Name>(empty));
         };
     }
 
@@ -91,7 +93,7 @@ namespace {
             const auto second = registry.spawnEntity();
 
             expect(!registry.hasComponents<Position>(second));
-            expect(registry.getEntityName(second).empty());
+            expect(!registry.hasComponents<ECS::Name>(second));
             expect(second.generation() != first.generation());
         };
     }
@@ -135,7 +137,8 @@ namespace {
                 worldB.killEntity(a);
             }));
             expect(!worldB.hasComponents<Position>(a));
-            expect(worldB.getEntityName(a).empty());
+            expect(!worldB.hasComponents<ECS::Name>(a));
+            expect(worldB.getComponent<ECS::Name>(b).value == "B");
 
             expect(worldB.getComponent<Position>(b).x == 999);
             expect(worldA.getComponent<Position>(a).x == 10);
@@ -147,7 +150,7 @@ namespace {
             ECS::Registry registry;
             const auto entity = registry.spawnEntity();
             registry.killEntity(entity);
-            expect(registry.getEntityName(entity).empty());
+            expect(!registry.isAlive(entity));
             expect(!registry.hasComponents<Position>(entity));
         };
     }
@@ -612,37 +615,59 @@ namespace {
         };
     }
 
-    void test_set_entity_name_assigns_and_replaces_name() {
-        "setEntityName assigns and replaces a name"_test = [] {
+    void test_name_is_a_regular_component() {
+        "a Name can be added, replaced and removed like any component"_test = [] {
             ECS::Registry registry;
             const auto entity = registry.spawnEntity();
-            registry.setEntityName(entity, "First");
-            registry.setEntityName(entity, "Second");
+            registry.addComponent(entity, ECS::Name{"First"});
+            registry.addComponent(entity, ECS::Name{"Second"});
+            expect(registry.getComponent<ECS::Name>(entity).value == "Second");
 
-            expect(registry.getEntityName(entity) == "Second");
+            registry.removeComponent<ECS::Name>(entity);
+            expect(!registry.hasComponents<ECS::Name>(entity));
         };
     }
 
-    void test_set_entity_name_rejects_dead_entity() {
-        "setEntityName rejects a dead entity"_test = [] {
+    void test_name_on_dead_entity_throws() {
+        "naming a dead entity throws"_test = [] {
             ECS::Registry registry;
             const auto entity = registry.spawnEntity();
             registry.killEntity(entity);
 
             expect(throws<std::invalid_argument>([&] {
-                registry.setEntityName(entity, "Dead");
+                registry.addComponent(entity, ECS::Name{"Dead"});
             }));
         };
     }
 
-    void test_get_entity_name_returns_empty_for_unknown_or_dead_entity() {
-        "getEntityName is empty for unknown or dead entities"_test = [] {
+    void test_kill_removes_the_name() {
+        "killing a named entity removes its Name"_test = [] {
             ECS::Registry registry;
             const auto entity = registry.spawnEntity("Player");
             registry.killEntity(entity);
 
-            expect(registry.getEntityName(entity).empty());
-            expect(registry.getEntityName(ECS::Entity{}).empty());
+            expect(registry.getComponents<ECS::Name>().size() == std::size_t{0});
+        };
+    }
+
+    void test_deferred_spawn_name_applies_at_flush() {
+        "a name given to a deferred spawn appears with the entity at flush"_test = [] {
+            ECS::Registry registry;
+            ECS::Entity spawned{};
+            ECS::Entity killedInBatch{};
+            bool namedDuring = true;
+
+            registry.runDeferred([&] {
+                spawned = registry.spawnEntity("Late");
+                killedInBatch = registry.spawnEntity("Gone");
+                registry.killEntity(killedInBatch);
+                namedDuring = registry.hasComponents<ECS::Name>(spawned);
+            });
+
+            expect(!namedDuring);
+            expect(registry.getComponent<ECS::Name>(spawned).value == "Late");
+            expect(!registry.isAlive(killedInBatch));
+            expect(registry.getComponents<ECS::Name>().size() == std::size_t{1});
         };
     }
 
@@ -1485,9 +1510,10 @@ void run_registry_tests() {
     test_view_registers_unregistered_component_and_returns_no_matches();
     test_const_view_is_empty_for_unregistered_component();
     test_const_view_returns_const_components();
-    test_set_entity_name_assigns_and_replaces_name();
-    test_set_entity_name_rejects_dead_entity();
-    test_get_entity_name_returns_empty_for_unknown_or_dead_entity();
+    test_name_is_a_regular_component();
+    test_name_on_dead_entity_throws();
+    test_kill_removes_the_name();
+    test_deferred_spawn_name_applies_at_flush();
     test_more_than_256_component_types_can_be_used();
     test_growing_signatures_keeps_existing_components();
     test_recycled_entity_owns_no_high_id_component();

@@ -44,7 +44,7 @@ read with `getComponent<T>`, and the other way round.
 | **`TypeId`** | Hash of the reflected name. It is stable across runs and builds, so it can be persisted, unlike `componentId<T>()`. |
 | **`TypeRegistry`** | Process-wide catalogue of every `TypeInfo`, found by type, name or `TypeId`. |
 | **`Ref`** | Non-owning view on a value: a `TypeInfo` plus an address. You navigate through it by field name, index or key, and read the value back with `as<T>()`. |
-| **`RegistryInspector`** | Returned by `world.inspect()`. Gives access to an entity's components from a `TypeInfo` (`list`, `get`, `has`, `add`, `remove`) and lists component types (`types`, `findType`). |
+| **`RegistryInspector`** | Returned by `world.inspect()`. Gives access to an entity's components from a `TypeInfo` (`list`, `get`, `has`, `add`, `remove`), lists component types (`types`, `findType`), and lists the entities (`entities`, an always up-to-date `EntityList`) with a label for each (`displayName`: its `ECS::Name`, or `"Entity <index>"`). |
 | **`ContainerTraits`** | Customisation point. Specialise it to make your own container inspectable. |
 | **PrettyPrint** | Optional. Prints any `Ref` in a readable form, for logs and debugging. |
 
@@ -258,6 +258,7 @@ docstrings. This README only gives the overview.
 | [ContainerTraits.hpp](ContainerTraits.hpp) | Customisation point that makes a container inspectable. |
 | [Ref.hpp](Ref.hpp) | Type-erased view on a value. |
 | [RegistryInspector.hpp](RegistryInspector.hpp) | Components of a `Registry` by `TypeInfo`. Defines `Registry::inspect()` and `registerComponentType<T>()`. |
+| [CoreTypes.hpp](CoreTypes.hpp) | Reflection of the core's own components (`ECS::Name`). Included by `Reflection.hpp`. |
 | [PrettyPrint.hpp](PrettyPrint.hpp) | Optional. Readable printing of any reflected value, for logs and debugging. |
 | [detail/](detail/) | Internals (component catalog, automatic registration). Not meant to be included directly. |
 

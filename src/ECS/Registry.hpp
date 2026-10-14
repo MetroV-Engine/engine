@@ -9,10 +9,10 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <unordered_map>
 
 #include "Core/Component/ComponentStore.hpp"
 #include "Core/Entity/EntityManager.hpp"
+#include "Core/Entity/Name.hpp"
 #include "Core/CommandBuffer.hpp"
 #include "Core/Resource/ResourceStore.hpp"
 #include "View.hpp"
@@ -48,9 +48,11 @@ namespace ECS {
             Registry& operator=(const Registry&) = delete;
 
             /**
-             * @brief Creates a named or unnamed entity.
-             * @param name Optional display name stored by the registry.
-             * @return Newly created entity handle.
+             * @brief Creates an entity, with a Name component when name is not empty.
+             * @param name Optional display name, stored as an ECS::Name component.
+             * @return Newly created entity handle. Under runDeferred, the
+             *         entity (and its Name) only exists after the flush, but
+             *         the handle can already receive components.
              */
             Entity spawnEntity(const std::string& name = {}) {
                 if (_commands.recording()) {
@@ -239,23 +241,6 @@ namespace ECS {
                 _commands.record(std::forward<Callable>(callable));
             }
 
-            /** @brief Associates a display name with an entity. */
-            void setEntityName(Entity entity, const std::string& name) {
-                if (!_entities.isAlive(entity)) {
-                    throw std::invalid_argument("ECS::Registry::setEntityName: entity is not alive");
-                }
-                _entityNames[entity.value()] = name;
-            }
-
-            /** @brief Returns an entity's display name, or an empty string. */
-            [[nodiscard]] std::string getEntityName(Entity entity) const {
-                if (!_entities.isAlive(entity)) {
-                    return {};
-                }
-                const auto it = _entityNames.find(entity.value());
-                return it == _entityNames.end() ? std::string{} : it->second;
-            }
-
             /**
              * @brief Constructs or replaces the Resource-typed value held by this registry.
              * @tparam Resource Resource type, distinct from any component's ID space.
@@ -419,9 +404,7 @@ namespace ECS {
             Entity spawnEntityImmediate(const std::string& name) {
                 const Entity entity = _entities.create();
                 _components.addEntity(entity.value());
-                if (!name.empty()) {
-                    _entityNames[entity.value()] = name;
-                }
+                addName(entity, name);
                 return entity;
             }
 
@@ -432,18 +415,21 @@ namespace ECS {
                 return entity;
             }
 
+            void addName(Entity entity, const std::string& name) {
+                if (!name.empty()) {
+                    _components.insert(entity.value(), Name{name});
+                }
+            }
+
             void commitSpawn(Entity entity, const std::string& name) {
                 _entities.commit(entity);
                 _components.addEntity(entity.value());
-                if (!name.empty()) {
-                    _entityNames[entity.value()] = name;
-                }
+                addName(entity, name);
             }
 
             void killEntityImmediate(Entity entity) {
                 _entities.destroy(entity);
                 _components.removeEntity(entity.value());
-                _entityNames.erase(entity.value());
             }
 
             /**
@@ -496,7 +482,6 @@ namespace ECS {
 
             EntityManager _entities;
             ComponentStore _components;
-            std::unordered_map<std::size_t, std::string> _entityNames;
             ResourceStore _resources;
             CommandBuffer _commands;
     };

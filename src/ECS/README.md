@@ -49,7 +49,7 @@ See [Entity.hpp](Core/Entity/Entity.hpp).
 `Entity` is a lightweight handle containing an index, a generation and the
 world ID of the registry that issued it. It can be copied cheaply and passed to
 component operations. Display names are not
-stored in the handle; they are owned by `Registry`.
+stored in the handle: they are an optional `ECS::Name` component.
 
 ```cpp
 ECS::Entity player = world.spawnEntity("Player");
@@ -206,23 +206,24 @@ ECS::Entity player = world.spawnEntity();
 world.killEntity(player);
 ```
 
-An entity may receive an optional display name when it is created:
+An entity may receive an optional display name, stored as an `ECS::Name`
+component ([Name.hpp](Core/Entity/Name.hpp)). `spawnEntity(name)` adds it when
+`name` is not empty; it is then read, renamed or removed like any component:
 
 ```cpp
 ECS::Entity player = world.spawnEntity("Player");
-world.setEntityName(player, "MainPlayer");
-std::string name = world.getEntityName(player);
+world.getComponent<ECS::Name>(player).value = "MainPlayer";
+ECS::Entity tile = world.spawnEntity();          // no Name: costs nothing
 ```
 
-The name is registry metadata. It does not affect the entity ID or component
-storage.
+Most entities (tiles, bullets...) need no name. Tools show every entity with
+`world.inspect().displayName(entity)`: its `Name`, or `"Entity <index>"`.
 
 When `killEntity` is called, the registry:
 
 1. destroys the entity through `EntityManager`;
-2. removes the entity from every registered component pool;
-3. removes its optional name;
-4. returns its ID to the free list.
+2. removes the entity from every registered component pool (its `Name` too);
+3. returns its ID to the free list.
 
 ### Adding components
 

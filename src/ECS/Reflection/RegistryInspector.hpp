@@ -6,6 +6,7 @@
 
 #include "../Core/Entity/Entity.hpp"
 #include "../Core/Entity/EntityList.hpp"
+#include "../Core/Entity/Name.hpp"
 #include "../Registry.hpp"
 #include "Ref.hpp"
 #include "TypeInfo.hpp"
@@ -92,6 +93,25 @@ namespace ECS::reflect {
              */
             [[nodiscard]] EntityList entities() const noexcept {
                 return EntityList(_registry._entities);
+            }
+
+            /**
+             * @brief Label to show for an entity: its Name, or "Entity <index>".
+             *
+             * Most entities have no Name (or an empty one); tools still need
+             * to show them, so this falls back on the index. The fallback is
+             * not a stable identity: indices are reused after a kill and may
+             * differ after a scene is reloaded.
+             * @throws std::invalid_argument if entity is not alive.
+             */
+            [[nodiscard]] std::string displayName(Entity entity) const {
+                _registry.ensureEntityAlive(entity);
+                if (const ComponentStorage<Name>* names = _registry.getIf<Name>()) {
+                    if (names->has(entity.value()) && !names->get(entity.value()).value.empty()) {
+                        return names->get(entity.value()).value;
+                    }
+                }
+                return "Entity " + std::to_string(entity.index());
             }
 
             // --- Components of an entity ----------------------------------------
