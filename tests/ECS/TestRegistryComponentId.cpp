@@ -31,23 +31,12 @@ void test_ensure_pool_creates_once() {
         const auto entity = registry.spawnEntity();
 
         expect(!Ids::hasPoolById(registry, idOf<IdPosition>()));
-        Ids::ensurePoolById(registry, idOf<IdPosition>(), &ECS::ComponentPool<IdPosition>::create);
+        Ids::ensurePoolById(registry, idOf<IdPosition>(), ECS::ComponentOps::of<IdPosition>().makePool);
         expect(Ids::hasPoolById(registry, idOf<IdPosition>()));
 
         registry.addComponent(entity, IdPosition{1, 2});
-        Ids::ensurePoolById(registry, idOf<IdPosition>(), &ECS::ComponentPool<IdPosition>::create);
+        Ids::ensurePoolById(registry, idOf<IdPosition>(), ECS::ComponentOps::of<IdPosition>().makePool);
         expect(registry.getComponent<IdPosition>(entity).x == 1_i);
-    };
-}
-
-void test_ensure_pool_rejects_ids_beyond_signature() {
-    "ensurePoolById rejects an id that does not fit in a Signature"_test = [] {
-        ECS::Registry registry;
-
-        expect(throws<std::out_of_range>([&] {
-            Ids::ensurePoolById(registry, static_cast<ECS::ComponentId>(ECS::MaxComponentTypes),
-                                &ECS::ComponentPool<IdPosition>::create);
-        }));
     };
 }
 
@@ -60,7 +49,7 @@ void test_has_components_by_id() {
         expect(Ids::hasComponentsById(registry, entity, {idOf<IdPosition>()}));
         expect(!Ids::hasComponentsById(registry, entity, {idOf<IdPosition>(), idOf<IdVelocity>()}));
         expect(Ids::hasComponentsById(registry, entity, {}));
-        expect(!Ids::hasComponentsById(registry, entity, {static_cast<ECS::ComponentId>(ECS::MaxComponentTypes)}));
+        expect(!Ids::hasComponentsById(registry, entity, {ECS::ComponentId{100000}}));   // never registered
 
         registry.killEntity(entity);
         expect(!Ids::hasComponentsById(registry, entity, {idOf<IdPosition>()}));
@@ -74,22 +63,22 @@ void test_get_component_by_id() {
         const auto other = registry.spawnEntity();
         registry.addComponent(entity, IdPosition{3, 4});
 
-        expect(Ids::getComponentById(registry, entity, idOf<IdPosition>()) == &registry.getComponent<IdPosition>(entity));
-        expect(Ids::getComponentById(registry, other, idOf<IdPosition>()) == nullptr);   // no component
-        expect(Ids::getComponentById(registry, entity, idOf<IdVelocity>()) == nullptr);  // no pool
+        expect(Ids::getComponentById<IdPosition>(registry, entity) == &registry.getComponent<IdPosition>(entity));
+        expect(Ids::getComponentById<IdPosition>(registry, other) == nullptr);   // no component
+        expect(Ids::getComponentById<IdVelocity>(registry, entity) == nullptr);  // no pool
 
         registry.killEntity(entity);
-        expect(throws<std::invalid_argument>([&] { (void)Ids::getComponentById(registry, entity, idOf<IdPosition>()); }));
+        expect(throws<std::invalid_argument>([&] { (void)Ids::getComponentById<IdPosition>(registry, entity); }));
     };
 }
 
 void test_add_default_component_immediate() {
-    "addDefaultComponentById constructs a default component and updates the Signature"_test = [] {
+    "addDefaultComponentById constructs a default component and updates the signature row"_test = [] {
         ECS::Registry registry;
         const auto entity = registry.spawnEntity();
         registry.registerComponent<IdPosition>();
 
-        void* added = Ids::addDefaultComponentById(registry, entity, idOf<IdPosition>());
+        void* added = Ids::addDefaultComponentById<IdPosition>(registry, entity);
 
         expect(registry.hasComponents<IdPosition>(entity));
         expect(added == &registry.getComponent<IdPosition>(entity));
@@ -103,7 +92,7 @@ void test_add_default_component_replaces() {
         const auto entity = registry.spawnEntity();
         registry.addComponent(entity, IdPosition{1, 1});
 
-        (void)Ids::addDefaultComponentById(registry, entity, idOf<IdPosition>());
+        (void)Ids::addDefaultComponentById<IdPosition>(registry, entity);
 
         expect(registry.getComponent<IdPosition>(entity).x == 7_i);
         expect(registry.getComponents<IdPosition>().size() == 1_ul);
@@ -116,12 +105,12 @@ void test_add_default_component_errors() {
         const auto entity = registry.spawnEntity();
         registry.registerComponent<IdNoDefault>();
 
-        expect(throws<std::out_of_range>([&] { (void)Ids::addDefaultComponentById(registry, entity, idOf<IdVelocity>()); }));
-        expect(Ids::addDefaultComponentById(registry, entity, idOf<IdNoDefault>()) == nullptr);
+        expect(throws<std::out_of_range>([&] { (void)Ids::addDefaultComponentById<IdVelocity>(registry, entity); }));
+        expect(Ids::addDefaultComponentById<IdNoDefault>(registry, entity) == nullptr);
         expect(!registry.hasComponents<IdNoDefault>(entity));
 
         registry.killEntity(entity);
-        expect(throws<std::invalid_argument>([&] { (void)Ids::addDefaultComponentById(registry, entity, idOf<IdNoDefault>()); }));
+        expect(throws<std::invalid_argument>([&] { (void)Ids::addDefaultComponentById<IdNoDefault>(registry, entity); }));
     };
 }
 
@@ -170,7 +159,7 @@ void test_deferred_add_default_component() {
         bool visibleDuringDefer = true;
 
         registry.runDeferred([&] {
-            auto* staged = static_cast<IdPosition*>(Ids::addDefaultComponentById(registry, entity, idOf<IdPosition>()));
+            auto* staged = static_cast<IdPosition*>(Ids::addDefaultComponentById<IdPosition>(registry, entity));
             staged->x = 42;
             visibleDuringDefer = registry.hasComponents<IdPosition>(entity);
         });
@@ -189,8 +178,8 @@ void test_deferred_add_on_pending_and_killed_entities() {
 
         registry.runDeferred([&] {
             spawned = registry.spawnEntity();
-            (void)Ids::addDefaultComponentById(registry, spawned, idOf<IdPosition>());
-            (void)Ids::addDefaultComponentById(registry, doomed, idOf<IdPosition>());
+            (void)Ids::addDefaultComponentById<IdPosition>(registry, spawned);
+            (void)Ids::addDefaultComponentById<IdPosition>(registry, doomed);
             registry.killEntity(doomed);
         });
 
@@ -225,7 +214,6 @@ void test_deferred_remove_component_by_id() {
 
 void run_registry_component_id_tests() {
     test_ensure_pool_creates_once();
-    test_ensure_pool_rejects_ids_beyond_signature();
     test_has_components_by_id();
     test_get_component_by_id();
     test_add_default_component_immediate();

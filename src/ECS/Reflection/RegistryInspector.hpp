@@ -90,7 +90,7 @@ namespace ECS::reflect {
                 std::vector<Ref> components;
                 for (const ComponentId id : _registry.componentIdsOf(entity)) {
                     if (const detail::ComponentInfo* info = detail::ComponentCatalog::instance().find(id)) {
-                        components.emplace_back(*info->type, _registry.getComponentById(entity, id));
+                        components.emplace_back(*info->type, _registry.getComponentById(entity, id, info->ops));
                     }
                 }
                 return components;
@@ -106,7 +106,7 @@ namespace ECS::reflect {
                 if (!info) {
                     return {};
                 }
-                void* data = _registry.getComponentById(entity, info->id);
+                void* data = _registry.getComponentById(entity, info->id, info->ops);
                 return data ? Ref(type, data) : Ref{};
             }
 
@@ -128,15 +128,14 @@ namespace ECS::reflect {
              * @return An invalid Ref when type is not a component type or has no
              *         default constructor.
              * @throws std::invalid_argument if entity is not alive.
-             * @throws std::out_of_range when the type's ComponentId does not fit in a Signature.
              */
             Ref add(Entity entity, const TypeInfo& type) {
                 const detail::ComponentInfo* info = detail::ComponentCatalog::instance().find(type);
                 if (!info) {
                     return {};
                 }
-                _registry.ensurePoolById(info->id, info->makePool);
-                void* data = _registry.addDefaultComponentById(entity, info->id);
+                _registry.ensurePoolById(info->id, info->ops.makePool);
+                void* data = _registry.addDefaultComponentById(entity, info->id, info->ops);
                 return data ? Ref(type, data) : Ref{};
             }
 

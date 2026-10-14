@@ -173,9 +173,13 @@ Registry
 ```
 
 Typed access remains available through the registry, while type erasure is used
-for operations shared by every pool, such as removing a destroyed entity, and
-for the ComponentId-based access used by the reflection layer (`getRaw`,
-`makeDefault`, `insertMoved`).
+for operations shared by every pool, such as removing a destroyed entity.
+
+The reflection layer also needs type-specific operations (read a component,
+create a default one, move it into a pool) without knowing the type. These are
+not virtual functions of `IComponentPool`, which would be compiled for every
+component type: they live in `ComponentOps`, a set of function pointers built
+by `ComponentOps::of<T>()`, which is only compiled for reflected types.
 
 ## Registry
 
@@ -261,6 +265,21 @@ world.inspect().get(player, *ECS::reflect::RegistryInspector::findType("Health")
 core does not depend on it. Both APIs share one implementation: private,
 `ComponentId`-based methods of the Registry (`…ById`), used by the typed
 `hasComponents` / `removeComponent` and by `RegistryInspector`, its friend.
+
+### Number of component types
+
+There is no fixed limit on how many component types can be registered.
+
+Each registry keeps a row of membership bits per entity, one bit per
+component type, to answer `hasComponents` quickly. Rows start 64 types wide.
+When a new type does not fit, the registry doubles the width of every row.
+
+Widening copies the membership bits only. Component data does not move, so
+references and pointers to components stay valid.
+
+Widening costs one copy of every entity's bits. To keep it out of gameplay,
+register component types up front with `registerComponent<T>()`, for example
+while loading.
 
 ## Systems
 

@@ -95,7 +95,7 @@ void test_reflected_types_are_registered_before_main() {
         expect((info != nullptr) >> fatal);
         expect(info->type == TypeRegistry::instance().find("CrHealth"));
         expect(info->id == ECS::componentId<CrHealth>());
-        expect(info->makePool != nullptr);
+        expect(info->ops.makePool != nullptr && info->ops.insertMoved != nullptr);
         expect(listed(*info->type));
         expect(ComponentCatalog::instance().find(info->id) == info);
         expect(RegistryInspector::errors().empty());

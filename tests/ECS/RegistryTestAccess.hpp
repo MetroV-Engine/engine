@@ -20,11 +20,15 @@ namespace ECS::TestAccess {
         static bool hasComponentsById(const Registry& registry, Entity entity, std::initializer_list<ComponentId> ids) {
             return registry.hasComponentsById(entity, ids);
         }
-        static void* getComponentById(Registry& registry, Entity entity, ComponentId id) {
-            return registry.getComponentById(entity, id);
+        /** @brief getComponentById with Component's ComponentId and operations. */
+        template<typename Component>
+        static void* getComponentById(Registry& registry, Entity entity) {
+            return registry.getComponentById(entity, componentId<Component>(), ComponentOps::of<Component>());
         }
-        static void* addDefaultComponentById(Registry& registry, Entity entity, ComponentId id) {
-            return registry.addDefaultComponentById(entity, id);
+        /** @brief addDefaultComponentById with Component's ComponentId and operations. */
+        template<typename Component>
+        static void* addDefaultComponentById(Registry& registry, Entity entity) {
+            return registry.addDefaultComponentById(entity, componentId<Component>(), ComponentOps::of<Component>());
         }
         static void removeComponentById(Registry& registry, Entity entity, ComponentId id) {
             registry.removeComponentById(entity, id);

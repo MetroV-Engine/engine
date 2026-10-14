@@ -636,31 +636,118 @@ namespace {
         };
     }
 
-    // Must stay the last test run: componentId<T>() is process-wide, so this
-    // consumes every remaining ID and any type first used afterwards would be
-    // past the Signature limit.
-    void test_component_types_beyond_signature_limit_are_rejected() {
-        "component types beyond the signature limit are rejected before insertion"_test = [] {
-            exhaust_component_ids(std::make_index_sequence<ECS::MaxComponentTypes>{});
+    // componentId<T>() is process-wide. Each test below first uses up 256
+    // ids with Filler types (a no-op once done), which guarantees BeyondLimit
+    // has an id of 256 or more: past what the old fixed-size signature held.
+    void push_component_ids_past_256() {
+        exhaust_component_ids(std::make_index_sequence<256>{});
+    }
+
+    void test_more_than_256_component_types_can_be_used() {
+        "more than 256 component types can be registered and used"_test = [] {
+            push_component_ids_past_256();
+            expect(ECS::componentId<BeyondLimit>() >= ECS::ComponentId{256});
 
             ECS::Registry registry;
             const auto entity = registry.spawnEntity();
 
-            expect(throws<std::out_of_range>([&] {
-                registry.registerComponent<BeyondLimit>();
-            }));
-            expect(throws<std::out_of_range>([&] {
-                registry.addComponent(entity, BeyondLimit{1});
-            }));
-            expect(throws<std::out_of_range>([&] {
-                registry.emplaceComponent<BeyondLimit>(entity, 1);
-            }));
+            expect(nothrow([&] { registry.registerComponent<BeyondLimit>(); }));
+            expect(registry.getIf<BeyondLimit>() != nullptr);
+            expect(!registry.hasComponents<BeyondLimit>(entity));
 
-            expect(registry.getIf<BeyondLimit>() == nullptr);
-            expect(!registry.hasComponents<BeyondLimit>(entity));
-            expect(!registry.hasComponents<BeyondLimit>(entity));
+            registry.addComponent(entity, BeyondLimit{7});
+            expect(registry.hasComponents<BeyondLimit>(entity));
+            expect(registry.getComponent<BeyondLimit>(entity).value == 7);
+
             registry.removeComponent<BeyondLimit>(entity);
             expect(!registry.hasComponents<BeyondLimit>(entity));
+        };
+    }
+
+    void test_growing_signatures_keeps_existing_components() {
+        "registering a high-id type keeps every entity's components"_test = [] {
+            push_component_ids_past_256();
+            // The registry must start narrower than BeyondLimit needs.
+            expect(ECS::componentId<Position>() < ECS::ComponentId{64});
+            expect(ECS::componentId<Velocity>() < ECS::ComponentId{64});
+
+            ECS::Registry registry;
+            const auto first = registry.spawnEntity();
+            const auto second = registry.spawnEntity();
+            registry.emplaceComponent<Position>(first, 1, 2);
+            registry.emplaceComponent<Velocity>(second, 3, 4);
+            const Position* before = &registry.getComponent<Position>(first);
+
+            // First use of BeyondLimit in this registry: signatures widen here.
+            registry.emplaceComponent<BeyondLimit>(second, 9);
+
+            expect(registry.hasComponents<Position>(first));
+            expect(!registry.hasComponents<Velocity>(first));
+            expect(!registry.hasComponents<BeyondLimit>(first));
+            expect(registry.hasComponents<Velocity, BeyondLimit>(second));
+            expect(!registry.hasComponents<Position>(second));
+
+            expect(&registry.getComponent<Position>(first) == before);
+            expect(before->x == 1);
+            expect(before->y == 2);
+            expect(registry.getComponent<BeyondLimit>(second).value == 9);
+        };
+    }
+
+    void test_recycled_entity_owns_no_high_id_component() {
+        "a recycled entity owns no high-id component"_test = [] {
+            push_component_ids_past_256();
+
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.emplaceComponent<Position>(entity, 1, 2);
+            registry.emplaceComponent<BeyondLimit>(entity, 3);
+            registry.killEntity(entity);
+
+            const auto recycled = registry.spawnEntity();
+            expect(recycled.index() == entity.index());
+            expect(!registry.hasComponents<Position>(recycled));
+            expect(!registry.hasComponents<BeyondLimit>(recycled));
+        };
+    }
+
+    void test_high_id_component_added_during_deferred_update() {
+        "a high-id component added during a deferred update is applied"_test = [] {
+            push_component_ids_past_256();
+
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.emplaceComponent<Position>(entity, 1, 2);
+
+            registry.runDeferred([&] {
+                registry.emplaceComponent<BeyondLimit>(entity, 5);
+                expect(!registry.hasComponents<BeyondLimit>(entity));
+                expect(registry.hasComponents<Position>(entity));
+            });
+
+            expect(registry.hasComponents<Position, BeyondLimit>(entity));
+            expect(registry.getComponent<BeyondLimit>(entity).value == 5);
+        };
+    }
+
+    void test_type_registered_in_another_registry_is_absent() {
+        "a type registered in another registry is simply absent"_test = [] {
+            push_component_ids_past_256();
+            // narrow must stay narrower than BeyondLimit needs.
+            expect(ECS::componentId<Position>() < ECS::ComponentId{64});
+
+            ECS::Registry wide;
+            ECS::Registry narrow;
+            wide.registerComponent<BeyondLimit>();
+
+            const auto entity = narrow.spawnEntity();
+            narrow.emplaceComponent<Position>(entity, 1, 2);
+
+            expect(narrow.getIf<BeyondLimit>() == nullptr);
+            expect(!narrow.hasComponents<BeyondLimit>(entity));
+            expect(!narrow.hasComponents<Position, BeyondLimit>(entity));
+            narrow.removeComponent<BeyondLimit>(entity);
+            expect(narrow.hasComponents<Position>(entity));
         };
     }
 }
@@ -716,5 +803,9 @@ void run_registry_tests() {
     test_set_entity_name_rejects_dead_entity();
     test_set_entity_name_invalidates_cache();
     test_get_entity_name_returns_empty_for_unknown_or_dead_entity();
-    test_component_types_beyond_signature_limit_are_rejected();  // keep last
+    test_more_than_256_component_types_can_be_used();
+    test_growing_signatures_keeps_existing_components();
+    test_recycled_entity_owns_no_high_id_component();
+    test_high_id_component_added_during_deferred_update();
+    test_type_registered_in_another_registry_is_absent();
 }

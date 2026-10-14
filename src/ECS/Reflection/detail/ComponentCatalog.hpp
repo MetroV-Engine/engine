@@ -35,8 +35,8 @@ namespace ECS::reflect::detail {
     struct ComponentInfo {
         const TypeInfo* type = nullptr;
         ComponentId id = 0;
-        /** @brief Creates the type's pool in a Registry that has none yet. */
-        PoolFactory makePool = nullptr;
+        /** @brief Type-specific operations (pool creation, access, insertion), compiled for this type only. */
+        ComponentOps ops;
     };
 
     /**
@@ -78,7 +78,7 @@ namespace ECS::reflect::detail {
                     return *existing;
                 }
                 auto info = std::make_unique<ComponentInfo>(
-                    ComponentInfo{&type, componentId<T>(), &ComponentPool<T>::create});
+                    ComponentInfo{&type, componentId<T>(), ComponentOps::of<T>()});
                 ComponentInfo& ref = *info;
                 _byComponentId.emplace(ref.id, &ref);
                 _ordered.push_back(&ref);
