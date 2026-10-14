@@ -12,9 +12,14 @@
 */
 
 #include <iostream>
+#include <SDL3/SDL.h>
+#include <imgui.h>
 
 int main()
 {
-    std::cout << "Hello, World!" << std::endl;
-    std::cout << "This is a C++ project." << std::endl;
+    if (!SDL_Init(SDL_INIT_VIDEO))
+        return 1;
+    printf("SDL initialized successfully\n");
+    ImGui::CreateContext();
+    printf("ImGui context created successfully\n");
 }
