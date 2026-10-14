@@ -6,6 +6,7 @@ set(ECS_TEST_FILES
 	ECS/TestComponentId.cpp
 	ECS/TestComponentStorage.cpp
 	ECS/TestComponentPool.cpp
+	ECS/Core/TestCommandBuffer.cpp
 	ECS/Core/Resource/TestResourceId.cpp
 	ECS/Core/Resource/TestResourceHolder.cpp
 	ECS/Core/Resource/TestResourceStore.cpp
@@ -14,9 +15,7 @@ set(ECS_TEST_FILES
 	ECS/TestZipperDriver.cpp
 	ECS/TestView.cpp
 	ECS/TestRegistry.cpp
-	ECS/TestDeferredMutations.cpp
 	ECS/TestSystems.cpp
-	ECS/TestRegistryComponentId.cpp
 	ECS/Reflection/TestDescriptor.cpp
 	ECS/Reflection/TestTypeRegistry.cpp
 	ECS/Reflection/TestContainers.cpp

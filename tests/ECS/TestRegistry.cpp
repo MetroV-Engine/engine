@@ -1,5 +1,6 @@
 #include <boost/ut.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
@@ -7,7 +8,9 @@
 #include <utility>
 #include <vector>
 
+#include "ECS/ComponentPool.hpp"
 #include "ECS/Registry.hpp"
+#include "RegistryTestAccess.hpp"
 
 using namespace boost::ut;
 
@@ -19,6 +22,23 @@ namespace {
     struct Settings { std::string name; };
     struct Unregistered { int value; };
     struct BeyondLimit { int value; };
+
+    bool contains(const std::vector<ECS::Entity>& entities, ECS::Entity entity) {
+        return std::find(entities.begin(), entities.end(), entity) != entities.end();
+    }
+
+    // Types and helpers of the ComponentId-based core tests.
+    using Ids = ECS::TestAccess::RegistryIdAccess;
+
+    struct IdPosition { int x = 7; int y = 8; };
+    struct IdVelocity { int dx = 0; };
+    struct IdNoDefault {
+        explicit IdNoDefault(int v) : value(v) {}
+        int value;
+    };
+
+    template<typename T>
+    ECS::ComponentId idOf() { return ECS::componentId<T>(); }
     template<std::size_t N> struct Filler { int value; };
 
     template<std::size_t... Indices>
@@ -857,6 +877,529 @@ namespace {
             expect(throws<std::out_of_range>([&] { (void)registry.getResource<Settings>(); }));
         };
     }
+
+    // ------------------------------------------------------------------------
+    // Deferred mode (runDeferred)
+    // ------------------------------------------------------------------------
+
+    // --- Group A: visibility timing while runDeferred() is active ---
+
+    void test_spawn_during_run_deferred_is_not_visible_until_flush() {
+        "spawnEntity during runDeferred is not visible until flush"_test = [] {
+            ECS::Registry registry;
+            ECS::Entity spawned{};
+            bool visibleDuringDefer = true;
+
+            registry.runDeferred([&] {
+                spawned = registry.spawnEntity();
+                visibleDuringDefer = contains(registry.getAllEntities(), spawned);
+            });
+
+            expect(!visibleDuringDefer);
+            expect(contains(registry.getAllEntities(), spawned));
+        };
+    }
+
+    void test_add_component_during_run_deferred_is_not_visible_until_flush() {
+        "addComponent during runDeferred is not visible until flush"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+            bool hasDuringDefer = false;
+
+            registry.runDeferred([&] {
+                registry.addComponent(entity, Position{1, 2});
+                hasDuringDefer = registry.hasComponents<Position>(entity);
+            });
+
+            expect(!hasDuringDefer);
+            expect(registry.hasComponents<Position>(entity));
+        };
+    }
+
+    void test_remove_component_during_run_deferred_is_not_visible_until_flush() {
+        "removeComponent during runDeferred is not visible until flush"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+            registry.addComponent(entity, Position{1, 2});
+            bool hasDuringDefer = false;
+
+            registry.runDeferred([&] {
+                registry.removeComponent<Position>(entity);
+                hasDuringDefer = registry.hasComponents<Position>(entity);
+            });
+
+            expect(hasDuringDefer);
+            expect(!registry.hasComponents<Position>(entity));
+        };
+    }
+
+    void test_kill_during_run_deferred_is_not_visible_until_flush() {
+        "killEntity during runDeferred is not visible until flush"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+            bool aliveDuringDefer = false;
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                aliveDuringDefer = contains(registry.getAllEntities(), entity);
+            });
+
+            expect(aliveDuringDefer);
+            expect(!contains(registry.getAllEntities(), entity));
+        };
+    }
+
+    void test_later_step_in_same_run_deferred_call_sees_pre_mutation_state() {
+        "a later step in the same runDeferred call still sees pre-mutation state"_test = [] {
+            ECS::Registry registry;
+            ECS::Entity spawned{};
+            bool secondStepSawIt = true;
+
+            registry.runDeferred([&] {
+                spawned = registry.spawnEntity();
+                registry.addComponent(spawned, Position{1, 1});
+                secondStepSawIt = registry.hasComponents<Position>(spawned);
+            });
+
+            expect(!secondStepSawIt);
+            expect(registry.hasComponents<Position>(spawned));
+        };
+    }
+
+    // --- Group A': end-state contracts once flush has happened ---
+
+    void test_spawn_then_add_component_applies_in_order_after_flush() {
+        "spawn then addComponent on the same entity applies in order after flush"_test = [] {
+            ECS::Registry registry;
+            ECS::Entity spawned{};
+
+            registry.runDeferred([&] {
+                spawned = registry.spawnEntity();
+                registry.addComponent(spawned, Position{7, 9});
+            });
+
+            expect(registry.hasComponents<Position>(spawned));
+            expect(registry.getComponent<Position>(spawned).x == 7);
+            expect(registry.getComponent<Position>(spawned).y == 9);
+        };
+    }
+
+    void test_mutations_outside_run_deferred_remain_immediate() {
+        "mutations outside runDeferred remain immediate"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+            expect(contains(registry.getAllEntities(), entity));
+
+            registry.addComponent(entity, Position{3, 4});
+            expect(registry.hasComponents<Position>(entity));
+
+            registry.removeComponent<Position>(entity);
+            expect(!registry.hasComponents<Position>(entity));
+
+            registry.killEntity(entity);
+            expect(!contains(registry.getAllEntities(), entity));
+        };
+    }
+
+    void test_flushed_queue_does_not_replay_on_next_run_deferred() {
+        "queued commands do not replay on a later runDeferred call"_test = [] {
+            ECS::Registry registry;
+            int callCount = 0;
+
+            auto step = [&] {
+                if (callCount == 0) {
+                    registry.spawnEntity();
+                }
+                ++callCount;
+            };
+
+            registry.runDeferred(step);
+            registry.runDeferred(step);
+
+            expect(registry.getAllEntities().size() == std::size_t{1});
+        };
+    }
+
+    void test_add_component_reference_during_defer_reflects_after_flush() {
+        "addComponent's returned reference during deferral is usable and reflects after flush"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+
+            registry.runDeferred([&] {
+                auto& position = registry.addComponent(entity, Position{1, 1});
+                position.x = 99;
+            });
+
+            expect(registry.getComponent<Position>(entity).x == 99);
+        };
+    }
+
+    void test_deferring_stops_and_flushes_even_when_callable_throws() {
+        "runDeferred turns off deferred mode and flushes even if callable throws"_test = [] {
+            ECS::Registry registry;
+            ECS::Entity spawned{};
+
+            expect(throws<std::runtime_error>([&] {
+                registry.runDeferred([&] {
+                    spawned = registry.spawnEntity();
+                    throw std::runtime_error("boom");
+                });
+            }));
+
+            expect(contains(registry.getAllEntities(), spawned));
+
+            auto entity = registry.spawnEntity();
+            registry.addComponent(entity, Position{5, 6});
+            expect(registry.hasComponents<Position>(entity));
+        };
+    }
+
+    // --- Group B: structural mutation must not corrupt an active iteration ---
+
+    void test_remove_component_mid_iteration_does_not_corrupt_view() {
+        "removing a component mid-iteration does not corrupt the view"_test = [] {
+            ECS::Registry registry;
+            std::vector<ECS::Entity> entities;
+            for (int i = 0; i < 5; ++i) {
+                auto entity = registry.spawnEntity();
+                registry.addComponent(entity, Position{i, i});
+                entities.push_back(entity);
+            }
+
+            std::vector<int> seenX;
+            registry.runDeferred([&] {
+                for (auto [entity, position] : registry.view<Position>()) {
+                    seenX.push_back(position.x);
+                    if (entity == entities[1]) {
+                        registry.removeComponent<Position>(entities[0]);
+                    }
+                }
+            });
+
+            const std::vector<int> expected{0, 1, 2, 3, 4};
+            expect(seenX == expected);
+        };
+    }
+
+    void test_kill_entity_mid_iteration_does_not_corrupt_view() {
+        "killing an entity mid-iteration does not corrupt the view"_test = [] {
+            ECS::Registry registry;
+            std::vector<ECS::Entity> entities;
+            for (int i = 0; i < 5; ++i) {
+                auto entity = registry.spawnEntity();
+                registry.addComponent(entity, Position{i, i});
+                entities.push_back(entity);
+            }
+
+            std::vector<int> seenX;
+            registry.runDeferred([&] {
+                for (auto [entity, position] : registry.view<Position>()) {
+                    seenX.push_back(position.x);
+                    if (entity == entities[1]) {
+                        registry.killEntity(entities[0]);
+                    }
+                }
+            });
+
+            const std::vector<int> expected{0, 1, 2, 3, 4};
+            expect(seenX == expected);
+        };
+    }
+
+    void test_add_component_mid_iteration_does_not_corrupt_view() {
+        "adding a component mid-iteration does not corrupt the view"_test = [] {
+            ECS::Registry registry;
+            std::vector<ECS::Entity> entities;
+            for (int i = 0; i < 5; ++i) {
+                auto entity = registry.spawnEntity();
+                registry.addComponent(entity, Position{i, i});
+                entities.push_back(entity);
+            }
+            auto extra = registry.spawnEntity();
+
+            std::vector<int> seenX;
+            registry.runDeferred([&] {
+                for (auto [entity, position] : registry.view<Position>()) {
+                    seenX.push_back(position.x);
+                    if (entity == entities[1]) {
+                        registry.addComponent(extra, Position{42, 42});
+                    }
+                }
+            });
+
+            const std::vector<int> expected{0, 1, 2, 3, 4};
+            expect(seenX == expected);
+            expect(registry.hasComponents<Position>(extra));
+        };
+    }
+    // --- Group C: dead entities inside a deferred batch are no-ops ---
+
+    void test_double_kill_in_same_deferred_batch_does_not_throw() {
+        "killing the same entity twice in one deferred batch does not throw"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                registry.killEntity(entity);
+            });
+
+            expect(!contains(registry.getAllEntities(), entity));
+        };
+    }
+
+    void test_add_component_after_kill_in_same_deferred_batch_is_a_no_op() {
+        "addComponent after killEntity on the same entity in one deferred batch is a no-op"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                registry.addComponent(entity, Position{1, 2});
+            });
+
+            auto reused = registry.spawnEntity();
+            expect(!registry.hasComponents<Position>(reused));
+        };
+    }
+
+    void test_emplace_component_after_kill_in_same_deferred_batch_is_a_no_op() {
+        "emplaceComponent after killEntity on the same entity in one deferred batch is a no-op"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                registry.emplaceComponent<Position>(entity, 1, 2);
+            });
+
+            auto reused = registry.spawnEntity();
+            expect(!registry.hasComponents<Position>(reused));
+        };
+    }
+
+    void test_remove_component_after_kill_in_same_deferred_batch_is_a_no_op() {
+        "removeComponent after killEntity on the same entity in one deferred batch does not throw"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+            registry.addComponent(entity, Position{1, 2});
+
+            registry.runDeferred([&] {
+                registry.killEntity(entity);
+                registry.removeComponent<Position>(entity);
+            });
+
+            expect(!contains(registry.getAllEntities(), entity));
+        };
+    }
+    void test_nested_run_deferred_applies_at_the_end_of_the_outer_call() {
+        "a nested runDeferred applies its mutations when the outer call ends"_test = [] {
+            ECS::Registry registry;
+            auto entity = registry.spawnEntity();
+            bool visibleAfterInner = true;
+
+            registry.runDeferred([&] {
+                registry.runDeferred([&] {
+                    registry.addComponent(entity, Position{1, 2});
+                });
+                visibleAfterInner = registry.hasComponents<Position>(entity);
+            });
+
+            expect(!visibleAfterInner);
+            expect(registry.hasComponents<Position>(entity));
+        };
+    }
+
+    // ------------------------------------------------------------------------
+    // ComponentId-based core: the private, type-erased access used by
+    // reflect::RegistryInspector (a friend), reached here through
+    // RegistryTestAccess. The typed has/remove API forwards to it.
+    // ------------------------------------------------------------------------
+
+    void test_ensure_pool_creates_once() {
+        "ensurePoolById creates the pool once and keeps an existing one"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+
+            expect(!Ids::hasPoolById(registry, idOf<IdPosition>()));
+            Ids::ensurePoolById(registry, idOf<IdPosition>(), ECS::ComponentOps::of<IdPosition>().makePool);
+            expect(Ids::hasPoolById(registry, idOf<IdPosition>()));
+
+            registry.addComponent(entity, IdPosition{1, 2});
+            Ids::ensurePoolById(registry, idOf<IdPosition>(), ECS::ComponentOps::of<IdPosition>().makePool);
+            expect(registry.getComponent<IdPosition>(entity).x == 1_i);
+        };
+    }
+
+    void test_has_components_by_id() {
+        "hasComponentsById agrees with the typed overload"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.addComponent(entity, IdPosition{});
+
+            expect(Ids::hasComponentsById(registry, entity, {idOf<IdPosition>()}));
+            expect(!Ids::hasComponentsById(registry, entity, {idOf<IdPosition>(), idOf<IdVelocity>()}));
+            expect(Ids::hasComponentsById(registry, entity, {}));
+            expect(!Ids::hasComponentsById(registry, entity, {ECS::ComponentId{100000}}));   // never registered
+
+            registry.killEntity(entity);
+            expect(!Ids::hasComponentsById(registry, entity, {idOf<IdPosition>()}));
+        };
+    }
+
+    void test_get_component_by_id() {
+        "getComponentById returns the component address or nullptr"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            const auto other = registry.spawnEntity();
+            registry.addComponent(entity, IdPosition{3, 4});
+
+            expect(Ids::getComponentById<IdPosition>(registry, entity) == &registry.getComponent<IdPosition>(entity));
+            expect(Ids::getComponentById<IdPosition>(registry, other) == nullptr);   // no component
+            expect(Ids::getComponentById<IdVelocity>(registry, entity) == nullptr);  // no pool
+
+            registry.killEntity(entity);
+            expect(throws<std::invalid_argument>([&] { (void)Ids::getComponentById<IdPosition>(registry, entity); }));
+        };
+    }
+
+    void test_add_default_component_immediate() {
+        "addDefaultComponentById constructs a default component and updates the signature row"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.registerComponent<IdPosition>();
+
+            void* added = Ids::addDefaultComponentById<IdPosition>(registry, entity);
+
+            expect(registry.hasComponents<IdPosition>(entity));
+            expect(added == &registry.getComponent<IdPosition>(entity));
+            expect(registry.getComponent<IdPosition>(entity).x == 7_i);
+        };
+    }
+
+    void test_add_default_component_replaces() {
+        "addDefaultComponentById replaces an existing component with a default one"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.addComponent(entity, IdPosition{1, 1});
+
+            (void)Ids::addDefaultComponentById<IdPosition>(registry, entity);
+
+            expect(registry.getComponent<IdPosition>(entity).x == 7_i);
+            expect(registry.getComponents<IdPosition>().size() == 1_ul);
+        };
+    }
+
+    void test_add_default_component_errors() {
+        "addDefaultComponentById needs a live entity, a pool and a default constructor"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.registerComponent<IdNoDefault>();
+
+            expect(throws<std::out_of_range>([&] { (void)Ids::addDefaultComponentById<IdVelocity>(registry, entity); }));
+            expect(Ids::addDefaultComponentById<IdNoDefault>(registry, entity) == nullptr);
+            expect(!registry.hasComponents<IdNoDefault>(entity));
+
+            registry.killEntity(entity);
+            expect(throws<std::invalid_argument>([&] { (void)Ids::addDefaultComponentById<IdNoDefault>(registry, entity); }));
+        };
+    }
+
+    void test_remove_component_by_id() {
+        "removeComponentById removes the component and fires onRemove"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            int removedX = 0;
+            registry.onRemove<IdPosition>([&](IdPosition& position) { removedX = position.x; });
+            registry.addComponent(entity, IdPosition{5, 6});
+
+            Ids::removeComponentById(registry, entity, idOf<IdPosition>());
+
+            expect(!registry.hasComponents<IdPosition>(entity));
+            expect(removedX == 5_i);
+            Ids::removeComponentById(registry, entity, idOf<IdVelocity>());   // no pool: no-op
+
+            registry.killEntity(entity);
+            expect(throws<std::invalid_argument>([&] { Ids::removeComponentById(registry, entity, idOf<IdPosition>()); }));
+        };
+    }
+
+    void test_component_ids_of() {
+        "componentIdsOf lists the owned components in ascending order"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.addComponent(entity, IdVelocity{});
+            registry.addComponent(entity, IdPosition{});
+
+            std::vector<ECS::ComponentId> expected{idOf<IdPosition>(), idOf<IdVelocity>()};
+            if (expected[0] > expected[1]) {
+                std::swap(expected[0], expected[1]);
+            }
+            expect(Ids::componentIdsOf(registry, entity) == expected);
+
+            registry.killEntity(entity);
+            expect(Ids::componentIdsOf(registry, entity).empty());
+        };
+    }
+
+    void test_deferred_add_default_component() {
+        "a deferred addDefaultComponentById returns the staged value, applied at flush"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.registerComponent<IdPosition>();
+            bool visibleDuringDefer = true;
+
+            registry.runDeferred([&] {
+                auto* staged = static_cast<IdPosition*>(Ids::addDefaultComponentById<IdPosition>(registry, entity));
+                staged->x = 42;
+                visibleDuringDefer = registry.hasComponents<IdPosition>(entity);
+            });
+
+            expect(!visibleDuringDefer);
+            expect(registry.getComponent<IdPosition>(entity).x == 42_i);
+        };
+    }
+
+    void test_deferred_add_on_pending_and_killed_entities() {
+        "a deferred addDefaultComponentById follows spawns and kills of the same batch"_test = [] {
+            ECS::Registry registry;
+            registry.registerComponent<IdPosition>();
+            const auto doomed = registry.spawnEntity();
+            ECS::Entity spawned{};
+
+            registry.runDeferred([&] {
+                spawned = registry.spawnEntity();
+                (void)Ids::addDefaultComponentById<IdPosition>(registry, spawned);
+                (void)Ids::addDefaultComponentById<IdPosition>(registry, doomed);
+                registry.killEntity(doomed);
+            });
+
+            expect(registry.hasComponents<IdPosition>(spawned));
+            expect(registry.getComponents<IdPosition>().size() == 1_ul);
+        };
+    }
+
+    void test_deferred_remove_component_by_id() {
+        "a deferred removeComponentById applies at flush, unless the entity died"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            const auto doomed = registry.spawnEntity();
+            registry.addComponent(entity, IdPosition{});
+            registry.addComponent(doomed, IdPosition{});
+            bool hasDuringDefer = false;
+
+            registry.runDeferred([&] {
+                Ids::removeComponentById(registry, entity, idOf<IdPosition>());
+                hasDuringDefer = registry.hasComponents<IdPosition>(entity);
+                registry.killEntity(doomed);
+                Ids::removeComponentById(registry, doomed, idOf<IdPosition>());
+            });
+
+            expect(hasDuringDefer);
+            expect(!registry.hasComponents<IdPosition>(entity));
+            expect(registry.getComponents<IdPosition>().size() == 0_ul);
+        };
+    }
 }
 
 void run_registry_tests() {
@@ -926,4 +1469,33 @@ void run_registry_tests() {
     test_get_resource_returns_mutable_reference();
     test_get_resource_is_const_accessible();
     test_const_get_resource_on_unset_type_throws();
+    test_spawn_during_run_deferred_is_not_visible_until_flush();
+    test_add_component_during_run_deferred_is_not_visible_until_flush();
+    test_remove_component_during_run_deferred_is_not_visible_until_flush();
+    test_kill_during_run_deferred_is_not_visible_until_flush();
+    test_later_step_in_same_run_deferred_call_sees_pre_mutation_state();
+    test_spawn_then_add_component_applies_in_order_after_flush();
+    test_mutations_outside_run_deferred_remain_immediate();
+    test_flushed_queue_does_not_replay_on_next_run_deferred();
+    test_add_component_reference_during_defer_reflects_after_flush();
+    test_deferring_stops_and_flushes_even_when_callable_throws();
+    test_remove_component_mid_iteration_does_not_corrupt_view();
+    test_kill_entity_mid_iteration_does_not_corrupt_view();
+    test_add_component_mid_iteration_does_not_corrupt_view();
+    test_double_kill_in_same_deferred_batch_does_not_throw();
+    test_add_component_after_kill_in_same_deferred_batch_is_a_no_op();
+    test_emplace_component_after_kill_in_same_deferred_batch_is_a_no_op();
+    test_remove_component_after_kill_in_same_deferred_batch_is_a_no_op();
+    test_nested_run_deferred_applies_at_the_end_of_the_outer_call();
+    test_ensure_pool_creates_once();
+    test_has_components_by_id();
+    test_get_component_by_id();
+    test_add_default_component_immediate();
+    test_add_default_component_replaces();
+    test_add_default_component_errors();
+    test_remove_component_by_id();
+    test_component_ids_of();
+    test_deferred_add_default_component();
+    test_deferred_add_on_pending_and_killed_entities();
+    test_deferred_remove_component_by_id();
 }
