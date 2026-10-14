@@ -1,10 +1,16 @@
 #include <boost/ut.hpp>
 
+#include <algorithm>
+#include <climits>
+#include <cstddef>
 #include <cstdint>
+#include <map>
 #include <new>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "ECS/Reflection/Reflection.hpp"
@@ -48,6 +54,37 @@ namespace {
         TrCounted& operator=(const TrCounted&) = default;
         ~TrCounted() { --alive; }
     };
+
+    // Fields whose types are fundamental integers rather than <cstdint> aliases.
+    struct TrSized {
+        std::size_t count;
+        long delta;
+        std::map<std::size_t, int> byIndex;
+    };
+
+    // Claims the built-in name "uint64" (hand-written Descriptor below).
+    struct TrUint64Impostor { int value; };
+
+    // Rollback fixtures. Their Descriptors are hand-written (no E_REFLECT) so
+    // that the failing registrations are not attempted before main.
+    struct TrRbTaken { int a; };   // E_REFLECT: owns the name "TrRbTaken"
+
+    namespace other {
+        struct TrRbTaken { int b; };   // also named "TrRbTaken": cannot register
+    }
+
+    struct TrRbInner { float value; };
+
+    struct TrRbBroken {
+        TrRbInner inner;
+        std::vector<TrRbInner> inners;
+        other::TrRbTaken bad;
+    };
+
+    struct TrRbNode {
+        std::vector<TrRbNode> children;
+        other::TrRbTaken bad;
+    };
 }
 
 E_REFLECT(TrVec2)
@@ -83,6 +120,50 @@ E_END
 template<> struct ECS::reflect::Descriptor<other::TrDuplicate> {
     static constexpr std::string_view name = "TrDuplicate";
     template<typename Visitor> static void forEach(Visitor&) {}
+};
+
+E_REFLECT(TrSized)
+    E_FIELD(count, std::size_t)
+    E_FIELD(delta, long)
+    E_FIELD(byIndex, std::map<std::size_t, int>)
+E_END
+
+E_REFLECT(TrRbTaken)
+    E_FIELD(a, int)
+E_END
+
+template<> struct ECS::reflect::Descriptor<TrUint64Impostor> {
+    static constexpr std::string_view name = "uint64";
+    template<typename Visitor> static void forEach(Visitor&) {}
+};
+
+template<> struct ECS::reflect::Descriptor<other::TrRbTaken> {
+    static constexpr std::string_view name = "TrRbTaken";
+    template<typename Visitor> static void forEach(Visitor&) {}
+};
+
+template<> struct ECS::reflect::Descriptor<TrRbInner> {
+    static constexpr std::string_view name = "TrRbInner";
+    template<typename Visitor> static void forEach(Visitor& v) {
+        ECS::reflect::detail::visitField<&TrRbInner::value>(v, "value");
+    }
+};
+
+template<> struct ECS::reflect::Descriptor<TrRbBroken> {
+    static constexpr std::string_view name = "TrRbBroken";
+    template<typename Visitor> static void forEach(Visitor& v) {
+        ECS::reflect::detail::visitField<&TrRbBroken::inner>(v, "inner");
+        ECS::reflect::detail::visitField<&TrRbBroken::inners>(v, "inners");
+        ECS::reflect::detail::visitField<&TrRbBroken::bad>(v, "bad");
+    }
+};
+
+template<> struct ECS::reflect::Descriptor<TrRbNode> {
+    static constexpr std::string_view name = "TrRbNode";
+    template<typename Visitor> static void forEach(Visitor& v) {
+        ECS::reflect::detail::visitField<&TrRbNode::children>(v, "children");
+        ECS::reflect::detail::visitField<&TrRbNode::bad>(v, "bad");
+    }
 };
 
 using ECS::reflect::Ref;
@@ -358,6 +439,278 @@ void test_ref_iterates_fields_generically() {
     };
 }
 
+// --- Built-in scalars ----------------------------------------------------
+
+// Writes value with the print operation of T's TypeInfo; empty if none.
+template<typename T>
+std::string printed(T value) {
+    const TypeInfo* info = registry().find<T>();
+    std::ostringstream os;
+    if (info && info->print) {
+        info->print(os, &value);
+    }
+    return os.str();
+}
+
+// Expected name of an integer type: signedness and width in bits.
+template<typename T>
+std::string integerName() {
+    return std::string(std::is_signed_v<T> ? "int" : "uint") + std::to_string(sizeof(T) * CHAR_BIT);
+}
+
+template<typename T>
+bool isIntegerScalar() {
+    const TypeInfo* info = registry().find<T>();
+    return info && info->kind == TypeKind::Scalar && info->name == integerName<T>() &&
+           info->size == sizeof(T) && info->align == alignof(T) &&
+           info->id == ECS::reflect::typeId(info->name) && registry().find(info->name) == info;
+}
+
+std::size_t timesListed(const TypeInfo* info) {
+    const auto& types = registry().types();
+    return static_cast<std::size_t>(std::count(types.begin(), types.end(), info));
+}
+
+void test_builtin_scalar_names_unchanged() {
+    "the historical scalars keep their names, ids and registration order"_test = [] {
+        const std::vector<std::pair<std::string_view, const TypeInfo*>> expected{
+            {"bool", registry().find<bool>()},
+            {"char", registry().find<char>()},
+            {"int8", registry().find<std::int8_t>()},
+            {"int16", registry().find<std::int16_t>()},
+            {"int32", registry().find<std::int32_t>()},
+            {"int64", registry().find<std::int64_t>()},
+            {"uint8", registry().find<std::uint8_t>()},
+            {"uint16", registry().find<std::uint16_t>()},
+            {"uint32", registry().find<std::uint32_t>()},
+            {"uint64", registry().find<std::uint64_t>()},
+            {"float", registry().find<float>()},
+            {"double", registry().find<double>()},
+            {"string", registry().find<std::string>()},
+        };
+        const auto& types = registry().types();
+        expect((types.size() >= expected.size()) >> fatal);
+
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+            const auto& [name, info] = expected[i];
+            expect((info != nullptr) >> fatal);
+            expect(info->name == name);
+            expect(info->kind == TypeKind::Scalar);
+            expect(info->id == ECS::reflect::typeId(name));
+            expect(types[i] == info);
+        }
+    };
+}
+
+void test_every_fundamental_integer_is_a_scalar() {
+    "every fundamental and <cstdint> integer type is a Scalar named by signedness and width"_test = [] {
+        expect(isIntegerScalar<signed char>());
+        expect(isIntegerScalar<short>());
+        expect(isIntegerScalar<int>());
+        expect(isIntegerScalar<long>());
+        expect(isIntegerScalar<long long>());
+        expect(isIntegerScalar<unsigned char>());
+        expect(isIntegerScalar<unsigned short>());
+        expect(isIntegerScalar<unsigned int>());
+        expect(isIntegerScalar<unsigned long>());
+        expect(isIntegerScalar<unsigned long long>());
+        expect(isIntegerScalar<std::int8_t>());
+        expect(isIntegerScalar<std::int64_t>());
+        expect(isIntegerScalar<std::uint64_t>());
+        expect(isIntegerScalar<std::size_t>());
+        expect(isIntegerScalar<std::ptrdiff_t>());
+        expect(isIntegerScalar<const unsigned long>());
+    };
+}
+
+void test_integer_aliases_share_type_info() {
+    "integer types of the same width share one TypeInfo, listed once"_test = [] {
+        if constexpr (sizeof(unsigned long) == sizeof(unsigned long long)) {
+            expect(registry().find<unsigned long>() == registry().find<unsigned long long>());
+        }
+        if constexpr (sizeof(long) == sizeof(long long)) {
+            expect(registry().find<long>() == registry().find<long long>());
+        }
+        if constexpr (sizeof(unsigned long long) == sizeof(std::uint64_t)) {
+            expect(registry().find<unsigned long long>() == registry().find<std::uint64_t>());
+            expect(registry().find<long long>() == registry().find<std::int64_t>());
+        }
+        if constexpr (sizeof(int) == sizeof(std::int32_t)) {
+            expect(registry().find<int>() == registry().find<std::int32_t>());
+            expect(registry().find<unsigned int>() == registry().find<std::uint32_t>());
+        }
+        expect(registry().find<signed char>() == registry().find<std::int8_t>());
+        expect(registry().find<unsigned char>() == registry().find<std::uint8_t>());
+        expect(registry().find<short>() == registry().find<std::int16_t>());
+
+        // Aliases add lookup keys, not entries.
+        for (const TypeInfo* info : {registry().find<long>(), registry().find<long long>(),
+                                     registry().find<unsigned long>(),
+                                     registry().find<unsigned long long>(),
+                                     registry().find<int>(), registry().find<signed char>()}) {
+            expect(timesListed(info) == 1_ul);
+        }
+    };
+}
+
+void test_char_types_are_distinct() {
+    "char, signed char and unsigned char stay three distinct types"_test = [] {
+        expect(registry().find<char>()->name == std::string("char"));
+        expect(registry().find<char>() != registry().find<signed char>());
+        expect(registry().find<char>() != registry().find<unsigned char>());
+        expect(printed('A') == "A");   // char still prints as a character
+    };
+}
+
+void test_builtin_name_cannot_be_claimed() {
+    "a reflected type named like a built-in integer is rejected"_test = [] {
+        const TypeInfo* uint64 = registry().find<std::uint64_t>();
+
+        expect(throws<std::logic_error>([] { (void)registry().get<TrUint64Impostor>(); }));
+        expect(registry().find<TrUint64Impostor>() == nullptr);
+        expect(registry().find("uint64") == uint64);
+        expect(registry().find<std::uint64_t>() == uint64);
+    };
+}
+
+void test_int8_prints_as_number() {
+    "int8 and uint8 (signed / unsigned char) print as numbers, not characters"_test = [] {
+        expect(printed<std::int8_t>(-5) == "-5");
+        expect(printed<std::uint8_t>(200) == "200");
+        expect(printed<signed char>(65) == "65");
+        expect(printed<unsigned char>(65) == "65");
+        expect(printed(true) == "true");
+    };
+}
+
+void test_character_and_long_double_scalars() {
+    "wchar_t, char8_t, char16_t, char32_t and long double are printable Scalars"_test = [] {
+        const std::vector<std::pair<std::string_view, const TypeInfo*>> expected{
+            {"wchar", registry().find<wchar_t>()},
+            {"char8", registry().find<char8_t>()},
+            {"char16", registry().find<char16_t>()},
+            {"char32", registry().find<char32_t>()},
+            {"long double", registry().find<long double>()},
+        };
+        for (const auto& [name, info] : expected) {
+            expect((info != nullptr) >> fatal);
+            expect(info->name == name);
+            expect(info->kind == TypeKind::Scalar);
+            expect(info->print != nullptr);
+            expect(registry().find(name) == info);
+            expect(timesListed(info) == 1_ul);
+        }
+        expect(registry().find<long double>() != registry().find<double>());
+
+        // Character types print their numeric code unit.
+        expect(printed(L'A') == "65");
+        expect(printed(u8'A') == "65");
+        expect(printed(char16_t{0x00E9}) == "233");
+        expect(printed(char32_t{0x1F600}) == "128512");
+        expect(printed(char8_t{0xFF}) == "255");
+        expect(printed(1.5L) == "1.5");
+    };
+}
+
+void test_size_t_field_is_fully_usable() {
+    "std::size_t and long fields are editable, printable and usable as map keys"_test = [] {
+        TrSized sized{40, -3, {{7, 70}}};
+        const TypeInfo& info = registry().get<TrSized>();
+        const TypeInfo* count = info.findField("count")->type;
+        const TypeInfo* delta = info.findField("delta")->type;
+
+        expect(count->kind == TypeKind::Scalar);
+        expect(count->name == integerName<std::size_t>());
+        expect(count == registry().find<std::size_t>());
+        expect(delta->kind == TypeKind::Scalar);
+        expect(delta->name == integerName<long>());
+
+        Ref root = Ref::make(sized);
+        root.field("count").as<std::size_t>() += 2;
+        root.path("delta").as<long>() = 5;
+        expect(sized.count == 42_ul);
+        expect(sized.delta == 5_l);
+        expect(printed(sized.count) == "42");
+        expect(printed(sized.delta) == "5");
+
+        expect(root.path("byIndex[7]").as<int>() == 70_i);
+        std::size_t key = 9;
+        root.field("byIndex").insert(Ref::make(key)).as<int>() = 90;
+        expect(sized.byIndex.at(9) == 90_i);
+        expect(root.path("byIndex[9]").as<int>() == 90_i);
+    };
+}
+
+void test_size_t_map_key_parse_failures() {
+    "a std::size_t map key rejects missing, negative and malformed keys"_test = [] {
+        TrSized sized{0, 0, {{7, 70}}};
+        Ref root = Ref::make(sized);
+
+        expect(!root.path("byIndex[8]").valid());
+        expect(!root.path("byIndex[-7]").valid());
+        expect(!root.path("byIndex[7x]").valid());
+        expect(!root.path("byIndex[]").valid());
+    };
+}
+
+// --- Rollback of a failed registration -----------------------------------
+
+void test_failed_registration_is_rolled_back() {
+    "a struct whose field fails to register is removed with its field types"_test = [] {
+        const std::size_t before = registry().types().size();
+        const TypeInfo* taken = registry().find<TrRbTaken>();
+
+        expect(throws<std::logic_error>([] { (void)registry().get<TrRbBroken>(); }));
+        expect(registry().find<TrRbBroken>() == nullptr);
+        expect(registry().find("TrRbBroken") == nullptr);
+        expect(registry().find(ECS::reflect::typeId("TrRbBroken")) == nullptr);
+        // Field types registered on its behalf are gone too.
+        expect(registry().find<TrRbInner>() == nullptr);
+        expect(registry().find("TrRbInner") == nullptr);
+        expect(registry().find<std::vector<TrRbInner>>() == nullptr);
+        expect(registry().find<other::TrRbTaken>() == nullptr);
+        // What existed before is untouched.
+        expect(taken != nullptr && registry().find("TrRbTaken") == taken);
+        expect(registry().types().size() == before);
+    };
+}
+
+void test_failed_self_referencing_registration_is_rolled_back() {
+    "a self-referencing struct is rolled back with the container pointing to it"_test = [] {
+        const std::size_t before = registry().types().size();
+
+        expect(throws<std::logic_error>([] { (void)registry().get<TrRbNode>(); }));
+        expect(registry().find<TrRbNode>() == nullptr);
+        expect(registry().find("TrRbNode") == nullptr);
+        expect(registry().find<std::vector<TrRbNode>>() == nullptr);
+        expect(registry().types().size() == before);
+    };
+}
+
+void test_registration_after_rollback() {
+    "after a rollback, other types register and a retry fails the same way"_test = [] {
+        const std::size_t before = registry().types().size();
+
+        const TypeInfo& inner = registry().get<TrRbInner>();
+        expect(inner.kind == TypeKind::Struct);
+        expect(inner.fields.size() == 1_ul);
+        expect(registry().find("TrRbInner") == &inner);
+        expect((registry().types().size() == before + 1) >> fatal);
+        expect(registry().types().back() == &inner);
+
+        // Retrying still collides; types registered before the call are kept.
+        expect(throws<std::logic_error>([] { (void)registry().get<TrRbBroken>(); }));
+        expect(throws<std::logic_error>([] { (void)registry().get<TrRbNode>(); }));
+        expect(registry().find<TrRbBroken>() == nullptr);
+        expect(registry().find<TrRbNode>() == nullptr);
+        expect(registry().find<std::vector<TrRbInner>>() == nullptr);
+        expect(registry().find<std::vector<TrRbNode>>() == nullptr);
+        expect(registry().find<TrRbInner>() == &inner);
+        expect(registry().types().size() == before + 1);
+        expect(timesListed(&inner) == 1_ul);
+    };
+}
+
 }
 
 void run_type_registry_tests() {
@@ -383,4 +736,16 @@ void run_type_registry_tests() {
     test_ref_path_invalid();
     test_ref_type_mismatch();
     test_ref_iterates_fields_generically();
+    test_builtin_scalar_names_unchanged();
+    test_every_fundamental_integer_is_a_scalar();
+    test_integer_aliases_share_type_info();
+    test_char_types_are_distinct();
+    test_builtin_name_cannot_be_claimed();
+    test_int8_prints_as_number();
+    test_character_and_long_double_scalars();
+    test_size_t_field_is_fully_usable();
+    test_size_t_map_key_parse_failures();
+    test_failed_registration_is_rolled_back();
+    test_failed_self_referencing_registration_is_rolled_back();
+    test_registration_after_rollback();
 }
