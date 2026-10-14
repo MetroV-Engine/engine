@@ -1,5 +1,6 @@
 void run_entity_tests();
 void run_entity_manager_tests();
+void run_entity_list_tests();
 void run_component_id_tests();
 void run_component_storage_tests();
 void run_component_pool_tests();
@@ -27,6 +28,7 @@ int main()
 {
     run_entity_tests();
     run_entity_manager_tests();
+    run_entity_list_tests();
     run_component_id_tests();
     run_component_storage_tests();
     run_component_pool_tests();

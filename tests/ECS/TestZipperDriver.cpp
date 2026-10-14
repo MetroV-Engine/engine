@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "ECS/Core/Component/ComponentStorage.hpp"
-#include "ECS/EntityManager.hpp"
+#include "ECS/Core/Entity/EntityManager.hpp"
 #include "ECS/Registry.hpp"
 #include "ECS/View.hpp"
 #include "ECS/Zipper.hpp"

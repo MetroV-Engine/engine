@@ -13,9 +13,6 @@ namespace {
     struct Position { int x; int y; };
     struct Velocity { int x; int y; };
 
-    bool contains(const std::vector<ECS::Entity>& entities, ECS::Entity entity) {
-        return std::find(entities.begin(), entities.end(), entity) != entities.end();
-    }
 
     class OrderRecordingSystem : public ECS::ISystem {
         public:
@@ -66,7 +63,7 @@ namespace {
 
             void update(ECS::Registry& reg, double) override {
                 _spawned = reg.spawnEntity();
-                _visibleDuringUpdate = contains(reg.getAllEntities(), _spawned);
+                _visibleDuringUpdate = reg.isAlive(_spawned);
             }
 
             const std::string name() const override { return "SpawningSystem"; }
@@ -90,7 +87,7 @@ namespace {
             explicit EntityCountRecordingSystem(std::size_t& countSeen) : _countSeen(countSeen) {}
 
             void update(ECS::Registry& reg, double) override {
-                _countSeen = reg.getAllEntities().size();
+                _countSeen = reg.entityCount();
             }
 
             const std::string name() const override { return "EntityCountRecordingSystem"; }
@@ -216,7 +213,7 @@ namespace {
             systems.update(registry, 0.0);
 
             expect(!visibleDuringUpdate);
-            expect(contains(registry.getAllEntities(), spawned));
+            expect(registry.isAlive(spawned));
         };
     }
 

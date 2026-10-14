@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "ECS/Entity.hpp"
+#include "ECS/Core/Entity/Entity.hpp"
 
 namespace ECS::TestAccess {
     /** @brief Builds arbitrary handles, which only EntityManager may do in production. */

@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "ECS/Core/Component/ComponentStorage.hpp"
-#include "ECS/EntityManager.hpp"
+#include "ECS/Core/Entity/EntityManager.hpp"
 #include "ECS/View.hpp"
 
 using namespace boost::ut;

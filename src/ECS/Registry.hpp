@@ -12,7 +12,7 @@
 #include <unordered_map>
 
 #include "Core/Component/ComponentStore.hpp"
-#include "EntityManager.hpp"
+#include "Core/Entity/EntityManager.hpp"
 #include "Core/CommandBuffer.hpp"
 #include "Core/Resource/ResourceStore.hpp"
 #include "View.hpp"
@@ -67,6 +67,22 @@ namespace ECS {
              */
             [[nodiscard]] WorldId worldId() const noexcept {
                 return _entities.worldId();
+            }
+
+            /**
+             * @brief Checks whether an entity handle refers to a live entity of this registry.
+             *
+             * For handles kept across frames (a target, a parent): the entity
+             * may have been killed since. An entity spawned under runDeferred
+             * is not alive until the flush.
+             */
+            [[nodiscard]] bool isAlive(Entity entity) const noexcept {
+                return _entities.isAlive(entity);
+            }
+
+            /** @brief Number of live entities; spawns still queued under runDeferred are not counted. */
+            [[nodiscard]] std::size_t entityCount() const noexcept {
+                return _entities.size();
             }
 
             /**
@@ -223,28 +239,12 @@ namespace ECS {
                 _commands.record(std::forward<Callable>(callable));
             }
 
-            /**
-             * @brief Returns all currently live entities for tooling or inspection.
-             * @return A reference to a cache rebuilt only when entities changed
-             *         since the last call. The reference is invalidated by any
-             *         subsequent call that rebuilds the cache (spawn, kill, or
-             *         a name change), so do not hold it across those calls.
-             */
-            [[nodiscard]] const std::vector<Entity>& getAllEntities() const {
-                if (_entitiesDirty) {
-                    _cachedEntities = _entities.getAll();
-                    _entitiesDirty = false;
-                }
-                return _cachedEntities;
-            }
-
             /** @brief Associates a display name with an entity. */
             void setEntityName(Entity entity, const std::string& name) {
                 if (!_entities.isAlive(entity)) {
                     throw std::invalid_argument("ECS::Registry::setEntityName: entity is not alive");
                 }
                 _entityNames[entity.value()] = name;
-                _entitiesDirty = true;
             }
 
             /** @brief Returns an entity's display name, or an empty string. */
@@ -417,7 +417,6 @@ namespace ECS {
             }
 
             Entity spawnEntityImmediate(const std::string& name) {
-                _entitiesDirty = true;
                 const Entity entity = _entities.create();
                 _components.addEntity(entity.value());
                 if (!name.empty()) {
@@ -428,17 +427,13 @@ namespace ECS {
 
             Entity spawnEntityDeferred(const std::string& name) {
                 const Entity entity = _entities.reserveIdentity();
-                ensurePendingSlot(entity.value());
-                _pendingSpawns[entity.value()] = true;
                 // Not through mutate: the entity only becomes alive in this command.
                 _commands.push([this, entity, name] { commitSpawn(entity, name); });
                 return entity;
             }
 
             void commitSpawn(Entity entity, const std::string& name) {
-                _entitiesDirty = true;
                 _entities.commit(entity);
-                _pendingSpawns[entity.value()] = false;
                 _components.addEntity(entity.value());
                 if (!name.empty()) {
                     _entityNames[entity.value()] = name;
@@ -449,7 +444,6 @@ namespace ECS {
                 _entities.destroy(entity);
                 _components.removeEntity(entity.value());
                 _entityNames.erase(entity.value());
-                _entitiesDirty = true;
             }
 
             /**
@@ -492,31 +486,17 @@ namespace ECS {
                 return *staged;
             }
 
+            // Accepts an entity spawned under runDeferred and not flushed
+            // yet, so it can already receive components (applied in order).
             void ensureEntityAlive(Entity entity) const {
-                if (_entities.isAlive(entity)) {
-                    return;
-                }
-                const std::size_t id = entity.value();
-                const bool isPendingSpawn = id < _pendingSpawns.size()
-                    && _pendingSpawns[id]
-                    && entity == _entities.entityFromIndex(id);
-                if (!isPendingSpawn) {
+                if (!_entities.isAlive(entity) && !_entities.isReserved(entity)) {
                     throw std::invalid_argument("ECS::Registry: entity handle is not alive");
-                }
-            }
-
-            void ensurePendingSlot(std::size_t id) {
-                if (id >= _pendingSpawns.size()) {
-                    _pendingSpawns.resize(id + 1, false);
                 }
             }
 
             EntityManager _entities;
             ComponentStore _components;
             std::unordered_map<std::size_t, std::string> _entityNames;
-            mutable std::vector<Entity> _cachedEntities;
-            mutable bool _entitiesDirty{true};
-            std::vector<bool> _pendingSpawns;
             ResourceStore _resources;
             CommandBuffer _commands;
     };

@@ -4,8 +4,8 @@
 #include <cstddef>
 #include <type_traits>
 
-#include "ECS/Entity.hpp"
-#include "EntityTestAccess.hpp"
+#include "ECS/Core/Entity/Entity.hpp"
+#include "../../EntityTestAccess.hpp"
 
 using namespace boost::ut;
 using ECS::TestAccess::EntityAccess;

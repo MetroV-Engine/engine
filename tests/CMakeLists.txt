@@ -1,8 +1,9 @@
 find_package(ut CONFIG REQUIRED)
 
 set(ECS_TEST_FILES
-	ECS/TestEntity.cpp
-	ECS/TestEntityManager.cpp
+	ECS/Core/Entity/TestEntity.cpp
+	ECS/Core/Entity/TestEntityManager.cpp
+	ECS/Core/Entity/TestEntityList.cpp
 	ECS/Core/Component/TestComponentId.cpp
 	ECS/Core/Component/TestComponentStorage.cpp
 	ECS/Core/Component/TestComponentPool.cpp

@@ -4,7 +4,8 @@
 #include <string_view>
 #include <vector>
 
-#include "../Entity.hpp"
+#include "../Core/Entity/Entity.hpp"
+#include "../Core/Entity/EntityList.hpp"
 #include "../Registry.hpp"
 #include "Ref.hpp"
 #include "TypeInfo.hpp"
@@ -77,6 +78,20 @@ namespace ECS::reflect {
              */
             [[nodiscard]] static const std::vector<std::string>& errors() noexcept {
                 return detail::ComponentCatalog::instance().errors();
+            }
+
+            // --- Entities -------------------------------------------------------
+
+            /**
+             * @brief The live entities of the Registry, e.g. for an editor's hierarchy.
+             *
+             * The returned EntityList stays up to date: keep it and iterate it
+             * whenever needed. Each iteration works on the entities alive when
+             * it starts, skipping those killed meanwhile. Like the inspector,
+             * it must not outlive the Registry.
+             */
+            [[nodiscard]] EntityList entities() const noexcept {
+                return EntityList(_registry._entities);
             }
 
             // --- Components of an entity ----------------------------------------

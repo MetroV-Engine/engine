@@ -6,7 +6,7 @@
 #include "ECS/Core/Component/ComponentId.hpp"
 #include "ECS/Core/Component/ComponentOps.hpp"
 #include "ECS/Core/Component/ComponentPool.hpp"
-#include "ECS/Entity.hpp"
+#include "ECS/Core/Entity/Entity.hpp"
 #include "ECS/Registry.hpp"
 
 namespace ECS::TestAccess {

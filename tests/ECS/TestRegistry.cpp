@@ -23,9 +23,6 @@ namespace {
     struct Unregistered { int value; };
     struct BeyondLimit { int value; };
 
-    bool contains(const std::vector<ECS::Entity>& entities, ECS::Entity entity) {
-        return std::find(entities.begin(), entities.end(), entity) != entities.end();
-    }
 
     // Types and helpers of the ComponentId-based core tests.
     using Ids = ECS::TestAccess::RegistryIdAccess;
@@ -49,7 +46,7 @@ namespace {
     void test_registry_is_default_constructible() {
         "registry is default constructible"_test = [] {
             ECS::Registry registry;
-            expect(registry.getAllEntities().empty());
+            expect(registry.entityCount() == std::size_t{0});
         };
     }
 
@@ -522,47 +519,96 @@ namespace {
         };
     }
 
-    void test_get_all_entities_is_empty_for_new_registry() {
-        "getAllEntities is empty for a new registry"_test = [] {
-            const ECS::Registry registry;
-            expect(registry.getAllEntities().empty());
-        };
-    }
-
-    void test_get_all_entities_reuses_cache_without_changes() {
-        "getAllEntities reuses its cache without changes"_test = [] {
+    void test_is_alive_is_true_for_a_spawned_entity() {
+        "isAlive is true for a spawned entity"_test = [] {
             ECS::Registry registry;
-            registry.spawnEntity();
-            const auto& first = registry.getAllEntities();
-            const auto& second = registry.getAllEntities();
+            const auto entity = registry.spawnEntity();
 
-            expect(&first == &second);
+            expect(registry.isAlive(entity));
         };
     }
 
-    void test_get_all_entities_reflects_spawns_and_kills() {
-        "getAllEntities reflects spawns and kills"_test = [] {
+    void test_is_alive_is_false_after_kill() {
+        "isAlive is false after the entity is killed"_test = [] {
+            ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.killEntity(entity);
+
+            expect(!registry.isAlive(entity));
+        };
+    }
+
+    void test_is_alive_rejects_foreign_default_and_stale_handles() {
+        "isAlive is false for a default, foreign or recycled handle"_test = [] {
+            ECS::Registry registry;
+            ECS::Registry other;
+            const auto old = registry.spawnEntity();
+            registry.killEntity(old);
+            const auto recycled = registry.spawnEntity();
+            const auto foreign = other.spawnEntity();
+
+            expect(recycled.index() == old.index());
+            expect(!registry.isAlive(old));
+            expect(registry.isAlive(recycled));
+            expect(!registry.isAlive(foreign));
+            expect(!registry.isAlive(ECS::Entity{}));
+        };
+    }
+
+    void test_is_alive_during_deferred_spawn_and_kill() {
+        "isAlive follows deferred spawns and kills at flush"_test = [] {
+            ECS::Registry registry;
+            const auto killed = registry.spawnEntity();
+            ECS::Entity spawned{};
+            bool spawnedAliveDuring = true;
+            bool killedAliveDuring = false;
+
+            registry.runDeferred([&] {
+                spawned = registry.spawnEntity();
+                registry.killEntity(killed);
+                spawnedAliveDuring = registry.isAlive(spawned);
+                killedAliveDuring = registry.isAlive(killed);
+            });
+
+            expect(!spawnedAliveDuring);
+            expect(killedAliveDuring);
+            expect(registry.isAlive(spawned));
+            expect(!registry.isAlive(killed));
+        };
+    }
+
+    void test_entity_count_is_zero_for_a_new_registry() {
+        "entityCount is zero for a new registry"_test = [] {
+            const ECS::Registry registry;
+            expect(registry.entityCount() == std::size_t{0});
+        };
+    }
+
+    void test_entity_count_follows_spawns_and_kills() {
+        "entityCount follows spawns and kills"_test = [] {
             ECS::Registry registry;
             const auto first = registry.spawnEntity();
-            const auto second = registry.spawnEntity();
-            registry.killEntity(first);
-
-            expect(registry.getAllEntities().size() == std::size_t{1});
-            expect(registry.getAllEntities()[0] == second);
             registry.spawnEntity();
-            expect(registry.getAllEntities().size() == std::size_t{2});
+            registry.killEntity(first);
+            registry.spawnEntity();
+
+            expect(registry.entityCount() == std::size_t{2});
         };
     }
 
-    void test_get_all_entities_preserves_current_generations() {
-        "getAllEntities preserves current generations"_test = [] {
+    void test_entity_count_ignores_queued_spawns() {
+        "entityCount does not count spawns queued under runDeferred"_test = [] {
             ECS::Registry registry;
-            const auto oldEntity = registry.spawnEntity();
-            registry.killEntity(oldEntity);
-            const auto newEntity = registry.spawnEntity();
+            registry.spawnEntity();
+            std::size_t countDuring = 0;
 
-            expect(registry.getAllEntities()[0] == newEntity);
-            expect(registry.getAllEntities()[0].generation() != oldEntity.generation());
+            registry.runDeferred([&] {
+                registry.spawnEntity();
+                countDuring = registry.entityCount();
+            });
+
+            expect(countDuring == std::size_t{1});
+            expect(registry.entityCount() == std::size_t{2});
         };
     }
 
@@ -586,19 +632,6 @@ namespace {
             expect(throws<std::invalid_argument>([&] {
                 registry.setEntityName(entity, "Dead");
             }));
-        };
-    }
-
-    void test_set_entity_name_invalidates_cache() {
-        "setEntityName invalidates the entity cache"_test = [] {
-            ECS::Registry registry;
-            const auto entity = registry.spawnEntity();
-            const auto& first = registry.getAllEntities();
-            registry.setEntityName(entity, "Named");
-            const auto& second = registry.getAllEntities();
-
-            expect(&first == &second);
-            expect(registry.getEntityName(entity) == "Named");
         };
     }
 
@@ -899,11 +932,11 @@ namespace {
 
             registry.runDeferred([&] {
                 spawned = registry.spawnEntity();
-                visibleDuringDefer = contains(registry.getAllEntities(), spawned);
+                visibleDuringDefer = registry.isAlive(spawned);
             });
 
             expect(!visibleDuringDefer);
-            expect(contains(registry.getAllEntities(), spawned));
+            expect(registry.isAlive(spawned));
         };
     }
 
@@ -948,11 +981,11 @@ namespace {
 
             registry.runDeferred([&] {
                 registry.killEntity(entity);
-                aliveDuringDefer = contains(registry.getAllEntities(), entity);
+                aliveDuringDefer = registry.isAlive(entity);
             });
 
             expect(aliveDuringDefer);
-            expect(!contains(registry.getAllEntities(), entity));
+            expect(!registry.isAlive(entity));
         };
     }
 
@@ -995,7 +1028,7 @@ namespace {
         "mutations outside runDeferred remain immediate"_test = [] {
             ECS::Registry registry;
             auto entity = registry.spawnEntity();
-            expect(contains(registry.getAllEntities(), entity));
+            expect(registry.isAlive(entity));
 
             registry.addComponent(entity, Position{3, 4});
             expect(registry.hasComponents<Position>(entity));
@@ -1004,7 +1037,7 @@ namespace {
             expect(!registry.hasComponents<Position>(entity));
 
             registry.killEntity(entity);
-            expect(!contains(registry.getAllEntities(), entity));
+            expect(!registry.isAlive(entity));
         };
     }
 
@@ -1023,7 +1056,7 @@ namespace {
             registry.runDeferred(step);
             registry.runDeferred(step);
 
-            expect(registry.getAllEntities().size() == std::size_t{1});
+            expect(registry.entityCount() == std::size_t{1});
         };
     }
 
@@ -1053,7 +1086,7 @@ namespace {
                 });
             }));
 
-            expect(contains(registry.getAllEntities(), spawned));
+            expect(registry.isAlive(spawned));
 
             auto entity = registry.spawnEntity();
             registry.addComponent(entity, Position{5, 6});
@@ -1151,7 +1184,7 @@ namespace {
                 registry.killEntity(entity);
             });
 
-            expect(!contains(registry.getAllEntities(), entity));
+            expect(!registry.isAlive(entity));
         };
     }
 
@@ -1196,7 +1229,7 @@ namespace {
                 registry.removeComponent<Position>(entity);
             });
 
-            expect(!contains(registry.getAllEntities(), entity));
+            expect(!registry.isAlive(entity));
         };
     }
     void test_nested_run_deferred_applies_at_the_end_of_the_outer_call() {
@@ -1452,13 +1485,8 @@ void run_registry_tests() {
     test_view_registers_unregistered_component_and_returns_no_matches();
     test_const_view_is_empty_for_unregistered_component();
     test_const_view_returns_const_components();
-    test_get_all_entities_is_empty_for_new_registry();
-    test_get_all_entities_reuses_cache_without_changes();
-    test_get_all_entities_reflects_spawns_and_kills();
-    test_get_all_entities_preserves_current_generations();
     test_set_entity_name_assigns_and_replaces_name();
     test_set_entity_name_rejects_dead_entity();
-    test_set_entity_name_invalidates_cache();
     test_get_entity_name_returns_empty_for_unknown_or_dead_entity();
     test_more_than_256_component_types_can_be_used();
     test_growing_signatures_keeps_existing_components();
@@ -1505,4 +1533,11 @@ void run_registry_tests() {
     test_deferred_add_default_component();
     test_deferred_add_on_pending_and_killed_entities();
     test_deferred_remove_component_by_id();
+    test_is_alive_is_true_for_a_spawned_entity();
+    test_is_alive_is_false_after_kill();
+    test_is_alive_rejects_foreign_default_and_stale_handles();
+    test_is_alive_during_deferred_spawn_and_kill();
+    test_entity_count_is_zero_for_a_new_registry();
+    test_entity_count_follows_spawns_and_kills();
+    test_entity_count_ignores_queued_spawns();
 }

@@ -343,6 +343,67 @@ void test_registration_errors_are_recorded() {
     };
 }
 
+void test_entities_lists_the_live_entities() {
+    "entities lists the live entities of the registry"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity first = world.spawnEntity();
+        const ECS::Entity second = world.spawnEntity();
+        const auto inspector = world.inspect();
+
+        std::vector<ECS::Entity> listed;
+        for (ECS::Entity entity : inspector.entities()) {
+            listed.push_back(entity);
+        }
+
+        expect(listed == std::vector<ECS::Entity>{first, second});
+        expect(inspector.entities().size() == 2_ul);
+    };
+}
+
+void test_entities_is_empty_for_an_empty_registry() {
+    "entities is empty for an empty registry"_test = [] {
+        ECS::Registry world;
+        const auto inspector = world.inspect();
+
+        expect(inspector.entities().empty());
+        expect(inspector.entities().begin() == inspector.entities().end());
+    };
+}
+
+void test_kept_entities_follows_the_world() {
+    "a kept entities() list follows spawns, kills and deferred spawns"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity killed = world.spawnEntity();
+        const ECS::EntityList all = world.inspect().entities();
+
+        ECS::Entity spawned{};
+        std::size_t countDuring = 0;
+        world.runDeferred([&] {
+            spawned = world.spawnEntity();
+            world.killEntity(killed);
+            countDuring = all.size();
+        });
+
+        std::vector<ECS::Entity> listed;
+        for (ECS::Entity entity : all) {
+            listed.push_back(entity);
+        }
+        expect(countDuring == 1_ul);
+        expect(listed == std::vector<ECS::Entity>{spawned});
+    };
+}
+
+void test_entities_of_two_registries_are_separate() {
+    "entities only lists the entities of its own registry"_test = [] {
+        ECS::Registry world;
+        ECS::Registry other;
+        other.spawnEntity();
+
+        expect(world.inspect().entities().empty());
+        expect(other.inspect().entities().size() == 1_ul);
+    };
+}
+
 }
 
 void run_registry_inspector_tests() {
@@ -362,4 +423,8 @@ void run_registry_inspector_tests() {
     test_unstorable_type_is_reflected_but_not_a_component();
     test_find_component_type();
     test_registration_errors_are_recorded();
+    test_entities_lists_the_live_entities();
+    test_entities_is_empty_for_an_empty_registry();
+    test_kept_entities_follows_the_world();
+    test_entities_of_two_registries_are_separate();
 }

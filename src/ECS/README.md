@@ -27,8 +27,8 @@ entities that contain the components they need.
 
 | File | Purpose |
 | --- | --- |
-| [Entity.hpp](Entity.hpp) | Lightweight entity handle and identity access. |
-| [EntityManager.hpp](EntityManager.hpp) | Entity creation, destruction, validation, and ID reuse. |
+| [Entity.hpp](Core/Entity/Entity.hpp) | Lightweight entity handle and identity access. |
+| [EntityManager.hpp](Core/Entity/EntityManager.hpp) | Entity creation, destruction, validation, and ID reuse. |
 | [ComponentId.hpp](Core/Component/ComponentId.hpp) | Lazy runtime ID assignment for component types. |
 | [ComponentStorage.hpp](Core/Component/ComponentStorage.hpp) | Component storage and fast entity-to-component lookup. |
 | [ComponentPool.hpp](Core/Component/ComponentPool.hpp) | Type-erased access to different component pools. |
@@ -44,7 +44,7 @@ entities that contain the components they need.
 
 ## Entity
 
-See [Entity.hpp](Entity.hpp).
+See [Entity.hpp](Core/Entity/Entity.hpp).
 
 `Entity` is a lightweight handle containing an index, a generation and the
 world ID of the registry that issued it. It can be copied cheaply and passed to
@@ -58,9 +58,10 @@ std::size_t id = player.value();
 
 The entity handle does not create or destroy entities. That responsibility
 belongs to `EntityManager` and `Registry`. Only the default constructor is
-public: every other handle comes from `spawnEntity()`, a view, or
-`getAllEntities()`. A default-constructed `Entity` belongs to no world and is
-never alive.
+public: every other handle comes from `spawnEntity()`, a view, or the
+tools' list `world.inspect().entities()`. A default-constructed `Entity`
+belongs to no world and is never alive. To check a handle kept across frames
+(a target, a parent), use `world.isAlive(entity)`.
 
 ```text
 Entity handle -> world ID + index + generation
@@ -87,7 +88,7 @@ worldB.getComponent<Position>(a);       // throws std::invalid_argument
 
 ## EntityManager
 
-See [EntityManager.hpp](EntityManager.hpp).
+See [EntityManager.hpp](Core/Entity/EntityManager.hpp).
 
 `EntityManager` owns the lifecycle of entity IDs. It tracks live IDs and keeps a
 free list for IDs that can be reused.

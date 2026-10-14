@@ -5,8 +5,8 @@
 #include <stdexcept>
 #include <type_traits>
 
-#include "ECS/EntityManager.hpp"
-#include "EntityTestAccess.hpp"
+#include "ECS/Core/Entity/EntityManager.hpp"
+#include "../../EntityTestAccess.hpp"
 
 using namespace boost::ut;
 using ECS::TestAccess::EntityAccess;
@@ -22,9 +22,9 @@ namespace ECS::TestAccess {
 			std::size_t index,
 			EntityGeneration generation
 		) {
-			manager._alive.resize(index + 1, false);
+			manager._states.resize(index + 1, EntityManager::State::Free);
 			manager._generations.resize(index + 1, 0);
-			manager._alive[index] = true;
+			manager._states[index] = EntityManager::State::Alive;
 			manager._generations[index] = generation;
 		}
 	};
@@ -647,6 +647,201 @@ void test_destroy_throws_when_generation_overflows() {
 	};
 }
 
+void test_reserve_identity_is_reserved_not_alive() {
+	"reserveIdentity returns a reserved handle that is not alive"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity entity = manager.reserveIdentity();
+
+		expect(manager.isReserved(entity));
+		expect(!manager.isAlive(entity));
+		expect(entity.world() == manager.worldId());
+	};
+}
+
+void test_reserve_identity_is_invisible() {
+	"a reserved identity is not counted nor listed"_test = [] {
+		ECS::EntityManager manager;
+		manager.create();
+		(void)manager.reserveIdentity();
+
+		expect(manager.size() == std::size_t{1});
+		expect(manager.getAll().size() == std::size_t{1});
+	};
+}
+
+void test_reserve_identity_reuses_a_free_index() {
+	"reserveIdentity reuses a destroyed index with its new generation"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity old = manager.create();
+		manager.destroy(old);
+		const ECS::Entity reserved = manager.reserveIdentity();
+
+		expect(reserved.index() == old.index());
+		expect(reserved.generation() == old.generation() + 1);
+		expect(manager.isReserved(reserved));
+		expect(!manager.isReserved(old));
+	};
+}
+
+void test_reserve_identity_never_hands_out_the_same_index_twice() {
+	"two reservations get different indexes"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity first = manager.reserveIdentity();
+		const ECS::Entity second = manager.reserveIdentity();
+
+		expect(first.index() != second.index());
+	};
+}
+
+void test_commit_makes_a_reserved_identity_alive() {
+	"commit makes a reserved identity alive, counted and listed"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity entity = manager.reserveIdentity();
+		manager.commit(entity);
+
+		expect(manager.isAlive(entity));
+		expect(!manager.isReserved(entity));
+		expect(manager.size() == std::size_t{1});
+		expect(manager.getAll().size() == std::size_t{1});
+	};
+}
+
+void test_commit_rejects_an_alive_entity() {
+	"commit throws for an entity that is already alive"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity entity = manager.create();
+
+		expect(throws<std::invalid_argument>([&] { manager.commit(entity); }));
+		expect(manager.size() == std::size_t{1});
+	};
+}
+
+void test_commit_rejects_free_foreign_and_unknown_handles() {
+	"commit throws for a free, foreign or never allocated handle"_test = [] {
+		ECS::EntityManager manager;
+		ECS::EntityManager other;
+		const ECS::Entity destroyed = manager.create();
+		manager.destroy(destroyed);
+		const ECS::Entity foreign = other.reserveIdentity();
+
+		expect(throws<std::invalid_argument>([&] { manager.commit(destroyed); }));
+		expect(throws<std::invalid_argument>([&] { manager.commit(foreign); }));
+		expect(throws<std::invalid_argument>([&] { manager.commit(ECS::Entity{}); }));
+		expect(throws<std::invalid_argument>([&] {
+			manager.commit(EntityAccess::make(50, 0, manager.worldId()));
+		}));
+	};
+}
+
+void test_commit_twice_throws() {
+	"committing the same reservation twice throws"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity entity = manager.reserveIdentity();
+		manager.commit(entity);
+
+		expect(throws<std::invalid_argument>([&] { manager.commit(entity); }));
+		expect(manager.size() == std::size_t{1});
+	};
+}
+
+void test_is_reserved_rejects_wrong_generation_and_world() {
+	"isReserved is false for a wrong generation, another manager or a default handle"_test = [] {
+		ECS::EntityManager manager;
+		ECS::EntityManager other;
+		const ECS::Entity reserved = manager.reserveIdentity();
+		const ECS::Entity otherReserved = other.reserveIdentity();
+
+		expect(!manager.isReserved(EntityAccess::make(reserved.index(), reserved.generation() + 1, manager.worldId())));
+		expect(!manager.isReserved(otherReserved));
+		expect(!manager.isReserved(ECS::Entity{}));
+	};
+}
+
+void test_is_reserved_is_false_for_empty_and_alive() {
+	"isReserved is false for an empty manager and for an alive entity"_test = [] {
+		ECS::EntityManager manager;
+		expect(!manager.isReserved(EntityAccess::make(0, 0, manager.worldId())));
+
+		const ECS::Entity alive = manager.create();
+		expect(!manager.isReserved(alive));
+	};
+}
+
+void test_destroy_rejects_a_reserved_identity() {
+	"destroy throws for a reserved identity that is not alive yet"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity entity = manager.reserveIdentity();
+
+		expect(throws<std::invalid_argument>([&] { manager.destroy(entity); }));
+		expect(manager.isReserved(entity));
+	};
+}
+
+void test_snapshot_is_shared_while_nothing_changes() {
+	"snapshot returns the same list while no entity is created or destroyed"_test = [] {
+		ECS::EntityManager manager;
+		manager.create();
+		const auto first = manager.snapshot();
+		(void)manager.reserveIdentity();   // a reservation does not change the list
+		const auto second = manager.snapshot();
+
+		expect(first.get() == second.get());
+		expect(first->size() == std::size_t{1});
+	};
+}
+
+void test_snapshot_held_list_is_never_modified() {
+	"a held snapshot keeps its content after creates and destroys"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity first = manager.create();
+		const auto held = manager.snapshot();
+
+		manager.destroy(first);
+		const ECS::Entity second = manager.create();
+		const auto current = manager.snapshot();
+
+		expect(held.get() != current.get());
+		expect(held->size() == std::size_t{1});
+		expect((*held)[0] == first);
+		expect(current->size() == std::size_t{1});
+		expect((*current)[0] == second);
+	};
+}
+
+void test_snapshot_is_rebuilt_in_place_when_not_held() {
+	"snapshot rebuilds its list in place when nobody holds it"_test = [] {
+		ECS::EntityManager manager;
+		manager.create();
+		const auto* address = manager.snapshot().get();
+		const ECS::Entity added = manager.create();
+		const auto current = manager.snapshot();
+
+		expect(current.get() == address);
+		expect(current->size() == std::size_t{2});
+		expect((*current)[1] == added);
+	};
+}
+
+void test_snapshot_follows_commit() {
+	"snapshot lists a reserved identity only once committed"_test = [] {
+		ECS::EntityManager manager;
+		const ECS::Entity entity = manager.reserveIdentity();
+		expect(manager.snapshot()->empty());
+
+		manager.commit(entity);
+
+		expect(manager.snapshot()->size() == std::size_t{1});
+		expect((*manager.snapshot())[0] == entity);
+	};
+}
+
+void test_snapshot_is_empty_for_empty_manager() {
+	"snapshot is empty for an empty manager"_test = [] {
+		const ECS::EntityManager manager;
+		expect(manager.snapshot()->empty());
+	};
+}
+
 void run_entity_manager_tests()
 {
 	test_create_empty_manager();
@@ -703,4 +898,20 @@ void run_entity_manager_tests()
 	test_multiple_reserve_calls_preserve_state();
 	test_create_throws_when_entity_id_overflows();
 	test_destroy_throws_when_generation_overflows();
+	test_reserve_identity_is_reserved_not_alive();
+	test_reserve_identity_is_invisible();
+	test_reserve_identity_reuses_a_free_index();
+	test_reserve_identity_never_hands_out_the_same_index_twice();
+	test_commit_makes_a_reserved_identity_alive();
+	test_commit_rejects_an_alive_entity();
+	test_commit_rejects_free_foreign_and_unknown_handles();
+	test_commit_twice_throws();
+	test_is_reserved_rejects_wrong_generation_and_world();
+	test_is_reserved_is_false_for_empty_and_alive();
+	test_destroy_rejects_a_reserved_identity();
+	test_snapshot_is_shared_while_nothing_changes();
+	test_snapshot_held_list_is_never_modified();
+	test_snapshot_is_rebuilt_in_place_when_not_held();
+	test_snapshot_follows_commit();
+	test_snapshot_is_empty_for_empty_manager();
 }
