@@ -70,6 +70,7 @@ E_REFLECT(PpBag)
 E_END
 
 using ECS::reflect::PrettyPrintOptions;
+using ECS::reflect::prettyPrint;
 using ECS::reflect::Ref;
 using ECS::reflect::toPrettyString;
 
@@ -239,6 +240,88 @@ void test_escaping_tabs_and_char_quotes() {
     };
 }
 
+void test_escaping_carriage_return() {
+    "a carriage return is escaped as \\r"_test = [] {
+        std::string text = "a\rb";
+
+        expect(toPrettyString(Ref::make(text)) == std::string("\"a\\rb\""));
+    };
+}
+
+void test_escaping_other_control_characters() {
+    "other control characters, embedded NUL and DEL are escaped as \\xHH"_test = [] {
+        std::string text("\0|\x01|\x1B|\x7F|\x1f", 9);
+
+        expect(toPrettyString(Ref::make(text)) ==
+               std::string("\"\\x00|\\x01|\\x1B|\\x7F|\\x1F\""));
+    };
+}
+
+void test_escaping_named_escapes_unchanged() {
+    "\\n, \\t, backslash and the quote character keep their escapes"_test = [] {
+        std::string text = "\n\t\\\"'";
+        char quote = '\'';
+        char doubleQuote = '"';
+
+        expect(toPrettyString(Ref::make(text)) == std::string("\"\\n\\t\\\\\\\"'\""));
+        expect(toPrettyString(Ref::make(quote)) == std::string("'\\''"));
+        expect(toPrettyString(Ref::make(doubleQuote)) == std::string("'\"'"));
+    };
+}
+
+void test_escaping_keeps_utf8() {
+    "UTF-8 bytes are printed unchanged"_test = [] {
+        std::string text = "\xC3\xA9 \xE6\x97\xA5\xE6\x9C\xAC";
+
+        expect(toPrettyString(Ref::make(text)) ==
+               std::string("\"\xC3\xA9 \xE6\x97\xA5\xE6\x9C\xAC\""));
+    };
+}
+
+void test_escaping_empty_string() {
+    "an empty string prints as two quotes"_test = [] {
+        std::string text;
+
+        expect(toPrettyString(Ref::make(text)) == std::string("\"\""));
+    };
+}
+
+void test_escaping_control_chars() {
+    "control characters in a char are escaped"_test = [] {
+        char cr = '\r';
+        char soh = '\x01';
+        char nul = '\0';
+        char plain = 'a';
+
+        expect(toPrettyString(Ref::make(cr)) == std::string("'\\r'"));
+        expect(toPrettyString(Ref::make(soh)) == std::string("'\\x01'"));
+        expect(toPrettyString(Ref::make(nul)) == std::string("'\\x00'"));
+        expect(toPrettyString(Ref::make(plain)) == std::string("'a'"));
+    };
+}
+
+void test_escaping_hex_digit_after_escape() {
+    "a hex digit right after a \\xHH escape is kept apart"_test = [] {
+        std::string text = "\x01" "AF";
+
+        expect(toPrettyString(Ref::make(text)) == std::string("\"\\x01AF\""));
+    };
+}
+
+void test_escaping_keeps_stream_flags() {
+    "escaping leaves the stream's formatting flags untouched"_test = [] {
+        std::string text = "\x1B";
+        std::ostringstream os;
+        const auto flags = os.flags();
+        prettyPrint(os, Ref::make(text));
+        os << ' ' << 255;
+
+        expect(os.str() == std::string("\"\\x1B\" 255"));
+        expect(os.flags() == flags);
+        expect(os.fill() == ' ');
+    };
+}
+
 void test_compact_sequences_of_enums_and_opaques() {
     "sequences of enums and of opaque values are leaves, printed on one line"_test = [] {
         std::vector<PpMode> modes{PpMode::A, PpMode::B};
@@ -278,6 +361,14 @@ void run_pretty_print_tests() {
     test_empty_struct_and_invalid_ref();
     test_string_escaping();
     test_escaping_tabs_and_char_quotes();
+    test_escaping_carriage_return();
+    test_escaping_other_control_characters();
+    test_escaping_named_escapes_unchanged();
+    test_escaping_keeps_utf8();
+    test_escaping_empty_string();
+    test_escaping_control_chars();
+    test_escaping_hex_digit_after_escape();
+    test_escaping_keeps_stream_flags();
     test_compact_sequences_of_enums_and_opaques();
     test_stream_operator();
 }

@@ -99,9 +99,10 @@ namespace ECS::reflect {
             /**
              * @brief Ref to an entity's component of this type.
              * @return An invalid Ref when absent or when type is not a component type.
-             * @throws std::invalid_argument if entity is not alive.
+             * @throws std::invalid_argument if entity is not alive, whatever the type.
              */
             [[nodiscard]] Ref get(Entity entity, const TypeInfo& type) {
+                _registry.ensureEntityAlive(entity);
                 const detail::ComponentInfo* info = detail::ComponentCatalog::instance().find(type);
                 if (!info) {
                     return {};
@@ -122,16 +123,18 @@ namespace ECS::reflect {
             /**
              * @brief Adds (or replaces) a default-constructed component of this type.
              *
-             * Creates the type's pool in the Registry if needed. Under
-             * runDeferred, the Ref points to the value applied at flush, like
+             * Creates the type's pool in the Registry if needed, only once the
+             * entity and the type are known to be valid. Under runDeferred,
+             * the Ref points to the value applied at flush, like
              * Registry::addComponent<T>.
-             * @return An invalid Ref when type is not a component type or has no
-             *         default constructor.
-             * @throws std::invalid_argument if entity is not alive.
+             * @return An invalid Ref, without touching the Registry, when type is
+             *         not a component type or has no default constructor.
+             * @throws std::invalid_argument if entity is not alive, whatever the type.
              */
             Ref add(Entity entity, const TypeInfo& type) {
+                _registry.ensureEntityAlive(entity);
                 const detail::ComponentInfo* info = detail::ComponentCatalog::instance().find(type);
-                if (!info) {
+                if (!info || !type.construct) {
                     return {};
                 }
                 _registry.ensurePoolById(info->id, info->ops.makePool);
@@ -141,9 +144,12 @@ namespace ECS::reflect {
 
             /**
              * @brief Removes an entity's component of this type, if any.
-             * @throws std::invalid_argument if entity is not alive.
+             *
+             * No-op when type is not a component type.
+             * @throws std::invalid_argument if entity is not alive, whatever the type.
              */
             void remove(Entity entity, const TypeInfo& type) {
+                _registry.ensureEntityAlive(entity);
                 if (const detail::ComponentInfo* info = detail::ComponentCatalog::instance().find(type)) {
                     _registry.removeComponentById(entity, info->id);
                 }

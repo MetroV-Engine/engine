@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <new>
@@ -21,7 +24,13 @@ namespace ECS::reflect {
     /**
      * @brief Process-wide catalogue of runtime type descriptions.
      *
-     * Built-in scalars are registered on construction. Any other type is
+     * Built-in scalars are registered on construction: bool, char, every
+     * fundamental integer type, wchar_t, char8_t, char16_t, char32_t, float,
+     * double, long double and std::string. Integers are named by signedness
+     * and width ("int32", "uint64"), not by spelling: integer types with the
+     * same name, size and alignment share one TypeInfo (aliases), so where
+     * std::size_t is unsigned long and std::uint64_t unsigned long long,
+     * find<std::size_t>() == find<std::uint64_t>(). Any other type is
      * registered on demand by registerType<T>(), which also registers the
      * types of its fields, recursively:
      *  - E_REFLECT types become TypeKind::Struct with their fields;
@@ -31,6 +40,9 @@ namespace ECS::reflect {
      *  - anything else becomes TypeKind::Opaque.
      * Enum and Opaque names come from typeid(T).name(), which is
      * compiler-specific: do not persist the id of such a type.
+     *
+     * A registration that throws (name collision) is rolled back entirely:
+     * the type and every type registered on its behalf are removed.
      *
      * Registration is not thread-safe; do it at startup, before systems run.
      */
@@ -62,9 +74,17 @@ namespace ECS::reflect {
                 if constexpr (Reflected<U>) {
                     // Inserted before its fields so self-referencing types
                     // (struct Node { std::vector<Node> children; }) terminate.
+                    // If a field fails, everything registered since the mark
+                    // goes too: field types such as vector<Node> point to Node.
+                    const std::size_t mark = _storage.size();
                     TypeInfo& info = insert<U>(std::string(Descriptor<U>::name), TypeKind::Struct);
-                    FieldBuilder<U> builder{*this, info.fields};
-                    forEachField<U>(builder);
+                    try {
+                        FieldBuilder<U> builder{*this, info.fields};
+                        forEachField<U>(builder);
+                    } catch (...) {
+                        rollback(mark);
+                        throw;
+                    }
                     return info;
                 } else if constexpr (HasContainerTraits<U>) {
                     return registerContainer<U>();
@@ -83,7 +103,7 @@ namespace ECS::reflect {
             template<typename T>
             [[nodiscard]] const TypeInfo* find() const noexcept {
                 const auto it = _byType.find(std::type_index(typeid(std::remove_cv_t<T>)));
-                return it == _byType.end() ? nullptr : it->second.get();
+                return it == _byType.end() ? nullptr : it->second;
             }
 
             /** @brief Returns the type registered under this id, or nullptr. */
@@ -107,18 +127,42 @@ namespace ECS::reflect {
             TypeRegistry() {
                 registerScalar<bool>("bool");
                 registerScalar<char>("char");
-                registerScalar<std::int8_t>("int8");
-                registerScalar<std::int16_t>("int16");
-                registerScalar<std::int32_t>("int32");
-                registerScalar<std::int64_t>("int64");
-                registerScalar<std::uint8_t>("uint8");
-                registerScalar<std::uint16_t>("uint16");
-                registerScalar<std::uint32_t>("uint32");
-                registerScalar<std::uint64_t>("uint64");
+                // The <cstdint> types first, in the historical order: they own
+                // the TypeInfo of their name; same-width fundamental types alias it.
+                registerInteger<std::int8_t>();
+                registerInteger<std::int16_t>();
+                registerInteger<std::int32_t>();
+                registerInteger<std::int64_t>();
+                registerInteger<std::uint8_t>();
+                registerInteger<std::uint16_t>();
+                registerInteger<std::uint32_t>();
+                registerInteger<std::uint64_t>();
                 registerScalar<float>("float");
                 registerScalar<double>("double");
                 registerScalar<std::string>("string");
+                registerInteger<signed char>();
+                registerInteger<short>();
+                registerInteger<int>();
+                registerInteger<long>();
+                registerInteger<long long>();
+                registerInteger<unsigned char>();
+                registerInteger<unsigned short>();
+                registerInteger<unsigned int>();
+                registerInteger<unsigned long>();
+                registerInteger<unsigned long long>();
+                registerScalar<long double>("long double");
+                registerScalar<wchar_t>("wchar");
+                registerScalar<char8_t>("char8");
+                registerScalar<char16_t>("char16");
+                registerScalar<char32_t>("char32");
             }
+
+            // Character types other than char: operator<< is deleted for them
+            // on a narrow stream, so they print their numeric code unit.
+            template<typename T>
+            static constexpr bool isWideCharacter =
+                std::is_same_v<T, wchar_t> || std::is_same_v<T, char8_t> ||
+                std::is_same_v<T, char16_t> || std::is_same_v<T, char32_t>;
 
             // Visitor turning each E_FIELD into a FieldInfo with a captureless accessor.
             template<typename T>
@@ -255,13 +299,45 @@ namespace ECS::reflect {
                 return info;
             }
 
+            // Names an integer type by signedness and width ("int32", "uint64").
+            // If a scalar of the same size and alignment already has that name
+            // (long vs long long), T becomes an alias of its TypeInfo.
+            template<typename T>
+            void registerInteger() {
+                static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool> &&
+                              !std::is_same_v<T, char> && !isWideCharacter<T>,
+                              "registerInteger is for signed/unsigned integer types");
+                if (find<T>()) {
+                    return;   // e.g. signed char, already registered as std::int8_t
+                }
+                std::string name = std::string(std::is_signed_v<T> ? "int" : "uint") +
+                                   std::to_string(sizeof(T) * CHAR_BIT);
+                const TypeInfo* same = find(name);
+                if (same && same->kind == TypeKind::Scalar && same->size == sizeof(T) &&
+                    same->align == alignof(T)) {
+                    _byType.emplace(std::type_index(typeid(T)), same);
+                    return;
+                }
+                registerScalar<T>(std::move(name));
+            }
+
             template<typename T>
             void registerScalar(std::string name) {
                 TypeInfo& info = insert<T>(std::move(name), TypeKind::Scalar);
-                // operator<< would print these as characters or 1/0.
-                if constexpr (std::is_same_v<T, std::int8_t> || std::is_same_v<T, std::uint8_t>) {
+                // operator<< would print these as characters or 1/0, or is
+                // deleted (wchar_t, char8_t, char16_t, char32_t).
+                if constexpr (std::is_integral_v<T> && sizeof(T) == 1 && !std::is_same_v<T, bool> &&
+                              !std::is_same_v<T, char> && !std::is_same_v<T, char8_t>) {
+                    // int8 / uint8 (signed / unsigned char): a number, not a character.
                     info.print = [](std::ostream& os, const void* obj) {
                         os << static_cast<int>(*static_cast<const T*>(obj));
+                    };
+                } else if constexpr (isWideCharacter<T>) {
+                    // The numeric code unit: the stream may not be able to
+                    // encode the character, and no narrow operator<< exists.
+                    info.print = [](std::ostream& os, const void* obj) {
+                        using Code = std::conditional_t<std::is_signed_v<T>, long long, unsigned long long>;
+                        os << static_cast<Code>(*static_cast<const T*>(obj));
                     };
                 } else if constexpr (std::is_same_v<T, bool>) {
                     info.print = [](std::ostream& os, const void* obj) {
@@ -302,13 +378,37 @@ namespace ECS::reflect {
 
                 // TypeInfo lives on the heap: its address survives map rehashes.
                 TypeInfo& ref = *info;
-                _byId.emplace(id, &ref);
-                _ordered.push_back(&ref);
-                _byType.emplace(std::type_index(typeid(T)), std::move(info));
+                const std::size_t mark = _storage.size();
+                _storage.push_back(std::move(info));
+                try {
+                    _ordered.push_back(&ref);
+                    _byId.emplace(id, &ref);
+                    _byType.emplace(std::type_index(typeid(T)), &ref);
+                } catch (...) {
+                    rollback(mark);
+                    throw;
+                }
                 return ref;
             }
 
-            std::unordered_map<std::type_index, std::unique_ptr<TypeInfo>> _byType;
+            // Removes every TypeInfo stored from index mark on, and every key
+            // (aliases included) referring to one of them.
+            void rollback(std::size_t mark) noexcept {
+                const auto first = _storage.begin() + static_cast<std::ptrdiff_t>(mark);
+                const auto removed = [&](const TypeInfo* info) noexcept {
+                    return std::any_of(first, _storage.end(),
+                                       [info](const auto& owned) { return owned.get() == info; });
+                };
+                std::erase_if(_byType, [&](const auto& entry) { return removed(entry.second); });
+                std::erase_if(_byId, [&](const auto& entry) { return removed(entry.second); });
+                _ordered.resize(std::min(_ordered.size(), mark));
+                _storage.erase(first, _storage.end());
+            }
+
+            // Owns every TypeInfo; _ordered lists them in the same order.
+            std::vector<std::unique_ptr<TypeInfo>> _storage;
+            // Several keys may share one TypeInfo (integer aliases).
+            std::unordered_map<std::type_index, const TypeInfo*> _byType;
             std::unordered_map<TypeId, const TypeInfo*> _byId;
             std::vector<const TypeInfo*> _ordered;
     };

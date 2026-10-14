@@ -19,6 +19,7 @@ void run_containers_tests();
 void run_pretty_print_tests();
 void run_registry_component_id_tests();
 void run_registry_inspector_tests();
+void run_component_catalog_tests();
 void run_unknown_type_tests();
 
 int main()
@@ -43,6 +44,7 @@ int main()
     run_pretty_print_tests();
     run_registry_component_id_tests();
     run_registry_inspector_tests();
+    run_component_catalog_tests();
     run_unknown_type_tests();
     run_registry_tests();
 }

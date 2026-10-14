@@ -1,12 +1,14 @@
 #include <boost/ut.hpp>
 
 #include <algorithm>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
 
 #include "ECS/Reflection/Reflection.hpp"
+#include "../RegistryTestAccess.hpp"
 
 using namespace boost::ut;
 
@@ -62,6 +64,7 @@ using ECS::reflect::TypeInfo;
 using ECS::reflect::TypeKind;
 using ECS::reflect::TypeRegistry;
 using ECS::reflect::detail::ComponentCatalog;
+using ECS::TestAccess::RegistryIdAccess;
 
 namespace {
     const TypeInfo& typeNamed(std::string_view name) {
@@ -208,11 +211,75 @@ void test_component_without_default_constructor() {
 
         expect(!inspector.add(entity, type).valid());
         expect(!registry.hasComponents<CrNoDefault>(entity));
+        expect(!RegistryIdAccess::hasPoolById(registry, ECS::componentId<CrNoDefault>()));   // nothing created
 
         registry.addComponent(entity, CrNoDefault{9});
         expect(inspector.get(entity, type).path("value").as<int>() == 9_i);
         inspector.remove(entity, type);
         expect(!registry.hasComponents<CrNoDefault>(entity));
+    };
+}
+
+void test_dead_entity_throws_whatever_the_type() {
+    "get, add and remove throw for a dead entity, component type or not"_test = [] {
+        ECS::Registry registry;
+        auto inspector = registry.inspect();
+        const auto entity = registry.spawnEntity();
+        registry.killEntity(entity);
+
+        for (const TypeInfo* type : {&typeNamed("float"), &typeNamed("CrConstant"), &typeNamed("CrHealth")}) {
+            expect(throws<std::invalid_argument>([&] { (void)inspector.get(entity, *type); })) << type->name;
+            expect(throws<std::invalid_argument>([&] { (void)inspector.add(entity, *type); })) << type->name;
+            expect(throws<std::invalid_argument>([&] { inspector.remove(entity, *type); })) << type->name;
+        }
+    };
+}
+
+void test_add_on_dead_entity_creates_no_pool() {
+    "add on a dead entity throws before creating the pool"_test = [] {
+        ECS::Registry registry;
+        auto inspector = registry.inspect();
+        const auto entity = registry.spawnEntity();
+        registry.killEntity(entity);
+
+        expect(throws<std::invalid_argument>([&] { (void)inspector.add(entity, typeNamed("CrPosition")); }));
+        expect(!RegistryIdAccess::hasPoolById(registry, ECS::componentId<CrPosition>()));
+    };
+}
+
+void test_has_on_dead_entity_does_not_throw() {
+    "has returns false for a dead entity, component type or not"_test = [] {
+        ECS::Registry registry;
+        auto inspector = registry.inspect();
+        const auto entity = registry.spawnEntity();
+        registry.addComponent(entity, CrHealth{});
+        registry.killEntity(entity);
+
+        bool hasHealth = true;
+        bool hasFloat = true;
+        expect(nothrow([&] { hasHealth = inspector.has(entity, typeNamed("CrHealth")); }));
+        expect(nothrow([&] { hasFloat = inspector.has(entity, typeNamed("float")); }));
+        expect(!hasHealth);
+        expect(!hasFloat);
+    };
+}
+
+void test_non_component_type_on_alive_entity() {
+    "a type that is not a component gives an invalid Ref and changes nothing"_test = [] {
+        ECS::Registry registry;
+        auto inspector = registry.inspect();
+        const auto entity = registry.spawnEntity();
+        registry.addComponent(entity, CrPosition{1.0f, 2.0f});
+
+        for (const TypeInfo* type : {&typeNamed("float"), &typeNamed("CrConstant")}) {
+            Ref added;
+            expect(nothrow([&] { added = inspector.add(entity, *type); })) << type->name;
+            expect(!added.valid()) << type->name;
+            expect(!inspector.get(entity, *type).valid()) << type->name;
+            expect(nothrow([&] { inspector.remove(entity, *type); })) << type->name;
+        }
+        expect(inspector.list(entity).size() == 1_ul);
+        expect(registry.getComponent<CrPosition>(entity).y == 2.0_f);
     };
 }
 
@@ -287,6 +354,10 @@ void run_registry_inspector_tests() {
     test_components_of();
     test_deferred_add_and_remove_by_type();
     test_component_without_default_constructor();
+    test_dead_entity_throws_whatever_the_type();
+    test_add_on_dead_entity_creates_no_pool();
+    test_has_on_dead_entity_does_not_throw();
+    test_non_component_type_on_alive_entity();
     test_manual_registration();
     test_unstorable_type_is_reflected_but_not_a_component();
     test_find_component_type();

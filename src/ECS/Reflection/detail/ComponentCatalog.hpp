@@ -1,11 +1,13 @@
 #pragma once
 
 #include <exception>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "../../ComponentId.hpp"
@@ -109,14 +111,27 @@ namespace ECS::reflect::detail {
                 return _ordered;
             }
 
-            /** @brief Failures of the automatic registration (see RegistryInspector::errors). */
+            /**
+             * @brief Failures of the automatic registration, as "<TypeName>: <what>",
+             *        in the order they happened (see RegistryInspector::errors).
+             *
+             * Each one was also written to std::cerr when it was recorded.
+             */
             [[nodiscard]] const std::vector<std::string>& errors() const noexcept {
                 return _errors;
             }
 
-            /** @brief Records an automatic registration failure. */
+            /**
+             * @brief Records an automatic registration failure and reports it
+             *        right away on std::cerr, as "[reflection] <TypeName>: <what>".
+             */
             void recordError(std::string_view typeName, std::string_view what) {
-                _errors.push_back(std::string(typeName) + ": " + std::string(what));
+                std::string message = std::string(typeName) + ": " + std::string(what);
+                // Through std::cerr until the engine has a logger. Including
+                // <iostream> guarantees std::cerr is usable during static
+                // initialisation, where E_REFLECT registrations run.
+                std::cerr << "[reflection] " << message << '\n';
+                _errors.push_back(std::move(message));
             }
 
         private:

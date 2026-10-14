@@ -22,7 +22,9 @@ namespace ECS::reflect {
      *
      * - Sequence: `using Element`, `name(elementName)`, `size(const T&)`,
      *   `at(T&, index) -> Element*`; optionally `resize(T&, count)` and
-     *   `erase(T&, index)` (absent means fixed size).
+     *   `erase(T&, index)` (absent means fixed size). std::vector only
+     *   offers `resize` for default- and move-constructible elements, and
+     *   `erase` for move-assignable ones.
      * - Map: `using Key`, `using Value`, `name(keyName, valueName)`,
      *   `size(const T&)`, `find(T&, const Key&) -> Value*` (null if absent),
      *   `erase(T&, const Key&) -> bool`, `forEach(T&, fn(const Key&, Value&))`;
@@ -56,10 +58,11 @@ namespace ECS::reflect {
         static std::size_t size(const Container& c) noexcept { return c.size(); }
         static E* at(Container& c, std::size_t index) noexcept { return &c[index]; }
         static void resize(Container& c, std::size_t count)
-            requires std::is_default_constructible_v<E> {
+            requires std::is_default_constructible_v<E> && std::is_move_constructible_v<E> {
             c.resize(count);
         }
-        static void erase(Container& c, std::size_t index) {
+        static void erase(Container& c, std::size_t index)
+            requires std::is_move_assignable_v<E> {
             c.erase(c.begin() + static_cast<std::ptrdiff_t>(index));
         }
     };
