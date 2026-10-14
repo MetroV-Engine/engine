@@ -157,18 +157,34 @@ namespace ECS::reflect {
                     }
                 }
 
+                /**
+                 * @brief Writes text between quotes, escaped.
+                 *
+                 * \n, \r, \t, the backslash and the quote character get their
+                 * usual escapes; every other control character (below 0x20,
+                 * and 0x7F) is written as \xHH with two uppercase hex digits.
+                 * Bytes from 0x80 up (UTF-8) pass through unchanged. The
+                 * stream's formatting flags are not touched.
+                 */
                 void quoted(std::string_view text, char quote) {
+                    static constexpr char hexDigits[] = "0123456789ABCDEF";
                     _os << quote;
                     for (const char c : text) {
+                        const auto byte = static_cast<unsigned char>(c);
                         switch (c) {
                             case '\n': _os << "\\n"; break;
+                            case '\r': _os << "\\r"; break;
                             case '\t': _os << "\\t"; break;
                             case '\\': _os << "\\\\"; break;
                             default:
-                                if (c == quote) {
-                                    _os << '\\';
+                                if (byte < 0x20 || byte == 0x7F) {
+                                    _os << "\\x" << hexDigits[byte >> 4] << hexDigits[byte & 0x0F];
+                                } else {
+                                    if (c == quote) {
+                                        _os << '\\';
+                                    }
+                                    _os << c;
                                 }
-                                _os << c;
                         }
                     }
                     _os << quote;
