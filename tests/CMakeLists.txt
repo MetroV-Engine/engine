@@ -6,7 +6,9 @@ set(ECS_TEST_FILES
 	ECS/TestComponentId.cpp
 	ECS/TestComponentStorage.cpp
 	ECS/TestComponentPool.cpp
-	ECS/TestResources.cpp
+	ECS/Core/Resource/TestResourceId.cpp
+	ECS/Core/Resource/TestResourceHolder.cpp
+	ECS/Core/Resource/TestResourceStore.cpp
 	ECS/TestSignatureTable.cpp
 	ECS/TestZipper.cpp
 	ECS/TestZipperDriver.cpp

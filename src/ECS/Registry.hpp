@@ -15,9 +15,8 @@
 #include "ComponentStorage.hpp"
 #include "ComponentPool.hpp"
 #include "EntityManager.hpp"
-#include "ResourceHolder.hpp"
-#include "ResourceId.hpp"
 #include "SignatureTable.hpp"
+#include "Core/Resource/ResourceStore.hpp"
 #include "View.hpp"
 
 namespace ECS {
@@ -286,12 +285,7 @@ namespace ECS {
              */
             template<typename Resource, typename... Params>
             Resource& setResource(Params&&... params) {
-                const ResourceId id = resourceId<Resource>();
-                ensureResourceSlot(id);
-                auto holder = std::make_unique<ResourceHolder<Resource>>(std::forward<Params>(params)...);
-                Resource& ref = holder->value();
-                _resources[id] = std::move(holder);
-                return ref;
+                return _resources.set<Resource>(std::forward<Params>(params)...);
             }
 
             /**
@@ -300,24 +294,19 @@ namespace ECS {
              */
             template<typename Resource>
             [[nodiscard]] Resource& getResource() {
-                const ResourceId id = resourceId<Resource>();
-                requireResourceSet(id);
-                return typedResource<Resource>(id).value();
+                return _resources.get<Resource>();
             }
 
             /** @copydoc getResource() */
             template<typename Resource>
             [[nodiscard]] const Resource& getResource() const {
-                const ResourceId id = resourceId<Resource>();
-                requireResourceSet(id);
-                return typedResource<Resource>(id).value();
+                return _resources.get<Resource>();
             }
 
             /** @brief Checks whether a resource of this type has been set. */
             template<typename Resource>
             [[nodiscard]] bool hasResource() const noexcept {
-                const ResourceId id = resourceId<Resource>();
-                return id < _resources.size() && _resources[id] != nullptr;
+                return _resources.has<Resource>();
             }
 
             /**
@@ -656,28 +645,6 @@ namespace ECS {
                 return *static_cast<const ComponentPool<Component>*>(_pools[id].get());
             }
 
-            void ensureResourceSlot(ResourceId id) {
-                if (id >= _resources.size()) {
-                    _resources.resize(static_cast<std::size_t>(id) + 1);
-                }
-            }
-
-            void requireResourceSet(ResourceId id) const {
-                if (id >= _resources.size() || !_resources[id]) {
-                    throw std::out_of_range("ECS::Registry: resource not set");
-                }
-            }
-
-            template<typename Resource>
-            ResourceHolder<Resource>& typedResource(ResourceId id) {
-                return *static_cast<ResourceHolder<Resource>*>(_resources[id].get());
-            }
-
-            template<typename Resource>
-            const ResourceHolder<Resource>& typedResource(ResourceId id) const {
-                return *static_cast<const ResourceHolder<Resource>*>(_resources[id].get());
-            }
-
             EntityManager _entities;
             std::vector<std::unique_ptr<IComponentPool>> _pools;
             std::unordered_map<std::size_t, std::string> _entityNames;
@@ -686,7 +653,7 @@ namespace ECS {
             SignatureTable _signatures;
             std::vector<std::function<void(Registry&)>> _commandQueue;
             std::vector<bool> _pendingSpawns;
-            std::vector<std::unique_ptr<IResourceHolder>> _resources;
+            ResourceStore _resources;
             bool _deferring{false};
     };
 }
