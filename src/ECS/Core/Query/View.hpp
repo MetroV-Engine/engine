@@ -5,9 +5,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "Core/Component/ComponentStorage.hpp"
-#include "Core/Entity/Entity.hpp"
-#include "Core/Entity/EntityManager.hpp"
+#include "../Component/ComponentStorage.hpp"
+#include "../Entity/Entity.hpp"
+#include "../Entity/EntityManager.hpp"
 #include "Zipper.hpp"
 
 namespace ECS {

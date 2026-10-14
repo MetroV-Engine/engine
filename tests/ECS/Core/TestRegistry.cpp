@@ -9,8 +9,8 @@
 #include <vector>
 
 #include "ECS/Core/Component/ComponentPool.hpp"
-#include "ECS/Registry.hpp"
-#include "RegistryTestAccess.hpp"
+#include "ECS/Core/Registry.hpp"
+#include "../Support/RegistryTestAccess.hpp"
 
 using namespace boost::ut;
 

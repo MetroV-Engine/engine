@@ -2,30 +2,20 @@
 
 #include <algorithm>
 #include <memory>
-#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
-#include "Registry.hpp"
+#include "../Registry.hpp"
+#include "ISystem.hpp"
 
 namespace ECS {
-    class ISystem {
-        public:
-            virtual ~ISystem() = default;
-
-            /** @brief Called once by SystemManager::addSystem, right after construction. */
-            virtual void init(ECS::Registry&) {}
-
-            /** @brief Called once by SystemManager::removeSystem, right before destruction. */
-            virtual void shutdown(ECS::Registry&) {}
-
-            /** @brief Called once per frame by SystemManager::update, under its own deferred-mutation scope. */
-            virtual void update(ECS::Registry &reg, double dt = 0.0) = 0;
-
-            virtual const std::string name() const = 0;
-    };
-
+    /**
+     * @brief Owns the systems and runs them in registration order.
+     *
+     * Each system's update runs under its own Registry::runDeferred scope,
+     * flushed before the next system starts.
+     */
     class SystemManager {
         public:
             SystemManager() = default;

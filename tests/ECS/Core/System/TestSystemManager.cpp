@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "ECS/Systems.hpp"
+#include "ECS/Core/System/SystemManager.hpp"
 
 using namespace boost::ut;
 
@@ -283,7 +283,7 @@ namespace {
     }
 }
 
-void run_systems_tests() {
+void run_system_manager_tests() {
     test_add_system_returns_reference_to_constructed_instance();
     test_size_reflects_registered_systems();
     test_update_runs_systems_in_registration_order();

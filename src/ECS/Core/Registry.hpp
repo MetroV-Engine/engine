@@ -10,12 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "Core/Component/ComponentStore.hpp"
-#include "Core/Entity/EntityManager.hpp"
-#include "Core/Entity/Name.hpp"
-#include "Core/CommandBuffer.hpp"
-#include "Core/Resource/ResourceStore.hpp"
-#include "View.hpp"
+#include "Component/ComponentStore.hpp"
+#include "Entity/EntityManager.hpp"
+#include "Entity/Name.hpp"
+#include "CommandBuffer.hpp"
+#include "Resource/ResourceStore.hpp"
+#include "Query/View.hpp"
 
 namespace ECS {
     namespace reflect {

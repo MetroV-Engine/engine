@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "ECS/Core/Component/ComponentStorage.hpp"
-#include "ECS/Zipper.hpp"
+#include "ECS/Core/Query/Zipper.hpp"
 
 using namespace boost::ut;
 

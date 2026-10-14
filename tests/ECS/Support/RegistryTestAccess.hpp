@@ -7,7 +7,7 @@
 #include "ECS/Core/Component/ComponentOps.hpp"
 #include "ECS/Core/Component/ComponentPool.hpp"
 #include "ECS/Core/Entity/Entity.hpp"
-#include "ECS/Registry.hpp"
+#include "ECS/Core/Registry.hpp"
 
 namespace ECS::TestAccess {
     /** @brief Reaches the Registry's private ComponentId-based access, which only reflect::RegistryInspector (a friend) may use in production. */

@@ -6,7 +6,7 @@
 #include <type_traits>
 
 #include "ECS/Core/Entity/EntityManager.hpp"
-#include "../../EntityTestAccess.hpp"
+#include "../../Support/EntityTestAccess.hpp"
 
 using namespace boost::ut;
 using ECS::TestAccess::EntityAccess;

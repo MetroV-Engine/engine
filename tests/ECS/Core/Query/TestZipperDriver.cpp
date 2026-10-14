@@ -8,9 +8,9 @@
 
 #include "ECS/Core/Component/ComponentStorage.hpp"
 #include "ECS/Core/Entity/EntityManager.hpp"
-#include "ECS/Registry.hpp"
-#include "ECS/View.hpp"
-#include "ECS/Zipper.hpp"
+#include "ECS/Core/Registry.hpp"
+#include "ECS/Core/Query/View.hpp"
+#include "ECS/Core/Query/Zipper.hpp"
 
 using namespace boost::ut;
 

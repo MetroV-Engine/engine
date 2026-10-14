@@ -37,9 +37,9 @@ entities that contain the components they need.
 | [ComponentStore.hpp](Core/Component/ComponentStore.hpp) | Every component pool of a world, kept in sync with the signature rows. |
 | [ResourceStore.hpp](Core/Resource/ResourceStore.hpp) | One value per resource type (`ResourceId.hpp`, `ResourceHolder.hpp` beside it). |
 | [CommandBuffer.hpp](Core/CommandBuffer.hpp) | Queue of deferred commands used by `runDeferred`. |
-| [Registry.hpp](Registry.hpp) | Main ECS API for entities and components. |
-| [View.hpp](View.hpp) | Public queries over entities sharing component types. |
-| [Systems.hpp](Systems.hpp) | `ISystem` interface and `SystemManager`, which owns and runs systems. |
+| [Registry.hpp](Core/Registry.hpp) | Main ECS API for entities and components. |
+| [View.hpp](Core/Query/View.hpp) | Public queries over entities sharing component types. |
+| [ISystem.hpp](Core/System/ISystem.hpp), [SystemManager.hpp](Core/System/SystemManager.hpp) | `ISystem` interface and `SystemManager`, which owns and runs systems. |
 | [Reflection/](Reflection/README.md) | Runtime reflection: `E_REFLECT`, `Ref`, and `Registry::inspect()` for code that does not know component types. |
 
 ## Entity
@@ -189,7 +189,7 @@ by `ComponentOps::of<T>()`, which is only compiled for reflected types.
 
 ## Registry
 
-See [Registry.hpp](Registry.hpp).
+See [Registry.hpp](Core/Registry.hpp).
 
 `Registry` is the main entry point for the ECS. It coordinates entity lifecycle,
 component pools, and component access. System execution is handled by
@@ -291,7 +291,7 @@ while loading.
 ## Systems
 
 Systems are stateful objects implementing `ECS::ISystem`, owned and run by
-`ECS::SystemManager` (see [Systems.hpp](Systems.hpp)). They are executed in
+`ECS::SystemManager` (see [SystemManager.hpp](Core/System/SystemManager.hpp)). They are executed in
 registration order.
 
 ```cpp

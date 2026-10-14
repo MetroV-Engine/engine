@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "ECS/Reflection/Reflection.hpp"
-#include "../RegistryTestAccess.hpp"
+#include "../Support/RegistryTestAccess.hpp"
 
 using namespace boost::ut;
 

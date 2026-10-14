@@ -7,7 +7,7 @@
 #include "../Core/Entity/Entity.hpp"
 #include "../Core/Entity/EntityList.hpp"
 #include "../Core/Entity/Name.hpp"
-#include "../Registry.hpp"
+#include "../Core/Registry.hpp"
 #include "Ref.hpp"
 #include "TypeInfo.hpp"
 #include "TypeRegistry.hpp"
