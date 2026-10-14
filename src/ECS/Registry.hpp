@@ -361,8 +361,7 @@ namespace ECS {
             // a component's ComponentId. They are the single implementation
             // of has/remove, which the typed API forwards to. Only
             // reflect::RegistryInspector (a friend) uses them. Kept together
-            // so they can move to a dedicated ComponentStore (see
-            // REFACTOR_REGISTRY.md).
+            // so they can later move to a dedicated ComponentStore.
             // ----------------------------------------------------------------
 
             /**
