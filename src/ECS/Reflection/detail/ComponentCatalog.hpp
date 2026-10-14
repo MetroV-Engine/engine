@@ -10,8 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "../../ComponentId.hpp"
-#include "../../ComponentPool.hpp"
+#include "../../Core/Component/ComponentId.hpp"
+#include "../../Core/Component/ComponentOps.hpp"
+#include "../../Core/Component/ComponentPool.hpp"
 #include "../Descriptor.hpp"
 #include "../TypeInfo.hpp"
 #include "../TypeRegistry.hpp"

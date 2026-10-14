@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "ComponentStorage.hpp"
+#include "Core/Component/ComponentStorage.hpp"
 #include "Entity.hpp"
 #include "EntityManager.hpp"
 #include "Zipper.hpp"

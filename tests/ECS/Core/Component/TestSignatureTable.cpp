@@ -2,8 +2,8 @@
 
 #include <cstddef>
 
-#include "ECS/ComponentId.hpp"
-#include "ECS/SignatureTable.hpp"
+#include "ECS/Core/Component/ComponentId.hpp"
+#include "ECS/Core/Component/SignatureTable.hpp"
 
 using namespace boost::ut;
 
@@ -290,6 +290,34 @@ namespace {
             expect(table.wordsPerEntity() == std::size_t{1});
         };
     }
+    void test_has_entity_is_false_for_a_new_table() {
+        "hasEntity is false before any row exists"_test = [] {
+            const ECS::SignatureTable table;
+            expect(!table.hasEntity(0));
+        };
+    }
+
+    void test_has_entity_covers_every_row_up_to_the_index() {
+        "hasEntity is true for every row up to the highest ensured index"_test = [] {
+            ECS::SignatureTable table;
+            table.ensureEntity(3);
+
+            expect(table.hasEntity(0));
+            expect(table.hasEntity(3));
+            expect(!table.hasEntity(4));
+        };
+    }
+
+    void test_has_entity_is_unchanged_by_growth() {
+        "hasEntity is unchanged when the rows grow wider"_test = [] {
+            ECS::SignatureTable table;
+            table.ensureEntity(1);
+            table.ensureComponent(200);
+
+            expect(table.hasEntity(1));
+            expect(!table.hasEntity(2));
+        };
+    }
 }
 
 void run_signature_table_tests() {
@@ -311,4 +339,7 @@ void run_signature_table_tests() {
     test_growth_with_no_entities();
     test_clear_after_growth_clears_high_ids();
     test_test_is_false_for_unknown_id_or_entity();
+    test_has_entity_is_false_for_a_new_table();
+    test_has_entity_covers_every_row_up_to_the_index();
+    test_has_entity_is_unchanged_by_growth();
 }

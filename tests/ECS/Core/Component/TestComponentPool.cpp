@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <type_traits>
 
-#include "ECS/ComponentPool.hpp"
+#include "ECS/Core/Component/ComponentPool.hpp"
 
 using namespace boost::ut;
 
@@ -260,6 +260,22 @@ void test_component_pool_without_hook_is_unaffected() {
     };
 }
 
+void test_component_pool_set_on_remove_replaces_previous_callback() {
+    "ComponentPool setOnRemove replaces the previous callback"_test = [] {
+        ECS::ComponentPool<Position> pool;
+        pool.storage().emplaceAt(1, 2, 3);
+        int firstCalls = 0;
+        int secondCalls = 0;
+        pool.setOnRemove([&firstCalls](Position&) { ++firstCalls; });
+        pool.setOnRemove([&secondCalls](Position&) { ++secondCalls; });
+
+        pool.erase(1);
+
+        expect(firstCalls == 0);
+        expect(secondCalls == 1);
+    };
+}
+
 }
 
 void run_component_pool_tests() {
@@ -281,4 +297,10 @@ void run_component_pool_tests() {
     test_component_pool_can_be_used_through_interface();
     test_different_component_pools_have_independent_storage();
     test_component_pool_does_not_expose_wrong_component_type();
+    test_component_pool_on_remove_fires_once_on_erase();
+    test_component_pool_on_remove_receives_the_exact_instance();
+    test_component_pool_on_remove_does_not_fire_for_missing_entity();
+    test_component_pool_on_remove_throwing_callback_is_contained();
+    test_component_pool_without_hook_is_unaffected();
+    test_component_pool_set_on_remove_replaces_previous_callback();
 }

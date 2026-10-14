@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "ECS/ComponentId.hpp"
+#include "ECS/Core/Component/ComponentId.hpp"
 
 using namespace boost::ut;
 

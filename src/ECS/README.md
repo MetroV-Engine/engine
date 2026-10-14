@@ -29,9 +29,14 @@ entities that contain the components they need.
 | --- | --- |
 | [Entity.hpp](Entity.hpp) | Lightweight entity handle and identity access. |
 | [EntityManager.hpp](EntityManager.hpp) | Entity creation, destruction, validation, and ID reuse. |
-| [ComponentId.hpp](ComponentId.hpp) | Lazy runtime ID assignment for component types. |
-| [ComponentStorage.hpp](ComponentStorage.hpp) | Component storage and fast entity-to-component lookup. |
-| [ComponentPool.hpp](ComponentPool.hpp) | Type-erased access to different component pools. |
+| [ComponentId.hpp](Core/Component/ComponentId.hpp) | Lazy runtime ID assignment for component types. |
+| [ComponentStorage.hpp](Core/Component/ComponentStorage.hpp) | Component storage and fast entity-to-component lookup. |
+| [ComponentPool.hpp](Core/Component/ComponentPool.hpp) | Type-erased access to different component pools. |
+| [ComponentOps.hpp](Core/Component/ComponentOps.hpp) | Type-specific operations on a component type, for code that only knows its `ComponentId`. |
+| [SignatureTable.hpp](Core/Component/SignatureTable.hpp) | One row of bits per entity: which components it owns. |
+| [ComponentStore.hpp](Core/Component/ComponentStore.hpp) | Every component pool of a world, kept in sync with the signature rows. |
+| [ResourceStore.hpp](Core/Resource/ResourceStore.hpp) | One value per resource type (`ResourceId.hpp`, `ResourceHolder.hpp` beside it). |
+| [CommandBuffer.hpp](Core/CommandBuffer.hpp) | Queue of deferred commands used by `runDeferred`. |
 | [Registry.hpp](Registry.hpp) | Main ECS API for entities and components. |
 | [View.hpp](View.hpp) | Public queries over entities sharing component types. |
 | [Systems.hpp](Systems.hpp) | `ISystem` interface and `SystemManager`, which owns and runs systems. |
@@ -106,7 +111,7 @@ Destroying an entity in `EntityManager` does not remove its components. The
 
 ## Component IDs
 
-See [ComponentId.hpp](ComponentId.hpp).
+See [ComponentId.hpp](Core/Component/ComponentId.hpp).
 
 Each component type receives a numeric ID the first time `componentId<T>()` is
 used. No manual registration line is required for each component.
@@ -129,7 +134,7 @@ files, save files, or network data.
 
 ## ComponentStorage
 
-See [ComponentStorage.hpp](ComponentStorage.hpp).
+See [ComponentStorage.hpp](Core/Component/ComponentStorage.hpp).
 
 `ComponentStorage<Component>` stores components densely while keeping a lookup from an
 entity ID to the component's packed position.
@@ -157,7 +162,7 @@ a component uses swap-and-pop, so packed order is not stable after an erase.
 
 ## ComponentPool
 
-See [ComponentPool.hpp](ComponentPool.hpp).
+See [ComponentPool.hpp](Core/Component/ComponentPool.hpp).
 
 The registry stores pools containing different component types. Since one
 container cannot directly store `ComponentStorage<Position>` and `ComponentStorage<Velocity>`

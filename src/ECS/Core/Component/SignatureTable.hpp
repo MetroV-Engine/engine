@@ -93,6 +93,11 @@ namespace ECS {
                 return (_words[entity * _wordsPerEntity + word] & bitOf(id)) != 0;
             }
 
+            /** @brief Checks whether a row exists for this entity index. */
+            [[nodiscard]] bool hasEntity(std::size_t entity) const noexcept {
+                return entity < _entityCount;
+            }
+
             /** @brief Number of 64-bit words in each entity's row. */
             [[nodiscard]] std::size_t wordsPerEntity() const noexcept {
                 return _wordsPerEntity;

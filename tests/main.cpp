@@ -3,6 +3,8 @@ void run_entity_manager_tests();
 void run_component_id_tests();
 void run_component_storage_tests();
 void run_component_pool_tests();
+void run_component_ops_tests();
+void run_component_store_tests();
 void run_command_buffer_tests();
 void run_resource_id_tests();
 void run_resource_holder_tests();
@@ -28,6 +30,8 @@ int main()
     run_component_id_tests();
     run_component_storage_tests();
     run_component_pool_tests();
+    run_component_ops_tests();
+    run_component_store_tests();
     run_command_buffer_tests();
     run_resource_id_tests();
     run_resource_holder_tests();

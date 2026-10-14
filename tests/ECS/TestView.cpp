@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "ECS/ComponentStorage.hpp"
+#include "ECS/Core/Component/ComponentStorage.hpp"
 #include "ECS/EntityManager.hpp"
 #include "ECS/View.hpp"
 

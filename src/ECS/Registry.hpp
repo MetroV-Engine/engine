@@ -11,11 +11,8 @@
 #include <vector>
 #include <unordered_map>
 
-#include "ComponentId.hpp"
-#include "ComponentStorage.hpp"
-#include "ComponentPool.hpp"
+#include "Core/Component/ComponentStore.hpp"
 #include "EntityManager.hpp"
-#include "SignatureTable.hpp"
 #include "Core/CommandBuffer.hpp"
 #include "Core/Resource/ResourceStore.hpp"
 #include "View.hpp"
@@ -32,18 +29,17 @@ namespace ECS {
 #endif
 
     /**
-     * @brief Header-only ECS registry for entities, component pools and systems.
+     * @brief The world: entities, their components and the resources.
      *
-     * Registry keeps one component storage per component type. Component IDs are
-     * allocated lazily and index the pool table, while EntityManager owns the
-     * entity lifecycle.
+     * A facade over its parts: EntityManager (entity lifecycle),
+     * ComponentStore (pools and signature rows), ResourceStore and
+     * CommandBuffer (deferred mode). It checks that entities are alive,
+     * chooses between applying a change now or at flush, and keeps the parts
+     * consistent (killing an entity erases its components).
      *
-     * The pools are the source of truth for which components an entity owns.
-     * Each entity's row in the SignatureTable mirrors them and is only
-     * updated here, which is why storages are handed out read-only: adding
-     * or removing a component must go through the Registry. The table widens
-     * when a component type is registered, so there is no limit on how many
-     * types a registry can hold.
+     * Storages are handed out read-only: adding or removing a component must
+     * go through the Registry, so the pools and the signature rows can't
+     * disagree.
      */
     class Registry {
         public:
@@ -76,7 +72,9 @@ namespace ECS {
             /**
              * @brief Destroys an entity and removes it from every component pool.
              * @param entity Entity to destroy.
-             * @throws std::invalid_argument if entity is not alive.
+             * @throws std::invalid_argument if entity is not alive. Under
+             *         runDeferred the kill is queued instead, and ignored at
+             *         flush if the entity is already dead.
              */
             void killEntity(Entity entity) {
                 mutate(entity, [this, entity] { killEntityImmediate(entity); });
@@ -89,7 +87,7 @@ namespace ECS {
              */
             template<typename Component>
             const ComponentStorage<Component>& registerComponent() {
-                return ensureStorage<Component>();
+                return _components.ensure<Component>();
             }
 
             /**
@@ -98,19 +96,22 @@ namespace ECS {
              */
             template<typename Component>
             const ComponentStorage<Component>& getComponents() const {
-                const ComponentId id = componentId<Component>();
-                requireRegistered(id);
-                return typedPool<Component>(id).storage();
+                return _components.storage<Component>();
             }
 
             /**
-             * @brief Returns a component for an entity.
+             * @brief Returns a component for an entity.             *
+             * The reference is short-lived: it is valid until the next add or
+             * remove of this component type (the storage is dense and may
+             * move its elements), or, under runDeferred, until the end of the
+             * outermost runDeferred. To keep something across frames, keep
+             * the Entity and fetch the component again.
              * @throws std::out_of_range if the pool or component is absent.
              */
             template<typename Component>
             Component& getComponent(Entity entity) {
                 ensureEntityAlive(entity);
-                return mutableStorage<Component>().get(entity.value());
+                return _components.storage<Component>().get(entity.value());
             }
 
             /** @copydoc getComponent(Entity) */
@@ -123,35 +124,27 @@ namespace ECS {
             /**
              * @brief Adds or replaces a component using copy or move semantics.
              * @tparam Component Deduced component value type.
-             * @return Reference to the stored component.
+             * @return Reference to the stored component; under runDeferred, to
+             *         the value that will be applied at flush. See getComponent
+             *         for how long it stays valid.
              */
             template<typename Component>
             std::decay_t<Component>& addComponent(Entity entity, Component&& component) {
                 ensureEntityAlive(entity);
                 using StoredComponent = std::decay_t<Component>;
                 StoredComponent value(std::forward<Component>(component));
-                if (!_commands.recording()) {
-                    return addComponentImmediate<StoredComponent>(entity, std::move(value));
-                }
-                return stage(entity, std::move(value), [this, entity](StoredComponent&& staged) {
-                    addComponentImmediate<StoredComponent>(entity, std::move(staged));
+                return addOrStage(entity, std::move(value), [this, entity](StoredComponent&& added) -> StoredComponent& {
+                    return _components.insert<StoredComponent>(entity.value(), std::move(added));
                 });
             }
 
             /**
-             * @brief Constructs or replaces a component for an entity.
-             * @return Reference to the stored component.
+             * @brief Constructs a component from params, then adds or replaces it like addComponent.
+             * @return Same as addComponent.
              */
             template<typename Component, typename... Params>
             Component& emplaceComponent(Entity entity, Params&&... params) {
-                ensureEntityAlive(entity);
-                Component value(std::forward<Params>(params)...);
-                if (!_commands.recording()) {
-                    return emplaceComponentImmediate<Component>(entity, std::move(value));
-                }
-                return stage(entity, std::move(value), [this, entity](Component&& staged) {
-                    emplaceComponentImmediate<Component>(entity, std::move(staged));
-                });
+                return addComponent(entity, Component(std::forward<Params>(params)...));
             }
 
             /**
@@ -181,11 +174,7 @@ namespace ECS {
              */
             template<typename Component>
             const ComponentStorage<Component>* getIf() const noexcept {
-                const ComponentId id = componentId<Component>();
-                if (id >= _pools.size() || !_pools[id]) {
-                    return nullptr;
-                }
-                return &typedPool<Component>(id).storage();
+                return _components.find<Component>();
             }
 
             /**
@@ -198,20 +187,19 @@ namespace ECS {
              */
             template<typename... Components>
             View<Components...> view() {
-                (ensureStorage<Components>(), ...);
-                return View<Components...>(_entities, mutableStorage<Components>()...);
+                return View<Components...>(_entities, _components.ensure<Components>()...);
             }
 
             /**
              * @brief Creates a read-only query over entities with all requested components.
-             * @throws std::out_of_range when a requested Component has never
-             *         been registered. Unlike the mutable overload, this
-             *         can't register an empty pool as a side effect: it is
-             *         const, and a read-only query shouldn't create storage.
+             *
+             * Like the mutable overload, a Component never registered simply
+             * matches no entity. Being const, this does not register it: it
+             * reads an empty storage instead.
              */
             template<typename... Components>
             ReadOnlyView<Components...> view() const {
-                return ReadOnlyView<Components...>(_entities, getComponents<Components>()...);
+                return ReadOnlyView<Components...>(_entities, _components.storageOrEmpty<Components>()...);
             }
 
             /**
@@ -313,8 +301,7 @@ namespace ECS {
              */
             template<typename Component>
             void onRemove(std::function<void(Component&)> callback) {
-                ensureStorage<Component>();
-                typedPool<Component>(componentId<Component>()).setOnRemove(std::move(callback));
+                _components.onRemove<Component>(std::move(callback));
             }
 
             /**
@@ -343,8 +330,8 @@ namespace ECS {
             // The same operations as the typed API, for code that only knows
             // a component's ComponentId. They are the single implementation
             // of has/remove, which the typed API forwards to. Only
-            // reflect::RegistryInspector (a friend) uses them. Kept together
-            // so they can later move to a dedicated ComponentStore.
+            // reflect::RegistryInspector (a friend) uses them. They check the
+            // entity, then forward to the ComponentStore.
             // ----------------------------------------------------------------
 
             /**
@@ -352,16 +339,12 @@ namespace ECS {
              * @param factory Must create the pool of the type whose componentId() is id.
              */
             void ensurePoolById(ComponentId id, PoolFactory factory) {
-                ensurePoolSlot(id);
-                if (!_pools[id]) {
-                    _signatures.ensureComponent(id);
-                    _pools[id] = factory();
-                }
+                _components.ensurePool(id, factory);
             }
 
             /** @brief Checks whether this registry has a pool for id. */
             [[nodiscard]] bool hasPoolById(ComponentId id) const noexcept {
-                return id < _pools.size() && _pools[id] != nullptr;
+                return _components.hasPool(id);
             }
 
             /**
@@ -371,15 +354,7 @@ namespace ECS {
              *         bit set for any entity.
              */
             [[nodiscard]] bool hasComponentsById(Entity entity, std::initializer_list<ComponentId> ids) const {
-                if (!_entities.isAlive(entity)) {
-                    return false;
-                }
-                for (const ComponentId id : ids) {
-                    if (!_signatures.test(entity.value(), id)) {
-                        return false;
-                    }
-                }
-                return true;
+                return _entities.isAlive(entity) && _components.has(entity.value(), ids);
             }
 
             /**
@@ -389,7 +364,7 @@ namespace ECS {
              */
             [[nodiscard]] void* getComponentById(Entity entity, ComponentId id, const ComponentOps& ops) {
                 ensureEntityAlive(entity);
-                return hasPoolById(id) ? ops.get(*_pools[id], entity.value()) : nullptr;
+                return _components.get(entity.value(), id, ops);
             }
 
             /**
@@ -403,7 +378,9 @@ namespace ECS {
              */
             void* addDefaultComponentById(Entity entity, ComponentId id, const ComponentOps& ops) {
                 ensureEntityAlive(entity);
-                requireRegistered(id);
+                if (!_components.hasPool(id)) {
+                    throw std::out_of_range("ECS::Registry: component not registered");
+                }
                 void* raw = ops.newDefault();
                 if (!raw) {
                     return nullptr;
@@ -411,10 +388,10 @@ namespace ECS {
                 // Owns the value until it is moved into the pool (now or at flush).
                 std::shared_ptr<void> value(raw, ops.deleteValue);
                 if (!_commands.recording()) {
-                    return insertMovedImmediate(entity, id, value.get(), ops);
+                    return _components.insertMoved(entity.value(), id, value.get(), ops);
                 }
                 mutate(entity, [this, entity, id, value, ops] {
-                    insertMovedImmediate(entity, id, value.get(), ops);
+                    _components.insertMoved(entity.value(), id, value.get(), ops);
                 });
                 return value.get();
             }
@@ -425,7 +402,7 @@ namespace ECS {
              */
             void removeComponentById(Entity entity, ComponentId id) {
                 ensureEntityAlive(entity);
-                mutate(entity, [this, entity, id] { removeComponentImmediate(entity, id); });
+                mutate(entity, [this, entity, id] { _components.remove(entity.value(), id); });
             }
 
             /**
@@ -433,23 +410,16 @@ namespace ECS {
              * @return Empty when the entity is not alive.
              */
             [[nodiscard]] std::vector<ComponentId> componentIdsOf(Entity entity) const {
-                std::vector<ComponentId> ids;
                 if (!_entities.isAlive(entity)) {
-                    return ids;
+                    return {};
                 }
-                for (ComponentId id = 0; id < _pools.size(); ++id) {
-                    if (_signatures.test(entity.value(), id)) {
-                        ids.push_back(id);
-                    }
-                }
-                return ids;
+                return _components.idsOf(entity.value());
             }
 
             Entity spawnEntityImmediate(const std::string& name) {
                 _entitiesDirty = true;
                 const Entity entity = _entities.create();
-                _signatures.ensureEntity(entity.value());
-                _signatures.clear(entity.value());
+                _components.addEntity(entity.value());
                 if (!name.empty()) {
                     _entityNames[entity.value()] = name;
                 }
@@ -469,8 +439,7 @@ namespace ECS {
                 _entitiesDirty = true;
                 _entities.commit(entity);
                 _pendingSpawns[entity.value()] = false;
-                _signatures.ensureEntity(entity.value());
-                _signatures.clear(entity.value());
+                _components.addEntity(entity.value());
                 if (!name.empty()) {
                     _entityNames[entity.value()] = name;
                 }
@@ -478,12 +447,7 @@ namespace ECS {
 
             void killEntityImmediate(Entity entity) {
                 _entities.destroy(entity);
-                for (const auto& pool : _pools) {
-                    if (pool) {
-                        pool->erase(entity.value());
-                    }
-                }
-                _signatures.clear(entity.value());
+                _components.removeEntity(entity.value());
                 _entityNames.erase(entity.value());
                 _entitiesDirty = true;
             }
@@ -509,48 +473,23 @@ namespace ECS {
             }
 
             /**
-             * @brief Deferred add: keeps value until flush, where insert moves it in.
-             * @return Reference to the staged value, so the caller can still
-             *         modify it before it is applied (like an immediate add).
+             * @brief Adds value now, or keeps it until flush while runDeferred records.
+             * @param insert Moves its argument into the store and returns the stored component.
+             * @return The stored component; under runDeferred, the staged value,
+             *         so the caller can still modify it before it is applied.
              *
-             * The pool is created at once, so the type is registered (and
-             * queryable) as soon as the add is requested.
+             * When deferred, the pool is created at once, so the type is
+             * registered (and queryable) as soon as the add is requested.
              */
             template<typename Component, typename Insert>
-            Component& stage(Entity entity, Component value, Insert insert) {
-                ensureStorage<Component>();
+            Component& addOrStage(Entity entity, Component value, Insert insert) {
+                if (!_commands.recording()) {
+                    return insert(std::move(value));
+                }
+                _components.ensure<Component>();
                 auto staged = std::make_shared<Component>(std::move(value));
                 mutate(entity, [staged, insert]() mutable { insert(std::move(*staged)); });
                 return *staged;
-            }
-
-            template<typename StoredComponent>
-            StoredComponent& addComponentImmediate(Entity entity, StoredComponent value) {
-                auto& stored = ensureStorage<StoredComponent>().insertAt(entity.value(), std::move(value));
-                _signatures.set(entity.value(), componentId<StoredComponent>());
-                return stored;
-            }
-
-            template<typename Component>
-            Component& emplaceComponentImmediate(Entity entity, Component value) {
-                auto& stored = ensureStorage<Component>().emplaceAt(entity.value(), std::move(value));
-                _signatures.set(entity.value(), componentId<Component>());
-                return stored;
-            }
-
-            void removeComponentImmediate(Entity entity, ComponentId id) {
-                if (!hasPoolById(id)) {
-                    return;
-                }
-                _pools[id]->erase(entity.value());
-                // Safe: registering the pool widened the table for this id.
-                _signatures.reset(entity.value(), id);
-            }
-
-            void* insertMovedImmediate(Entity entity, ComponentId id, void* value, const ComponentOps& ops) {
-                void* stored = ops.insertMoved(*_pools[id], entity.value(), value);
-                _signatures.set(entity.value(), id);
-                return stored;
             }
 
             void ensureEntityAlive(Entity entity) const {
@@ -572,54 +511,11 @@ namespace ECS {
                 }
             }
 
-            void requireRegistered(ComponentId id) const {
-                if (id >= _pools.size() || !_pools[id]) {
-                    throw std::out_of_range("ECS::Registry: component not registered");
-                }
-            }
-
-            /** @brief Registers Component if needed and returns its mutable storage. */
-            template<typename Component>
-            ComponentStorage<Component>& ensureStorage() {
-                const ComponentId id = componentId<Component>();
-                ensurePoolSlot(id);
-                if (!_pools[id]) {
-                    _signatures.ensureComponent(id);
-                    _pools[id] = std::make_unique<ComponentPool<Component>>();
-                }
-                return typedPool<Component>(id).storage();
-            }
-
-            /** @brief Mutable storage of a registered component, for views and getComponent. */
-            template<typename Component>
-            ComponentStorage<Component>& mutableStorage() {
-                const ComponentId id = componentId<Component>();
-                requireRegistered(id);
-                return typedPool<Component>(id).storage();
-            }
-
-            void ensurePoolSlot(ComponentId id) {
-                if (id >= _pools.size()) {
-                    _pools.resize(static_cast<std::size_t>(id) + 1);
-                }
-            }
-
-            template<typename Component>
-            ComponentPool<Component>& typedPool(ComponentId id) {
-                return *static_cast<ComponentPool<Component>*>(_pools[id].get());
-            }
-
-            template<typename Component>
-            const ComponentPool<Component>& typedPool(ComponentId id) const {
-                return *static_cast<const ComponentPool<Component>*>(_pools[id].get());
-            }
-
             EntityManager _entities;
-            std::vector<std::unique_ptr<IComponentPool>> _pools;
+            ComponentStore _components;
             std::unordered_map<std::size_t, std::string> _entityNames;
             mutable std::vector<Entity> _cachedEntities;
             mutable bool _entitiesDirty{true};
-            SignatureTable _signatures;
             std::vector<bool> _pendingSpawns;
             ResourceStore _resources;
             CommandBuffer _commands;

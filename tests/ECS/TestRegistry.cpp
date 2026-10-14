@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "ECS/ComponentPool.hpp"
+#include "ECS/Core/Component/ComponentPool.hpp"
 #include "ECS/Registry.hpp"
 #include "RegistryTestAccess.hpp"
 
@@ -489,13 +489,20 @@ namespace {
         };
     }
 
-    void test_const_view_throws_for_unregistered_component() {
-        "const view throws for an unregistered component"_test = [] {
+    void test_const_view_is_empty_for_unregistered_component() {
+        "const view of an unregistered component is empty and does not register it"_test = [] {
             ECS::Registry registry;
+            const auto entity = registry.spawnEntity();
+            registry.emplaceComponent<Position>(entity, 1, 2);
             const ECS::Registry& constRegistry = registry;
-            expect(throws<std::out_of_range>([&] {
-                constRegistry.view<Unregistered>();
-            }));
+
+            std::size_t matches = 0;
+            for ([[maybe_unused]] auto row : constRegistry.view<Position, Unregistered>()) {
+                ++matches;
+            }
+
+            expect(matches == std::size_t{0});
+            expect(constRegistry.getIf<Unregistered>() == nullptr);
         };
     }
 
@@ -1443,7 +1450,7 @@ void run_registry_tests() {
     test_view_returns_matching_entities();
     test_view_requires_all_requested_components();
     test_view_registers_unregistered_component_and_returns_no_matches();
-    test_const_view_throws_for_unregistered_component();
+    test_const_view_is_empty_for_unregistered_component();
     test_const_view_returns_const_components();
     test_get_all_entities_is_empty_for_new_registry();
     test_get_all_entities_reuses_cache_without_changes();

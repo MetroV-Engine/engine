@@ -4,7 +4,7 @@
 #include <tuple>
 #include <vector>
 
-#include "ECS/ComponentStorage.hpp"
+#include "ECS/Core/Component/ComponentStorage.hpp"
 #include "ECS/Zipper.hpp"
 
 using namespace boost::ut;

@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "ECS/ComponentStorage.hpp"
+#include "ECS/Core/Component/ComponentStorage.hpp"
 
 using namespace boost::ut;
 
