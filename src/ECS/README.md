@@ -35,6 +35,7 @@ entities that contain the components they need.
 | [Registry.hpp](Registry.hpp) | Main ECS API for entities and components. |
 | [View.hpp](View.hpp) | Public queries over entities sharing component types. |
 | [Systems.hpp](Systems.hpp) | `ISystem` interface and `SystemManager`, which owns and runs systems. |
+| [Reflection/](Reflection/README.md) | Runtime reflection: `E_REFLECT`, `Ref`, and `Registry::inspect()` for code that does not know component types. |
 
 ## Entity
 
@@ -174,6 +175,12 @@ Registry
 Typed access remains available through the registry, while type erasure is used
 for operations shared by every pool, such as removing a destroyed entity.
 
+The reflection layer also needs type-specific operations (read a component,
+create a default one, move it into a pool) without knowing the type. These are
+not virtual functions of `IComponentPool`, which would be compiled for every
+component type: they live in `ComponentOps`, a set of function pointers built
+by `ComponentOps::of<T>()`, which is only compiled for reflected types.
+
 ## Registry
 
 See [Registry.hpp](Registry.hpp).
@@ -242,6 +249,22 @@ world.removeComponent<Health>(player);
 `getComponent` throws `std::out_of_range` when the component pool or component
 does not exist for the entity. `getIf` is available when a nullable lookup is
 preferred.
+
+### Access without knowing the types
+
+Code that knows its component types (gameplay systems, C++ scripts) uses the
+typed API above. Code that only has a type name or `TypeInfo` (editor,
+interpreted scripting, scene loading, serialization) calls `world.inspect()`,
+which returns a `reflect::RegistryInspector` (see [Reflection](Reflection/README.md)):
+
+```cpp
+world.inspect().get(player, *ECS::reflect::RegistryInspector::findType("Health"));
+```
+
+`inspect()` is declared here and defined by the reflection layer, so the ECS
+core does not depend on it. Both APIs share one implementation: private,
+`ComponentId`-based methods of the Registry (`…ById`), used by the typed
+`hasComponents` / `removeComponent` and by `RegistryInspector`, its friend.
 
 ### Number of component types
 
@@ -317,6 +340,14 @@ other storages are checked for membership. Ties go to the type listed first.
 The yielded tuple always follows the order the types were written in; the
 order entities are visited in follows the driving storage and should not be
 relied on.
+
+## Reflection
+
+See [Reflection/README.md](Reflection/README.md).
+
+Every `E_REFLECT` type is described at runtime and is usable as a component by
+code that does not know its type at compile time, through `world.inspect()`.
+The ECS core does not depend on the reflection layer.
 
 ## Header-Only Design
 

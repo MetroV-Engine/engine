@@ -22,6 +22,7 @@ vcpkg_installed/
 # .changeset/*.md files should be committed with PRs
 
 .idea
+.vscode
 
 cmake-build-debug/
 a.out
