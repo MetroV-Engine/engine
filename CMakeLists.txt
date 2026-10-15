@@ -10,6 +10,7 @@ find_package(imgui CONFIG REQUIRED)
 
 add_executable(gui
     main.cpp
+    src/GuiContext.cpp
 )
 
 target_link_libraries(gui PRIVATE

@@ -53,7 +53,6 @@ GuiContext::~GuiContext()
 
 void GuiContext::destroy()
 {
-    // Reverse order of creation.
     if (_imguiRendererBackend)
         ImGui_ImplSDLRenderer3_Shutdown();
     if (_imguiSdlBackend)
@@ -76,7 +75,7 @@ void GuiContext::pollEvents()
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL3_ProcessEvent(&event);
-        if (event.type == SDL_EVENT_QUIT)
+        if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
             _running = false;
     }
 }
