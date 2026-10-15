@@ -61,13 +61,13 @@ namespace ECS::reflect {
                 void sequence(Ref ref, int depth) {
                     typePrefix(ref);
                     // An inlined sequence only holds leaves, so sequence() is never
-                    // re-entered while _inline is set: no need to save/restore it.
-                    _inline = _options.compactLeafSequences &&
+                    // re-entered while _isInline is set: no need to save/restore it.
+                    _isInline = _options.compactLeafSequences &&
                               isLeaf(*ref.type().sequenceOps->element);
                     block('[', ']', ref.size(), _options.maxElements, depth, [&](std::size_t i) {
                         value(ref.at(i), depth + 1);
                     });
-                    _inline = false;
+                    _isInline = false;
                 }
 
                 static bool isLeaf(const TypeInfo& type) noexcept {
@@ -150,7 +150,7 @@ namespace ECS::reflect {
                 }
 
                 void breakLine(int depth) {
-                    if (_options.indent > 0 && !_inline) {
+                    if (_options.indent > 0 && !_isInline) {
                         _os << '\n' << std::string(static_cast<std::size_t>(depth * _options.indent), ' ');
                     } else {
                         _os << ' ';
@@ -192,7 +192,7 @@ namespace ECS::reflect {
 
                 std::ostream& _os;
                 const PrettyPrintOptions& _options;
-                bool _inline = false;
+                bool _isInline = false;
         };
     }
 
