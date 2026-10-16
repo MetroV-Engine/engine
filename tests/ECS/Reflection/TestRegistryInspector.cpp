@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "ECS/Reflection/Reflection.hpp"
-#include "../RegistryTestAccess.hpp"
+#include "../Support/RegistryTestAccess.hpp"
 
 using namespace boost::ut;
 
@@ -302,7 +302,7 @@ void test_manual_registration() {
 
 void test_unstorable_type_is_reflected_but_not_a_component() {
     "a reflected type that cannot live in a pool is reflected but not a component"_test = [] {
-        static_assert(!ECS::reflect::ComponentStorable<CrConstant>);
+        static_assert(!ECS::ComponentStorable<CrConstant>);
         const TypeInfo& constant = typeNamed("CrConstant");
 
         expect(constant.kind == TypeKind::Struct);
@@ -343,6 +343,162 @@ void test_registration_errors_are_recorded() {
     };
 }
 
+void test_entities_lists_the_live_entities() {
+    "entities lists the live entities of the registry"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity first = world.spawnEntity();
+        const ECS::Entity second = world.spawnEntity();
+        const auto inspector = world.inspect();
+
+        std::vector<ECS::Entity> listed;
+        for (ECS::Entity entity : inspector.entities()) {
+            listed.push_back(entity);
+        }
+
+        expect(listed == std::vector<ECS::Entity>{first, second});
+        expect(inspector.entities().size() == 2_ul);
+    };
+}
+
+void test_entities_is_empty_for_an_empty_registry() {
+    "entities is empty for an empty registry"_test = [] {
+        ECS::Registry world;
+        const auto inspector = world.inspect();
+
+        expect(inspector.entities().empty());
+        expect(inspector.entities().begin() == inspector.entities().end());
+    };
+}
+
+void test_kept_entities_follows_the_world() {
+    "a kept entities() list follows spawns, kills and deferred spawns"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity killed = world.spawnEntity();
+        const ECS::EntityList all = world.inspect().entities();
+
+        ECS::Entity spawned{};
+        std::size_t countDuring = 0;
+        world.runDeferred([&] {
+            spawned = world.spawnEntity();
+            world.killEntity(killed);
+            countDuring = all.size();
+        });
+
+        std::vector<ECS::Entity> listed;
+        for (ECS::Entity entity : all) {
+            listed.push_back(entity);
+        }
+        expect(countDuring == 1_ul);
+        expect(listed == std::vector<ECS::Entity>{spawned});
+    };
+}
+
+void test_entities_of_two_registries_are_separate() {
+    "entities only lists the entities of its own registry"_test = [] {
+        ECS::Registry world;
+        ECS::Registry other;
+        other.spawnEntity();
+
+        expect(world.inspect().entities().empty());
+        expect(other.inspect().entities().size() == 1_ul);
+    };
+}
+
+
+void test_display_name_returns_the_name() {
+    "displayName returns the entity's Name"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity player = world.spawnEntity("Player");
+
+        expect(world.inspect().displayName(player) == "Player");
+    };
+}
+
+void test_display_name_falls_back_on_the_index() {
+    "displayName falls back on \"Entity <index>\" without a Name"_test = [] {
+        ECS::Registry world;
+        world.spawnEntity();
+        const ECS::Entity tile = world.spawnEntity();
+
+        expect(world.inspect().displayName(tile) == "Entity 1");
+    };
+}
+
+void test_display_name_treats_an_empty_name_as_no_name() {
+    "displayName treats an empty Name as no name"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity entity = world.spawnEntity();
+        world.addComponent(entity, ECS::Name{""});
+
+        expect(world.inspect().displayName(entity) == "Entity 0");
+    };
+}
+
+void test_display_name_follows_name_changes() {
+    "displayName follows a Name that is replaced, removed and added again"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity entity = world.spawnEntity("First");
+        const auto inspector = world.inspect();
+
+        world.getComponent<ECS::Name>(entity).value = "Renamed";
+        expect(inspector.displayName(entity) == "Renamed");
+
+        world.removeComponent<ECS::Name>(entity);
+        expect(inspector.displayName(entity) == "Entity 0");
+
+        world.addComponent(entity, ECS::Name{"Back"});
+        expect(inspector.displayName(entity) == "Back");
+    };
+}
+
+void test_display_name_rejects_dead_and_foreign_entities() {
+    "displayName throws for a dead, foreign or default handle"_test = [] {
+        ECS::Registry world;
+        ECS::Registry other;
+        const ECS::Entity dead = world.spawnEntity("Dead");
+        world.killEntity(dead);
+        const ECS::Entity foreign = other.spawnEntity("Foreign");
+        const auto inspector = world.inspect();
+
+        expect(throws<std::invalid_argument>([&] { (void)inspector.displayName(dead); }));
+        expect(throws<std::invalid_argument>([&] { (void)inspector.displayName(foreign); }));
+        expect(throws<std::invalid_argument>([&] { (void)inspector.displayName(ECS::Entity{}); }));
+    };
+}
+
+void test_display_name_of_a_deferred_spawn() {
+    "displayName of an entity spawned under runDeferred falls back until the flush"_test = [] {
+        ECS::Registry world;
+        std::string during;
+        ECS::Entity spawned{};
+
+        world.runDeferred([&] {
+            spawned = world.spawnEntity("Late");
+            during = world.inspect().displayName(spawned);
+        });
+
+        expect(during == "Entity 0");
+        expect(world.inspect().displayName(spawned) == "Late");
+    };
+}
+
+void test_name_is_a_reflected_component() {
+    "ECS::Name is a reflected component type listed with the entity's components"_test = [] {
+        const TypeInfo* name = RegistryInspector::findType("ECS::Name");
+        expect((name != nullptr) >> fatal);
+        const std::vector<const TypeInfo*> types = RegistryInspector::types();
+        expect(std::ranges::find(types, name) != types.end());
+
+        ECS::Registry world;
+        const ECS::Entity player = world.spawnEntity("Player");
+        const std::vector<Ref> components = world.inspect().list(player);
+
+        expect((components.size() == 1_ul) >> fatal);
+        expect(&components[0].type() == name);
+        expect(components[0].path("value").as<std::string>() == "Player");
+    };
+}
+
 }
 
 void run_registry_inspector_tests() {
@@ -362,4 +518,15 @@ void run_registry_inspector_tests() {
     test_unstorable_type_is_reflected_but_not_a_component();
     test_find_component_type();
     test_registration_errors_are_recorded();
+    test_entities_lists_the_live_entities();
+    test_entities_is_empty_for_an_empty_registry();
+    test_kept_entities_follows_the_world();
+    test_entities_of_two_registries_are_separate();
+    test_display_name_returns_the_name();
+    test_display_name_falls_back_on_the_index();
+    test_display_name_treats_an_empty_name_as_no_name();
+    test_display_name_follows_name_changes();
+    test_display_name_rejects_dead_and_foreign_entities();
+    test_display_name_of_a_deferred_spawn();
+    test_name_is_a_reflected_component();
 }

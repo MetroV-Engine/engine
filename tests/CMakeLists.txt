@@ -1,20 +1,24 @@
 find_package(ut CONFIG REQUIRED)
 
 set(ECS_TEST_FILES
-	ECS/TestEntity.cpp
-	ECS/TestEntityManager.cpp
-	ECS/TestComponentId.cpp
-	ECS/TestComponentStorage.cpp
-	ECS/TestComponentPool.cpp
-	ECS/TestResources.cpp
-	ECS/TestSignatureTable.cpp
-	ECS/TestZipper.cpp
-	ECS/TestZipperDriver.cpp
-	ECS/TestView.cpp
-	ECS/TestRegistry.cpp
-	ECS/TestDeferredMutations.cpp
-	ECS/TestSystems.cpp
-	ECS/TestRegistryComponentId.cpp
+	ECS/Core/TestRegistry.cpp
+	ECS/Core/TestCommandBuffer.cpp
+	ECS/Core/Entity/TestEntity.cpp
+	ECS/Core/Entity/TestEntityManager.cpp
+	ECS/Core/Entity/TestEntityList.cpp
+	ECS/Core/Component/TestComponentId.cpp
+	ECS/Core/Component/TestComponentStorage.cpp
+	ECS/Core/Component/TestComponentPool.cpp
+	ECS/Core/Component/TestComponentOps.cpp
+	ECS/Core/Component/TestSignatureTable.cpp
+	ECS/Core/Component/TestComponentStore.cpp
+	ECS/Core/Resource/TestResourceId.cpp
+	ECS/Core/Resource/TestResourceHolder.cpp
+	ECS/Core/Resource/TestResourceStore.cpp
+	ECS/Core/Query/TestZipper.cpp
+	ECS/Core/Query/TestZipperDriver.cpp
+	ECS/Core/Query/TestView.cpp
+	ECS/Core/System/TestSystemManager.cpp
 	ECS/Reflection/TestDescriptor.cpp
 	ECS/Reflection/TestTypeRegistry.cpp
 	ECS/Reflection/TestContainers.cpp

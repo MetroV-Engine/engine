@@ -4,8 +4,10 @@
 #include <string_view>
 #include <vector>
 
-#include "../Entity.hpp"
-#include "../Registry.hpp"
+#include "../Core/Entity/Entity.hpp"
+#include "../Core/Entity/EntityList.hpp"
+#include "../Core/Entity/Name.hpp"
+#include "../Core/Registry.hpp"
 #include "Ref.hpp"
 #include "TypeInfo.hpp"
 #include "TypeRegistry.hpp"
@@ -77,6 +79,41 @@ namespace ECS::reflect {
              */
             [[nodiscard]] static const std::vector<std::string>& errors() noexcept {
                 return detail::ComponentCatalog::instance().errors();
+            }
+
+            // --- Entities -------------------------------------------------------
+
+            /**
+             * @brief The live entities of the Registry, e.g. for an editor's hierarchy.
+             *
+             * The returned EntityList stays up to date: keep it and iterate it
+             * whenever needed. Each iteration works on the entities alive when
+             * it starts, skipping those killed meanwhile. Like the inspector,
+             * it must not outlive the Registry.
+             */
+            [[nodiscard]] EntityList entities() const noexcept {
+                return EntityList(_registry._entities);
+            }
+
+            /**
+             * @brief Label to show for an entity: its Name, or "Entity <index>".
+             *
+             * Most entities have no Name (or an empty one); tools still need
+             * to show them, so this falls back on the index. The fallback is
+             * not a stable identity: indices are reused after a kill and may
+             * differ after a scene is reloaded.
+             * @throws std::invalid_argument if entity is not alive.
+             */
+            [[nodiscard]] std::string displayName(Entity entity) const {
+                _registry.ensureEntityAlive(entity);
+                const ComponentStorage<Name>* names = _registry.getIf<Name>();
+                if (names && names->has(entity.index())) {
+                    const std::string& name = names->get(entity.index()).value;
+                    if (!name.empty()) {
+                        return name;
+                    }
+                }
+                return "Entity " + std::to_string(entity.index());
             }
 
             // --- Components of an entity ----------------------------------------

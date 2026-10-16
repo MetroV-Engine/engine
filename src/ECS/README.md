@@ -1,395 +1,284 @@
 # ECS
 
-This directory contains the header-only Entity Component System used by the
-engine.
+The engine's Entity Component System. This page explains what an ECS is and
+how to use this one. How each class works inside is documented in the headers,
+as docstrings.
 
-The ECS headers contain detailed Doxygen documentation for classes, methods,
-parameters, ownership rules, and important implementation details. Reading the
-code is therefore also a useful way to understand the exact behavior of the
-system.
+## Contents
 
-## ECS Overview
+1. [What is an ECS?](#what-is-an-ecs)
+2. [Using the ECS](#using-the-ecs)
+   1. [Entities](#entities)
+   2. [Components](#components)
+   3. [Views: finding entities by their components](#views-finding-entities-by-their-components)
+   4. [Systems](#systems)
+   5. [Changing the world during a loop](#changing-the-world-during-a-loop)
+   6. [Resources](#resources)
+3. [Full example](#full-example)
+4. [Rules to remember](#rules-to-remember)
+5. [Going further](#going-further)
 
-The ECS separates an entity's identity from the data attached to it:
+## What is an ECS?
 
-```text
-Entity
-  |
-  +-- Position component
-  +-- Velocity component
-  +-- Health component
-```
+An ECS splits a game object into three ideas:
 
-An entity is only an identity. Components contain data, and systems operate on
-entities that contain the components they need.
-
-## Main Files
-
-| File | Purpose |
-| --- | --- |
-| [Entity.hpp](Entity.hpp) | Lightweight entity handle and identity access. |
-| [EntityManager.hpp](EntityManager.hpp) | Entity creation, destruction, validation, and ID reuse. |
-| [ComponentId.hpp](ComponentId.hpp) | Lazy runtime ID assignment for component types. |
-| [ComponentStorage.hpp](ComponentStorage.hpp) | Component storage and fast entity-to-component lookup. |
-| [ComponentPool.hpp](ComponentPool.hpp) | Type-erased access to different component pools. |
-| [Registry.hpp](Registry.hpp) | Main ECS API for entities and components. |
-| [View.hpp](View.hpp) | Public queries over entities sharing component types. |
-| [Systems.hpp](Systems.hpp) | `ISystem` interface and `SystemManager`, which owns and runs systems. |
-| [Reflection/](Reflection/README.md) | Runtime reflection: `E_REFLECT`, `Ref`, and `Registry::inspect()` for code that does not know component types. |
-
-## Entity
-
-See [Entity.hpp](Entity.hpp).
-
-`Entity` is a lightweight handle containing an index, a generation and the
-world ID of the registry that issued it. It can be copied cheaply and passed to
-component operations. Display names are not
-stored in the handle; they are owned by `Registry`.
-
-```cpp
-ECS::Entity player = world.spawnEntity("Player");
-std::size_t id = player.value();
-```
-
-The entity handle does not create or destroy entities. That responsibility
-belongs to `EntityManager` and `Registry`. Only the default constructor is
-public: every other handle comes from `spawnEntity()`, a view, or
-`getAllEntities()`. A default-constructed `Entity` belongs to no world and is
-never alive.
+| | What it is | Example |
+| --- | --- | --- |
+| **Entity** | An identifier, nothing more. It holds no data and no behaviour. | the player, a bullet, a tile |
+| **Component** | A plain struct of data attached to an entity. | `Position`, `Velocity`, `Health` |
+| **System** | The logic. It runs every frame on the entities that have the components it needs. | `MovementSystem` moves everything that has a `Position` and a `Velocity` |
 
 ```text
-Entity handle -> world ID + index + generation
-               -> component pool lookup by index
+Entity "player"            MovementSystem: every entity with Position + Velocity
+  ├── Position   ◄──────── reads Velocity, updates Position
+  ├── Velocity   ◄────────┘
+  └── Health
 ```
 
-An entity is valid only while its world ID, index and generation match the
-state held by `EntityManager`. When an index is recycled, its generation is
-incremented, so old handles are rejected instead of accessing the new entity.
+Why it helps:
 
-Each `Registry` draws its own world ID, so a handle belongs to the registry
-that issued it. Passing it to another registry is rejected like any other dead
-handle, even when a local entity has the same index and generation:
+- **Composition instead of inheritance**: a flying enemy is an entity with
+  `Position`, `Velocity`, `Health` and `Flying`. No class hierarchy to design.
+- **Behaviour follows data**: give an entity a `Velocity` and the movement
+  system starts moving it; remove it and it stops.
+- **Speed**: each component type is stored in its own contiguous array, so a
+  system walks memory in order.
+
+In this engine, the **`ECS::Registry`** is the world: it owns the entities,
+their components and the resources. Everything goes through it.
+
+## Using the ECS
+
+Game code includes a single header:
 
 ```cpp
-ECS::Registry worldA;
-ECS::Registry worldB;
-ECS::Entity a = worldA.spawnEntity();
-worldB.spawnEntity();                   // same index and generation as a
+#include "ECS/ECS.hpp"
 
-worldB.hasComponent<Position>(a);       // false
-worldB.getComponent<Position>(a);       // throws std::invalid_argument
-```
-
-## EntityManager
-
-See [EntityManager.hpp](EntityManager.hpp).
-
-`EntityManager` owns the lifecycle of entity IDs. It tracks live IDs and keeps a
-free list for IDs that can be reused.
-
-```cpp
-ECS::Entity first = manager.create();
-manager.destroy(first);
-ECS::Entity recycled = manager.create();
-```
-
-The usual flow is:
-
-```text
-create -> live entity
-destroy -> free ID
-create -> reuse free ID when available
-```
-
-Destroying an entity in `EntityManager` does not remove its components. The
-`Registry` performs both operations together.
-
-## Component IDs
-
-See [ComponentId.hpp](ComponentId.hpp).
-
-Each component type receives a numeric ID the first time `componentId<T>()` is
-used. No manual registration line is required for each component.
-
-```cpp
-ECS::ComponentId positionId = ECS::componentId<Position>();
-ECS::ComponentId velocityId = ECS::componentId<Velocity>();
-```
-
-The same type always returns the same ID during the process:
-
-```text
-Position -> ComponentId 0
-Velocity -> ComponentId 1
-Position -> ComponentId 0
-```
-
-These IDs are runtime implementation details. They must not be stored in scene
-files, save files, or network data.
-
-## ComponentStorage
-
-See [ComponentStorage.hpp](ComponentStorage.hpp).
-
-`ComponentStorage<Component>` stores components densely while keeping a lookup from an
-entity ID to the component's packed position.
-
-```text
-Entity ID       0     1     2
-Sparse lookup   -     0     1
-
-Packed data   [Position of entity 1][Position of entity 2]
-```
-
-Typical operations are:
-
-```cpp
-ECS::ComponentStorage<Position> positions;
-positions.emplaceAt(entityId, 10, 20);
-
-if (positions.has(entityId)) {
-    Position& position = positions.get(entityId);
-}
-```
-
-The packed storage improves iteration performance and cache locality. Removing
-a component uses swap-and-pop, so packed order is not stable after an erase.
-
-## ComponentPool
-
-See [ComponentPool.hpp](ComponentPool.hpp).
-
-The registry stores pools containing different component types. Since one
-container cannot directly store `ComponentStorage<Position>` and `ComponentStorage<Velocity>`
-as the same concrete type, `IComponentPool` provides a small type-erased
-interface.
-
-```text
-Registry
-  |
-  +-- ComponentPool<Position>
-  +-- ComponentPool<Velocity>
-  +-- ComponentPool<Health>
-```
-
-Typed access remains available through the registry, while type erasure is used
-for operations shared by every pool, such as removing a destroyed entity.
-
-The reflection layer also needs type-specific operations (read a component,
-create a default one, move it into a pool) without knowing the type. These are
-not virtual functions of `IComponentPool`, which would be compiled for every
-component type: they live in `ComponentOps`, a set of function pointers built
-by `ComponentOps::of<T>()`, which is only compiled for reflected types.
-
-## Registry
-
-See [Registry.hpp](Registry.hpp).
-
-`Registry` is the main entry point for the ECS. It coordinates entity lifecycle,
-component pools, and component access. System execution is handled by
-`SystemManager` (see [Systems](#systems) below), which calls
-`Registry::runDeferred` to protect an in-progress `view()` iteration from
-structural mutations.
-
-### Creating and destroying entities
-
-```cpp
 ECS::Registry world;
-
-ECS::Entity player = world.spawnEntity();
-world.killEntity(player);
 ```
 
-An entity may receive an optional display name when it is created:
+Components are plain structs. They need no base class and no registration:
 
 ```cpp
-ECS::Entity player = world.spawnEntity("Player");
-world.setEntityName(player, "MainPlayer");
-std::string name = world.getEntityName(player);
+struct Position { float x = 0; float y = 0; };
+struct Velocity { float dx = 0; float dy = 0; };
+struct Health { int current = 100; int max = 100; };
 ```
 
-The name is registry metadata. It does not affect the entity ID or component
-storage.
-
-When `killEntity` is called, the registry:
-
-1. destroys the entity through `EntityManager`;
-2. removes the entity from every registered component pool;
-3. removes its optional name;
-4. returns its ID to the free list.
-
-### Adding components
-
-Use `emplaceComponent` when the registry should construct the component from
-constructor arguments:
+### Entities
 
 ```cpp
-world.emplaceComponent<Position>(player, 100, 200);
+ECS::Entity player = world.spawnEntity("player");   // named: gets an ECS::Name component
+ECS::Entity bullet = world.spawnEntity();           // unnamed: most entities don't need a name
+
+world.killEntity(bullet);                           // destroys it and all its components
+
+world.isAlive(bullet);    // false: check this for a handle kept across frames (a target, a parent)
+world.entityCount();      // 1
 ```
 
-Use `addComponent` when a component object already exists:
+An `Entity` is a small handle (an index and a generation). When an entity is
+killed, its index is reused later with a new generation, so an old handle is
+never mistaken for the new entity.
+
+### Components
 
 ```cpp
-Position randomPosition{randomX(), randomY()};
-world.addComponent(player, randomPosition);
+world.addComponent(player, Position{0, 0});         // from a value
+world.emplaceComponent<Health>(player, 100, 100);   // from constructor arguments
+
+Health& health = world.getComponent<Health>(player);
+health.current -= 10;
+
+if (world.hasComponents<Position, Velocity>(player)) { /* ... */ }
+
+world.removeComponent<Velocity>(player);
+
+// The name is a regular component
+world.getComponent<ECS::Name>(player).value = "hero";
 ```
 
-Both operations add or replace the component for the selected entity.
+Adding a component the entity already has replaces it. `getComponent` throws
+`std::out_of_range` when the entity does not have the component.
 
-### Accessing and removing components
+### Views: finding entities by their components
+
+A view visits every entity that has **all** the requested components, and gives
+the entity plus a reference to each component:
 
 ```cpp
-if (world.hasComponents<Health>(player)) {
-    Health& health = world.getComponent<Health>(player);
+for (auto [entity, position, velocity] : world.view<Position, Velocity>()) {
+    position.x += velocity.dx;
+    position.y += velocity.dy;
 }
-
-world.removeComponent<Health>(player);
 ```
 
-`getComponent` throws `std::out_of_range` when the component pool or component
-does not exist for the entity. `getIf` is available when a nullable lookup is
-preferred.
-
-### Access without knowing the types
-
-Code that knows its component types (gameplay systems, C++ scripts) uses the
-typed API above. Code that only has a type name or `TypeInfo` (editor,
-interpreted scripting, scene loading, serialization) calls `world.inspect()`,
-which returns a `reflect::RegistryInspector` (see [Reflection](Reflection/README.md)):
+The cost depends on the smallest of the requested component arrays, not on the
+total number of entities. A view is a standard range, so `<ranges>` algorithms
+work on it:
 
 ```cpp
-world.inspect().get(player, *ECS::reflect::RegistryInspector::findType("Health"));
+auto wounded = std::ranges::count_if(world.view<Health>(), [](const auto& row) {
+    return std::get<1>(row).current < std::get<1>(row).max;
+});
 ```
 
-`inspect()` is declared here and defined by the reflection layer, so the ECS
-core does not depend on it. Both APIs share one implementation: private,
-`ComponentId`-based methods of the Registry (`…ById`), used by the typed
-`hasComponents` / `removeComponent` and by `RegistryInspector`, its friend.
+### Systems
 
-### Number of component types
-
-There is no fixed limit on how many component types can be registered.
-
-Each registry keeps a row of membership bits per entity, one bit per
-component type, to answer `hasComponents` quickly. Rows start 64 types wide.
-When a new type does not fit, the registry doubles the width of every row.
-
-Widening copies the membership bits only. Component data does not move, so
-references and pointers to components stay valid.
-
-Widening costs one copy of every entity's bits. To keep it out of gameplay,
-register component types up front with `registerComponent<T>()`, for example
-while loading.
-
-## Systems
-
-Systems are stateful objects implementing `ECS::ISystem`, owned and run by
-`ECS::SystemManager` (see [Systems.hpp](Systems.hpp)). They are executed in
-registration order.
+A system implements `ECS::ISystem`. A `SystemManager` owns the systems and runs
+them in the order they were added:
 
 ```cpp
 class MovementSystem : public ECS::ISystem {
     public:
         void update(ECS::Registry& world, double dt) override {
-            for (auto [entity, position, velocity] :
-                 world.view<Position, Velocity>()) {
-                position.x += velocity.x * dt;
-                position.y += velocity.y * dt;
+            for (auto [entity, position, velocity] : world.view<Position, Velocity>()) {
+                position.x += velocity.dx * dt;
+                position.y += velocity.dy * dt;
             }
         }
+
+        const std::string name() const override { return "MovementSystem"; }
 };
 
 ECS::SystemManager systems;
-systems.addSystem<MovementSystem>();
+systems.addSystem<MovementSystem>(world);   // calls its optional init(world)
 
+// every frame
 systems.update(world, dt);
 ```
 
-`SystemManager::update` runs every registered system inside
-`Registry::runDeferred`, so structural mutations a system makes
-(spawnEntity, killEntity, addComponent, emplaceComponent, removeComponent)
-are queued and applied once every system has run, the same way
-`runDeferred` behaves for any other caller (see below).
+`init(world)` and `shutdown(world)` are optional hooks, called by `addSystem`
+and `removeSystem<T>(world)`.
 
-## View
+### Changing the world during a loop
 
-`Registry::view<Components...>()` is the public query API. It iterates the
-intersection of the requested component storages and returns an `Entity` plus
-references to each matching component. Internally, it uses `Zipper`.
-
-Gameplay code does not need to access `ComponentStorage` or `Zipper` directly.
+Spawning, killing, adding or removing components while a view is being iterated
+would move the arrays under the loop. Inside `runDeferred`, these changes are
+queued and applied in order when it ends:
 
 ```cpp
-for (auto [entity, position, velocity] :
-  world.view<Position, Velocity>()) {
-    position.x += velocity.x;
+world.runDeferred([&] {
+    for (auto [entity, health] : world.view<Health>()) {
+        if (health.current <= 0) {
+            world.killEntity(entity);           // queued
+            world.spawnEntity("loot");          // queued
+        }
+    }
+});                                             // applied here
+```
+
+**Systems don't need to do it**: `SystemManager::update` runs each system inside
+its own `runDeferred`, and applies its changes before the next system starts.
+A `runDeferred` called inside another one joins it, so a helper can always use
+one safely.
+
+### Resources
+
+A resource is a single value shared by the whole world, not attached to an
+entity (time, input, settings):
+
+```cpp
+struct Time { double dt = 0.0; };
+
+world.setResource<Time>(Time{0.016});
+double dt = world.getResource<Time>().dt;
+bool hasTime = world.hasResource<Time>();
+```
+
+## Full example
+
+```cpp
+#include <iostream>
+#include <string>
+
+#include "ECS/ECS.hpp"
+
+struct Position { float x = 0; float y = 0; };
+struct Velocity { float dx = 0; float dy = 0; };
+struct Health { int current = 100; };
+struct Time { double dt = 0.0; };
+
+class MovementSystem : public ECS::ISystem {
+    public:
+        void update(ECS::Registry& world, double) override {
+            const double dt = world.getResource<Time>().dt;
+            for (auto [entity, position, velocity] : world.view<Position, Velocity>()) {
+                position.x += velocity.dx * dt;
+                position.y += velocity.dy * dt;
+            }
+        }
+        const std::string name() const override { return "MovementSystem"; }
+};
+
+class DeathSystem : public ECS::ISystem {
+    public:
+        void update(ECS::Registry& world, double) override {
+            for (auto [entity, health] : world.view<Health>()) {
+                if (health.current <= 0) {
+                    world.killEntity(entity);   // applied after this system
+                }
+            }
+        }
+        const std::string name() const override { return "DeathSystem"; }
+};
+
+int main() {
+    ECS::Registry world;
+    world.setResource<Time>(Time{0.5});
+
+    const ECS::Entity player = world.spawnEntity("player");
+    world.addComponent(player, Position{0, 0});
+    world.addComponent(player, Velocity{2, 0});
+    world.emplaceComponent<Health>(player, 100);
+
+    const ECS::Entity enemy = world.spawnEntity("enemy");
+    world.emplaceComponent<Health>(enemy, 0);
+
+    ECS::SystemManager systems;
+    systems.addSystem<MovementSystem>(world);
+    systems.addSystem<DeathSystem>(world);
+    systems.update(world);
+
+    std::cout << "player x = " << world.getComponent<Position>(player).x   // 1
+              << ", enemy alive = " << world.isAlive(enemy)                // 0
+              << ", entities = " << world.entityCount() << '\n';           // 1
 }
 ```
 
-Only entities with both components are visited:
+## Rules to remember
 
-```text
-Position: entity 0, entity 1, entity 2
-Velocity: entity 1, entity 2
-Result:   entity 1, entity 2
-```
+- **Keep entities, not component references.** A reference returned by
+  `getComponent` or `addComponent` is valid until the next add or remove of that
+  component type, or the end of the current `runDeferred`. To remember
+  something across frames, keep the `Entity` and fetch the component again
+  (check `isAlive` first).
+- **Inside a system, changes apply after the system.** An entity killed in a
+  system is still alive until that system returns; one spawned there does not
+  exist yet (but can already receive components).
+- **Components must be movable.** They are moved inside their array; a type
+  that cannot be moved is rejected at compile time with a clear message.
+- **A `Registry` cannot be copied or moved.** Views, queued changes and tools
+  point into it. Keep it as a member of its scene, or behind a
+  `std::unique_ptr` to store several.
+- **Handles belong to their registry.** An entity from another registry is
+  rejected (`std::invalid_argument`), even if its index matches.
 
-The order of component types does not affect cost: iteration is driven by
-whichever requested storage is smallest when the loop begins, and only the
-other storages are checked for membership. Ties go to the type listed first.
-The yielded tuple always follows the order the types were written in; the
-order entities are visited in follows the driving storage and should not be
-relied on.
+## Going further
 
-## Reflection
+- **Tools (editor, save files, debug console)** use the reflection layer and
+  `world.inspect()` to read and edit components without knowing their types:
+  see [Reflection/README.md](Reflection/README.md).
+- **How it works inside**: each class is documented in its header.
 
-See [Reflection/README.md](Reflection/README.md).
+| Folder | Content |
+| --- | --- |
+| [Core/](Core/) | [Registry.hpp](Core/Registry.hpp) (the world) and [CommandBuffer.hpp](Core/CommandBuffer.hpp) (deferred changes) |
+| [Core/Entity/](Core/Entity/) | `Entity`, `EntityManager` (entity lifecycle), `EntityList`, `Name` |
+| [Core/Component/](Core/Component/) | `ComponentStorage` (one dense array per type), `ComponentStore` (all of them), `SignatureTable` (which entity has which component) |
+| [Core/Query/](Core/Query/) | `View` and the `Zipper` that walks several arrays at once |
+| [Core/Resource/](Core/Resource/) | `ResourceStore` |
+| [Core/System/](Core/System/) | `ISystem`, `SystemManager` |
 
-Every `E_REFLECT` type is described at runtime and is usable as a component by
-code that does not know its type at compile time, through `world.inspect()`.
-The ECS core does not depend on the reflection layer.
-
-## Header-Only Design
-
-The ECS is implemented in headers so that its templates and generic operations
-are available wherever the ECS is included. There are no ECS `.cpp` files.
-
-The CMake target in [CMakeLists.txt](CMakeLists.txt) is an `INTERFACE` target and
-only exposes the include directory.
-
-```text
-ECS headers
-    |
-    +-- include directly from user code
-    +-- no ECS object file
-    +-- template code compiled where used
-```
-
-## Basic Usage
-
-The minimal ECS workflow is:
-
-```cpp
-ECS::Registry world;
-ECS::Entity entity = world.spawnEntity();
-
-world.emplaceComponent<Position>(entity, 0, 0);
-world.emplaceComponent<Velocity>(entity, 1, 0);
-
-ECS::SystemManager systems;
-systems.addSystem<MovementSystem>();
-systems.update(world, dt);
-
-world.killEntity(entity);
-```
-
-The important relationship is:
-
-```text
-Registry
-  -> EntityManager manages entity IDs
-  -> ComponentPool stores component data
-  -> ComponentStorage provides dense storage
-  -> View helps systems iterate matching entities
-  -> SystemManager runs ISystem instances against the registry
-```
+The ECS is header-only: [CMakeLists.txt](CMakeLists.txt) defines an `INTERFACE`
+target that only exposes the include directory.

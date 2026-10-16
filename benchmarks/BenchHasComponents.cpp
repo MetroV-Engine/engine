@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "BenchSupport.hpp"
-#include "ECS/Registry.hpp"
+#include "ECS/ECS.hpp"
 
 namespace {
     struct Position { int x; int y; };
