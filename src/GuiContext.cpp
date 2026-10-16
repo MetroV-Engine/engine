@@ -40,6 +40,10 @@ GuiContext::GuiContext(const char *title, int width, int height)
         if (!ImGui_ImplSDLRenderer3_Init(_renderer))
             throw std::runtime_error("ImGui SDLRenderer3 backend init failed");
         _imguiRendererBackend = true;
+
+        _events.subscribeAll([](const SDL_Event &event) { ImGui_ImplSDL3_ProcessEvent(&event); });
+        _events.subscribe(SDL_EVENT_QUIT, [this](const SDL_Event &) { _running = false; });
+        _events.subscribe(SDL_EVENT_WINDOW_CLOSE_REQUESTED, [this](const SDL_Event &) { _running = false; });
     } catch (...) {
         destroy();
         throw;
@@ -68,16 +72,6 @@ void GuiContext::destroy()
     _imguiRendererBackend = _imguiSdlBackend = _imguiContext = false;
     _renderer = nullptr;
     _window = nullptr;
-}
-
-void GuiContext::pollEvents()
-{
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        ImGui_ImplSDL3_ProcessEvent(&event);
-        if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
-            _running = false;
-    }
 }
 
 void GuiContext::beginFrame()
