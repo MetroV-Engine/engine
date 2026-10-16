@@ -29,5 +29,8 @@ a.out
 build
 docs/
 
+.claude
+.cache
+
 # Personal Makefile wrapper
 Makefile
