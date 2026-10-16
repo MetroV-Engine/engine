@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "EventManager.hpp"
+
 #include <SDL3/SDL.h>
 
 class GuiContext
@@ -25,7 +27,8 @@ public:
     GuiContext &operator=(const GuiContext &) = delete;
 
     bool isRunning() const { return _running; }
-    void pollEvents();
+    EventManager &events() { return _events; }
+    void pollEvents() { _events.pollEvents(); }
     void beginFrame();
     void endFrame();
 
@@ -36,6 +39,7 @@ private:
     bool _imguiSdlBackend = false;
     bool _imguiRendererBackend = false;
     bool _running = true;
+    EventManager _events;
 
     void destroy();
 };
