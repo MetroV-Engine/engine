@@ -1,4 +1,4 @@
-name: Build with Ninja
+name: Build
 
 on:
   push:
@@ -7,17 +7,22 @@ on:
     branches: [dev]
 
 jobs:
-  build:
+  compile:
+    name: Compile on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: true
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Init vcpkg submodule
-        run: git submodule update --init --depth 1 vcpkg
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
       - name: Install CMake and Ninja
         uses: lukka/get-cmake@v4.3.1
@@ -25,22 +30,22 @@ jobs:
           cmakeVersion: 3.31.6
           ninjaVersion: 1.12.1
 
+      - name: Init vcpkg submodule
+        run: git submodule update --init --depth 1 vcpkg
+
       - name: Install vcpkg bootstrap deps (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y zip unzip
 
-      - name: Cache vcpkg installed packages
+      - name: Cache vcpkg packages
         uses: actions/cache@v4
         with:
-          path: vcpkg/installed
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+          path: vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', '.github/workflows/build.yml') }}
           restore-keys: |
-            ${{ runner.os }}-vcpkg-
+            vcpkg-${{ runner.os }}-
 
-      - name: Configure CMake
-        run: cmake -B cmake-build-debug -G Ninja
-
-      - name: Build with Ninja
-        run: ninja -C cmake-build-debug
+      - name: Compile project and tests
+        run: python project_scripts/build.py --compile-tests
