@@ -10,10 +10,11 @@ as docstrings.
 2. [Using the ECS](#using-the-ecs)
    1. [Entities](#entities)
    2. [Components](#components)
-   3. [Views: finding entities by their components](#views-finding-entities-by-their-components)
-   4. [Systems](#systems)
-   5. [Changing the world during a loop](#changing-the-world-during-a-loop)
-   6. [Resources](#resources)
+   3. [Reacting to a removed component](#reacting-to-a-removed-component)
+   4. [Views: finding entities by their components](#views-finding-entities-by-their-components)
+   5. [Systems](#systems)
+   6. [Changing the world during a loop](#changing-the-world-during-a-loop)
+   7. [Resources](#resources)
 3. [Full example](#full-example)
 4. [Rules to remember](#rules-to-remember)
 5. [Going further](#going-further)
@@ -100,6 +101,43 @@ world.getComponent<ECS::Name>(player).value = "hero";
 
 Adding a component the entity already has replaces it. `getComponent` throws
 `std::out_of_range` when the entity does not have the component.
+
+### Reacting to a removed component
+
+Some components hold something that lives outside the ECS: a texture, a sound,
+a physics body. When the component goes away, that thing must be freed too, or
+it leaks.
+
+`onRemove<T>` solves this. You give it a function once, and the ECS calls it
+every time a `T` is about to be destroyed, with that `T` as argument:
+
+```cpp
+struct Sprite { TextureHandle texture; };
+
+// Once, at startup: "when a Sprite is removed, free its texture"
+world.onRemove<Sprite>([&textures](Sprite& sprite) {
+    textures.release(sprite.texture);
+});
+
+// Later, both of these free the texture automatically
+world.removeComponent<Sprite>(player);   // removes the Sprite: callback called
+world.killEntity(enemy);                 // kills the entity, so its Sprite too: callback called
+```
+
+Good to know:
+
+| Situation | Is the callback called? |
+| --- | --- |
+| `removeComponent<T>` | yes |
+| `killEntity` on an entity that has a `T` | yes |
+| `addComponent` on an entity that already has a `T` (replacement) | no |
+
+- **One callback per type.** Calling `onRemove<Sprite>` a second time replaces
+  the first callback; it does not add a second one.
+- **Errors are ignored.** If the callback throws, the exception is swallowed and
+  the component is still removed.
+- **Only clean up, don't change the world.** Inside the callback, don't spawn or
+  kill entities, and don't add or remove components.
 
 ### Views: finding entities by their components
 
