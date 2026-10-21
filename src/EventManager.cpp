@@ -30,7 +30,8 @@ void EventManager::pollEvents()
 {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        logEvent(event);
+
+        // logEvent(event); // Uncomment this line to log all events to the console
         dispatch(event);
     }
 }
