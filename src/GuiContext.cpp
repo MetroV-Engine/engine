@@ -74,6 +74,26 @@ void GuiContext::destroy()
     _window = nullptr;
 }
 
+void GuiContext::setFullscreen(bool fullscreen)
+{
+    if (!SDL_SetWindowFullscreen(_window, fullscreen))
+        SDL_Log("SDL_SetWindowFullscreen failed: %s", SDL_GetError());
+}
+
+void GuiContext::setWindowSize(int width, int height)
+{
+    // While fullscreen, SDL keeps the size and applies it when leaving fullscreen.
+    if (!SDL_SetWindowSize(_window, width, height))
+        SDL_Log("SDL_SetWindowSize failed: %s", SDL_GetError());
+    SDL_SetWindowPosition(_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+
+void GuiContext::setVSync(bool enabled)
+{
+    if (!SDL_SetRenderVSync(_renderer, enabled ? 1 : SDL_RENDERER_VSYNC_DISABLED))
+        SDL_Log("SDL_SetRenderVSync failed: %s", SDL_GetError());
+}
+
 void GuiContext::beginFrame()
 {
     ImGui_ImplSDLRenderer3_NewFrame();

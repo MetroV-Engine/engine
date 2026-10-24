@@ -29,6 +29,11 @@ public:
     bool isRunning() const { return _running; }
     EventManager &events() { return _events; }
     void pollEvents() { _events.pollEvents(); }
+    // Window settings, applied immediately.
+    void setFullscreen(bool fullscreen);
+    void setWindowSize(int width, int height);
+    void setVSync(bool enabled);
+
     void beginFrame();
     void endFrame();
 

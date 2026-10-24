@@ -13,13 +13,18 @@
 
 #include "src/GuiContext.hpp"
 #include "src/components/Button.hpp"
+#include "src/components/Checkbox.hpp"
+#include "src/components/ComboBox.hpp"
 #include "src/components/NumberInput.hpp"
+#include "src/components/RadioGroup.hpp"
 #include "src/components/TextInput.hpp"
 
 #include <imgui.h>
 
 #include <exception>
 #include <iostream>
+#include <utility>
+#include <vector>
 
 int main()
 {
@@ -43,6 +48,26 @@ int main()
             [](float value) { std::cout << "Speed: " << value << std::endl; });
         speedInput.setRange(0.0f, 10.0f);
 
+        Checkbox vsyncCheckbox("VSync", true, [&gui](bool checked) {
+            std::cout << "VSync: " << (checked ? "on" : "off") << std::endl;
+            gui.setVSync(checked);
+        });
+        gui.setVSync(vsyncCheckbox.isChecked());
+        Checkbox fullscreenCheckbox("Fullscreen", false, [&gui](bool checked) {
+            std::cout << "Fullscreen: " << (checked ? "on" : "off") << std::endl;
+            gui.setFullscreen(checked);
+        });
+
+        const std::vector<std::pair<int, int>> resolutions = {{1280, 720}, {1920, 1080}, {2560, 1440}};
+        ComboBox resolutionCombo("Resolution", {"1280x720", "1920x1080", "2560x1440"}, 0,
+            [&gui, &resolutions](int index, const std::string &option) {
+                std::cout << "Resolution: " << option << std::endl;
+                gui.setWindowSize(resolutions[index].first, resolutions[index].second);
+            });
+        RadioGroup qualityRadio("Quality", {"Low", "Medium", "High"}, 1,
+            [](int, const std::string &option) { std::cout << "Quality: " << option << std::endl; });
+        qualityRadio.setHorizontal(true);
+
         while (gui.isRunning()) {
             gui.pollEvents();
             gui.beginFrame();
@@ -61,6 +86,13 @@ int main()
             passwordInput.render();
             ageInput.render();
             speedInput.render();
+            ImGui::End();
+
+            ImGui::Begin("Selection");
+            vsyncCheckbox.render();
+            fullscreenCheckbox.render();
+            resolutionCombo.render();
+            qualityRadio.render();
             ImGui::End();
 
             gui.endFrame();
