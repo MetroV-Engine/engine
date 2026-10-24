@@ -16,6 +16,7 @@
 #include "src/components/Checkbox.hpp"
 #include "src/components/ComboBox.hpp"
 #include "src/components/NumberInput.hpp"
+#include "src/components/PerformanceOverlay.hpp"
 #include "src/components/RadioGroup.hpp"
 #include "src/components/TextInput.hpp"
 
@@ -68,9 +69,11 @@ int main()
             [](int, const std::string &option) { std::cout << "Quality: " << option << std::endl; });
         qualityRadio.setHorizontal(true);
 
-        while (gui.isRunning()) {
-            gui.pollEvents();
-            gui.beginFrame();
+        PerformanceOverlay performanceOverlay(gui.timer());
+        Checkbox overlayCheckbox("Show performance", true,
+            [&performanceOverlay](bool checked) { performanceOverlay.setVisible(checked); });
+
+        gui.run([&] {
             // ImGui::ShowDemoWindow(); // ImGui demo window is disabled by default, uncomment the line above to enable it
 
             ImGui::Begin("Buttons");
@@ -93,10 +96,12 @@ int main()
             fullscreenCheckbox.render();
             resolutionCombo.render();
             qualityRadio.render();
+            overlayCheckbox.render();
             ImGui::End();
 
-            gui.endFrame();
-        }
+            performanceOverlay.render();
+
+        });
     } catch (const std::exception &e) {
         std::cerr << e.what() << std::endl;
         return 1;

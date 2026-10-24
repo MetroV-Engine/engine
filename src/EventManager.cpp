@@ -36,6 +36,16 @@ void EventManager::pollEvents()
     }
 }
 
+void EventManager::waitEvents(int timeoutMs)
+{
+    SDL_Event event;
+    if (!SDL_WaitEventTimeout(&event, timeoutMs))
+        return;
+    logEvent(event);
+    dispatch(event);
+    pollEvents();
+}
+
 void EventManager::logEvent(const SDL_Event &event) const
 {
     char description[256];

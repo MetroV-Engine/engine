@@ -31,6 +31,9 @@ public:
     void subscribeAll(Callback callback);
 
     void pollEvents();
+    // Blocks until an event arrives or timeoutMs elapses, then dispatches
+    // everything queued. Used when there is nothing to draw.
+    void waitEvents(int timeoutMs);
 
 private:
     std::vector<Callback> _globalCallbacks;
