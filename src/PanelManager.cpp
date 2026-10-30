@@ -67,27 +67,6 @@ bool PanelManager::toggle(const std::string &name)
 
 void PanelManager::drawAll()
 {
-    if (_menuBarVisible)
-        drawMenuBar();
     for (const auto &panel : _panels)
         panel->draw();
-}
-
-void PanelManager::drawMenuBar()
-{
-    if (!ImGui::BeginMainMenuBar())
-        return;
-    if (_menuBarCallback)
-        _menuBarCallback();
-    if (ImGui::BeginMenu("View")) {
-        for (const auto &panel : _panels) {
-            if (!panel->isClosable())
-                continue;
-            bool visible = panel->isVisible();
-            if (ImGui::MenuItem(panel->getName().c_str(), nullptr, &visible))
-                panel->setVisible(visible);
-        }
-        ImGui::EndMenu();
-    }
-    ImGui::EndMainMenuBar();
 }

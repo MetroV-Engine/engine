@@ -102,6 +102,11 @@ void GuiContext::setFullscreen(bool fullscreen)
         SDL_Log("SDL_SetWindowFullscreen failed: %s", SDL_GetError());
 }
 
+bool GuiContext::isFullscreen() const
+{
+    return (SDL_GetWindowFlags(_window) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
 void GuiContext::setWindowSize(int width, int height)
 {
     // While fullscreen, SDL keeps the size and applies it when leaving fullscreen.

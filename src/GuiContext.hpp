@@ -53,6 +53,7 @@ public:
 
     // Window settings, applied immediately.
     void setFullscreen(bool fullscreen);
+    bool isFullscreen() const;
     void setWindowSize(int width, int height);
     void setVSync(bool enabled);
 

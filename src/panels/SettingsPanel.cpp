@@ -17,6 +17,8 @@
 
 SettingsPanel::SettingsPanel(GuiContext &gui, PerformanceOverlay &overlay)
     : Panel("Settings"),
+      _gui(gui),
+      _overlay(overlay),
       _vsyncCheckbox("VSync", true,
           [&gui](bool checked) {
               std::cout << "VSync: " << (checked ? "on" : "off") << std::endl;
@@ -43,6 +45,11 @@ SettingsPanel::SettingsPanel(GuiContext &gui, PerformanceOverlay &overlay)
 
 void SettingsPanel::drawContent()
 {
+    // These can also change from the menu bar, toolbar, shortcuts or the
+    // window manager: always show the real state.
+    _fullscreenCheckbox.setChecked(_gui.isFullscreen());
+    _overlayCheckbox.setChecked(_overlay.isVisible());
+
     _vsyncCheckbox.render();
     _fullscreenCheckbox.render();
     _resolutionCombo.render();
