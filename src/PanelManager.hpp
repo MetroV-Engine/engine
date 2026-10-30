@@ -22,8 +22,8 @@
 #include <vector>
 
 // Central registry of the editor panels. Panels are registered once, then
-// drawAll() draws every visible one each frame, in registration order, with a
-// main menu bar whose View menu shows/hides them.
+// drawAll() draws every visible one each frame, in registration order. Menu
+// and toolbar entries to show/hide them are created through Actions.
 class PanelManager
 {
 public:
@@ -54,21 +54,14 @@ public:
     bool setVisible(const std::string &name, bool visible);
     bool toggle(const std::string &name);
 
-    // Draws the main menu bar and every visible panel. Call once per frame,
-    // between beginFrame() and present().
+    // Draws every visible panel. Call once per frame, after the menu bar and
+    // toolbar so panels are laid out below them.
     void drawAll();
-
-    // Extra menus drawn in the main menu bar, before View (e.g. File).
-    void setMenuBarCallback(std::function<void()> callback) { _menuBarCallback = std::move(callback); }
-    void setMenuBarVisible(bool visible) { _menuBarVisible = visible; }
 
     const std::vector<std::unique_ptr<Panel>> &getPanels() const { return _panels; }
 
 private:
     std::vector<std::unique_ptr<Panel>> _panels;
-    std::function<void()> _menuBarCallback;
-    bool _menuBarVisible = true;
 
     void add(std::unique_ptr<Panel> panel);
-    void drawMenuBar();
 };

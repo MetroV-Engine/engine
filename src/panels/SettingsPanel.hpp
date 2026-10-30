@@ -34,6 +34,8 @@ protected:
     void drawContent() override;
 
 private:
+    GuiContext &_gui;
+    PerformanceOverlay &_overlay;
     const std::vector<std::pair<int, int>> _resolutions = {{1280, 720}, {1920, 1080}, {2560, 1440}};
     Checkbox _vsyncCheckbox;
     Checkbox _fullscreenCheckbox;
