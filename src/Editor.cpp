@@ -19,6 +19,7 @@
 #include "panels/InputsPanel.hpp"
 #include "panels/InspectorPanel.hpp"
 #include "panels/SettingsPanel.hpp"
+#include "panels/ShortcutsPanel.hpp"
 #include "panels/ViewportPanel.hpp"
 #include "log/Logger.hpp"
 
@@ -40,9 +41,13 @@ Editor::Editor(GuiContext &gui, Options options)
       _options(options),
       _performanceOverlay(gui.timer()),
       _scene(options.demo),
+      _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
 {
+    // Tab / arrows / Space move between and activate widgets; Ctrl+Tab
+    // switches panels.
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     // Each mode keeps its own panel layout, so the demo does not disturb the
     // normal one. Must be set before the first frame, when ImGui loads it.
     ImGui::GetIO().IniFilename = options.demo ? "imgui-demo.ini" : "imgui.ini";
@@ -54,6 +59,7 @@ Editor::Editor(GuiContext &gui, Options options)
     buildStatusBar();
     registerCommands();
     connectFeedback();
+    loadShortcuts();
     _gui.setCloseRequestHandler([this] { requestQuit(); });
     logStartupInfo();
 }
@@ -89,6 +95,8 @@ void Editor::registerPanels()
     }
 
     // Floating, hidden until opened from the Help menu.
+    _shortcutsPanel = &_panels.registerPanel<ShortcutsPanel>(_actions, _dialogs, _notifications);
+    _shortcutsPanel->setVisible(false);
     _panels.registerPanel("About", [] {
         ImGui::TextUnformatted("MetroV Engine - Editor");
         ImGui::TextDisabled("Built with SDL3 and Dear ImGui %s", IMGUI_VERSION);
@@ -109,10 +117,27 @@ void Editor::registerActions()
     _actions.add({.id = "edit.create", .label = "Create Object",
         .callback = [this] { _hierarchy->createObject(HierarchyModel::InvalidId); },
         .shortcut = ImGuiMod_Ctrl | ImGuiKey_N, .tooltip = "Create an object at the root of the scene"});
+    // F2 and Delete are handled by the Hierarchy when it has focus (so typing
+    // elsewhere never deletes an object); the menu shows them as hints.
     _actions.add({.id = "edit.rename", .label = "Rename", .callback = [this] { _hierarchy->startRename(_selection.get()); },
-        .isEnabled = [this] { return _selection.has(); }});
+        .isEnabled = [this] { return _selection.has(); }, .shortcutHint = "F2"});
     _actions.add({.id = "edit.delete", .label = "Delete", .callback = [this] { _hierarchy->requestDelete(_selection.get()); },
-        .isEnabled = [this] { return _selection.has(); }});
+        .isEnabled = [this] { return _selection.has(); }, .shortcutHint = "Del"});
+
+    _actions.add({.id = "view.palette", .label = "Command Palette", .callback = [this] { _palette.toggle(); },
+        .shortcut = ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_P, .tooltip = "Search and run any command"});
+    _actions.add({.id = "help.shortcuts", .label = "Keyboard Shortcuts",
+        .callback = [this] { _panels.toggle("Keyboard Shortcuts"); }, .shortcut = ImGuiKey_F1,
+        .isChecked = [this] { return _panels.getPanel("Keyboard Shortcuts")->isVisible(); }});
+
+    // Ctrl+1..5: jump to a panel.
+    const std::pair<const char *, ImGuiKey> focusKeys[] = {{"Hierarchy", ImGuiKey_1}, {"Viewport", ImGuiKey_2},
+        {"Inspector", ImGuiKey_3}, {"Console", ImGuiKey_4}, {"Settings", ImGuiKey_5}};
+    for (const auto &[name, key] : focusKeys) {
+        const std::string panel = name;
+        _actions.add({.id = "window.focus." + panel, .label = "Focus " + panel, .callback = [this, panel] { focusPanel(panel); },
+            .shortcut = ImGuiMod_Ctrl | key});
+    }
 
     _actions.add({.id = "view.console", .label = "Developer Console",
         .callback = [this] {
@@ -122,6 +147,15 @@ void Editor::registerActions()
         },
         .shortcut = ImGuiKey_GraveAccent, .tooltip = "Open the console and type a command"});
 
+    _actions.add({.id = "view.theme.next", .label = "Next Theme",
+        .callback = [this] {
+            const std::vector<std::string> names = _gui.themes().getThemeNames();
+            const auto it = std::ranges::find(names, _gui.themes().current().name);
+            const std::size_t next = it == names.end() ? 0 : (static_cast<std::size_t>(it - names.begin()) + 1) % names.size();
+            _gui.themes().setTheme(names[next]);
+        },
+        .shortcut = ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_T, .tooltip = "Switch to the next theme"});
+
     _actions.add({.id = "view.layout.reset", .label = "Reset Layout",
         .callback = [this] {
             for (const std::string &name : _layoutPanels)
@@ -129,7 +163,7 @@ void Editor::registerActions()
             _layout.resetLayout();
             _notifications.info("Layout reset");
         },
-        .tooltip = "Restore the default panel arrangement"});
+        .shortcut = ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_R, .tooltip = "Restore the default panel arrangement"});
     _actions.add({.id = "view.statusbar", .label = "Status Bar",
         .callback = [this] { _statusBar.setVisible(!_statusBar.isVisible()); },
         .isChecked = [this] { return _statusBar.isVisible(); }});
@@ -157,6 +191,7 @@ void Editor::buildMenuBar()
 
     for (const std::string &name : _layoutPanels)
         _menuBar.addAction("View/Panels", "view.panel." + name);
+    _menuBar.addAction("View", "view.palette");
     _menuBar.addAction("View", "view.console");
     _menuBar.addAction("View", "view.layout.reset");
     _menuBar.addSeparator("View");
@@ -165,9 +200,15 @@ void Editor::buildMenuBar()
     _menuBar.addAction("View", "view.statusbar");
     for (const std::string &name : _gui.themes().getThemeNames())
         _menuBar.addAction("View/Theme", "view.theme." + name);
+    _menuBar.addSeparator("View/Theme");
+    _menuBar.addAction("View/Theme", "view.theme.next");
+    for (const std::string &name : _layoutPanels)
+        if (_actions.has("window.focus." + name))
+            _menuBar.addAction("Window", "window.focus." + name);
 
     if (_options.demo)
         _menuBar.addAction("Help", "view.panel.Dear ImGui Demo");
+    _menuBar.addAction("Help", "help.shortcuts");
     _menuBar.addAction("Help", "view.panel.About");
 }
 
@@ -283,11 +324,71 @@ void Editor::registerCommands()
                 message += (i > 1 ? " " : "") + args[i];
             Logger::instance().log(it->second, "Console", message);
         });
+    _commands.add("shortcuts", "shortcuts [reset]", "List the commands and their shortcuts, or reset them all",
+        [this](const std::vector<std::string> &args) {
+            Logger &log = Logger::instance();
+            if (!args.empty() && args[0] == "reset") {
+                _actions.resetAllShortcuts();
+                log.info("Console", "Shortcuts reset to the defaults");
+                return;
+            }
+            if (!args.empty())
+                throw std::invalid_argument("unknown option \"" + args[0] + "\"");
+            for (const auto &action : _actions.getActions()) {
+                std::string keys;
+                for (const ImGuiKeyChord chord : _actions.shortcuts(action->id))
+                    keys += (keys.empty() ? "" : ", ") + ActionRegistry::shortcutText(chord);
+                log.info("Console", action->id + "  " + (keys.empty() ? "-" : keys));
+            }
+        });
+    _commands.add("bind", "bind <action-id> <shortcut>", "Add a shortcut, e.g. bind view.palette Ctrl+K",
+        [this](const std::vector<std::string> &args) {
+            if (args.size() != 2)
+                throw std::invalid_argument("expected an action id and a shortcut");
+            if (!_actions.has(args[0]))
+                throw std::invalid_argument("unknown action \"" + args[0] + "\" (see \"shortcuts\")");
+            const std::optional<ImGuiKeyChord> chord = ActionRegistry::parseShortcut(args[1]);
+            if (!chord)
+                throw std::invalid_argument("invalid shortcut \"" + args[1] + "\"");
+            if (const std::optional<std::string> reason = ActionRegistry::reservedReason(*chord))
+                throw std::invalid_argument(*reason);
+            if (const Action *owner = _actions.findByShortcut(*chord); owner && owner->id != args[0])
+                throw std::invalid_argument(args[1] + " is used by " + owner->id + "; unbind it first");
+            _actions.addShortcut(args[0], *chord);
+            Logger::instance().info("Console", ActionRegistry::shortcutText(*chord) + " -> " + args[0]);
+        });
+    _commands.add("unbind", "unbind <action-id> [shortcut]", "Remove one shortcut of a command, or all of them",
+        [this](const std::vector<std::string> &args) {
+            if (args.empty() || args.size() > 2)
+                throw std::invalid_argument("expected an action id and optionally a shortcut");
+            if (!_actions.has(args[0]))
+                throw std::invalid_argument("unknown action \"" + args[0] + "\" (see \"shortcuts\")");
+            if (args.size() == 1) {
+                for (const ImGuiKeyChord chord : std::vector<ImGuiKeyChord>(_actions.shortcuts(args[0])))
+                    _actions.removeShortcut(args[0], chord);
+            } else {
+                const std::optional<ImGuiKeyChord> chord = ActionRegistry::parseShortcut(args[1]);
+                if (!chord || !_actions.removeShortcut(args[0], *chord))
+                    throw std::invalid_argument(args[0] + " has no shortcut \"" + args[1] + "\"");
+            }
+            Logger::instance().info("Console", "Shortcut removed from " + args[0]);
+        });
     _commands.add("objects", "objects", "Count the objects of the scene", [this](const auto &) {
         std::size_t count = 0;
         for (HierarchyModel::ObjectId root : _scene.roots())
             count += 1 + _scene.countDescendants(root);
         Logger::instance().info("Console", std::to_string(count) + " objects in the scene");
+    });
+}
+
+void Editor::loadShortcuts()
+{
+    // Shared by both modes: shortcuts are a user preference, not a layout.
+    static constexpr const char *ShortcutsFile = "shortcuts.ini";
+    _actions.loadShortcuts(ShortcutsFile);
+    _actions.setOnShortcutsChanged([this] {
+        if (!_actions.saveShortcuts(ShortcutsFile))
+            Logger::instance().error("Shortcuts", std::string("Cannot write ") + ShortcutsFile);
     });
 }
 
@@ -337,6 +438,17 @@ void Editor::reportNewErrors()
     _notifications.error(title, latest->message);
 }
 
+void Editor::focusPanel(const std::string &name)
+{
+    Panel *panel = _panels.getPanel(name);
+    if (!panel)
+        return;
+    if (panel->isVisible())
+        ImGui::SetWindowFocus(name.c_str());
+    else
+        panel->setVisible(true); // Showing a panel also focuses it
+}
+
 void Editor::requestQuit()
 {
     // Several triggers (shortcut, menu, window close) must not stack dialogs.
@@ -358,8 +470,9 @@ void Editor::run()
 
 void Editor::drawFrame()
 {
-    // A dialog waits for an answer: editor shortcuts must not act behind it.
-    if (!_dialogs.isOpen())
+    // A dialog waits for an answer, or a new shortcut is being recorded:
+    // editor shortcuts must not act meanwhile.
+    if (!_dialogs.isOpen() && !_shortcutsPanel->isRecording())
         _actions.processShortcuts();
     reportNewErrors();
 
@@ -372,6 +485,7 @@ void Editor::drawFrame()
 
     // On top of the panels.
     _performanceOverlay.render();
+    _palette.draw();
     _notifications.draw();
     _dialogs.draw();
 }
