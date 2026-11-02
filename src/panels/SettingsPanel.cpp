@@ -13,7 +13,9 @@
 
 #include "SettingsPanel.hpp"
 
-#include <iostream>
+#include "log/Logger.hpp"
+
+#include <string>
 
 SettingsPanel::SettingsPanel(GuiContext &gui, PerformanceOverlay &overlay)
     : Panel("Settings"),
@@ -21,21 +23,21 @@ SettingsPanel::SettingsPanel(GuiContext &gui, PerformanceOverlay &overlay)
       _overlay(overlay),
       _vsyncCheckbox("VSync", true,
           [&gui](bool checked) {
-              std::cout << "VSync: " << (checked ? "on" : "off") << std::endl;
+              Logger::instance().info("Settings", std::string("VSync: ") + (checked ? "on" : "off"));
               gui.setVSync(checked);
           }),
       _fullscreenCheckbox("Fullscreen", false,
           [&gui](bool checked) {
-              std::cout << "Fullscreen: " << (checked ? "on" : "off") << std::endl;
+              Logger::instance().info("Settings", std::string("Fullscreen: ") + (checked ? "on" : "off"));
               gui.setFullscreen(checked);
           }),
       _resolutionCombo("Resolution", {"1280x720", "1920x1080", "2560x1440"}, 0,
           [this, &gui](int index, const std::string &option) {
-              std::cout << "Resolution: " << option << std::endl;
+              Logger::instance().info("Settings", "Resolution: " + option);
               gui.setWindowSize(_resolutions[index].first, _resolutions[index].second);
           }),
       _qualityRadio("Quality", {"Low", "Medium", "High"}, 1,
-          [](int, const std::string &option) { std::cout << "Quality: " << option << std::endl; }),
+          [](int, const std::string &option) { Logger::instance().info("Settings", "Quality: " + option); }),
       _overlayCheckbox("Show performance", overlay.isVisible(),
           [&overlay](bool checked) { overlay.setVisible(checked); }),
       _themeCombo("Theme", gui.themes().getThemeNames(), 0,
@@ -49,6 +51,7 @@ void SettingsPanel::drawContent()
 {
     // These can also change from the menu bar, toolbar, shortcuts or the
     // window manager: always show the real state.
+    _vsyncCheckbox.setChecked(_gui.isVSync());
     _fullscreenCheckbox.setChecked(_gui.isFullscreen());
     _overlayCheckbox.setChecked(_overlay.isVisible());
     const auto &themeNames = _themeCombo.getOptions();

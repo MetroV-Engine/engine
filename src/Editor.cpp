@@ -20,10 +20,16 @@
 #include "panels/InspectorPanel.hpp"
 #include "panels/SettingsPanel.hpp"
 #include "panels/ViewportPanel.hpp"
+#include "log/Logger.hpp"
 
 #include <imgui.h>
 
+#include <algorithm>
+#include <cstdio>
+#include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -40,9 +46,10 @@ Editor::Editor(GuiContext &gui)
     buildMenuBar();
     buildToolbar();
     buildStatusBar();
+    registerCommands();
     connectFeedback();
     _gui.setCloseRequestHandler([this] { requestQuit(); });
-    _console->log(ConsolePanel::Level::Info, "Editor started");
+    logStartupInfo();
 }
 
 void Editor::registerPanels()
@@ -60,7 +67,7 @@ void Editor::registerPanels()
     _panels.registerPanel<SettingsPanel>(_gui, _performanceOverlay);
     _layout.setDefaultArea("Settings", Area::Right);
 
-    _console = &_panels.registerPanel<ConsolePanel>();
+    _console = &_panels.registerPanel<ConsolePanel>(_commands);
     _layout.setDefaultArea("Console", Area::Bottom);
     // Widget demos, next to the console.
     _panels.registerPanel<ButtonsPanel>(_notifications, _dialogs, [this] { requestQuit(); });
@@ -94,6 +101,14 @@ void Editor::registerActions()
         .isEnabled = [this] { return _selection.has(); }});
     _actions.add({.id = "edit.delete", .label = "Delete", .callback = [this] { _hierarchy->requestDelete(_selection.get()); },
         .isEnabled = [this] { return _selection.has(); }});
+
+    _actions.add({.id = "view.console", .label = "Developer Console",
+        .callback = [this] {
+            _panels.setVisible("Console", true);
+            ImGui::SetWindowFocus("Console");
+            _console->focusCommandLine();
+        },
+        .shortcut = ImGuiKey_GraveAccent, .tooltip = "Open the console and type a command"});
 
     _actions.add({.id = "view.layout.reset", .label = "Reset Layout",
         .callback = [this] {
@@ -130,6 +145,7 @@ void Editor::buildMenuBar()
 
     for (const char *name : EditorPanels)
         _menuBar.addAction("View/Panels", std::string("view.panel.") + name);
+    _menuBar.addAction("View", "view.console");
     _menuBar.addAction("View", "view.layout.reset");
     _menuBar.addSeparator("View");
     _menuBar.addAction("View", "view.fullscreen");
@@ -154,23 +170,156 @@ void Editor::buildToolbar()
 
 void Editor::buildStatusBar()
 {
+    // Warning and error counts; a click opens the console.
+    _statusBar.addItem([this] {
+        const Theme &theme = _gui.themes().current();
+        const Logger &logger = Logger::instance();
+        const std::size_t warnings = logger.count(LogLevel::Warning);
+        const std::size_t errors = logger.count(LogLevel::Error);
+        ImGui::TextColored(warnings ? theme.colors.warning : theme.colors.textMuted, "%zu warning%s", warnings,
+            warnings == 1 ? "" : "s");
+        const bool clicked = ImGui::IsItemClicked();
+        ImGui::SameLine();
+        ImGui::TextColored(errors ? theme.colors.danger : theme.colors.textMuted, "%zu error%s", errors,
+            errors == 1 ? "" : "s");
+        if (clicked || ImGui::IsItemClicked())
+            _actions.execute("view.console");
+    });
     _statusBar.addItem([this] { ImGui::Text("%.0f FPS", _gui.timer().getFps()); });
     _statusBar.addItem([this] { ImGui::TextUnformatted(_gui.themes().current().name.c_str()); });
 }
 
 void Editor::connectFeedback()
 {
-    // Every notification is also kept in the console and shown in the status bar.
+    // Every notification is also logged (category "Editor") and shown in the status bar.
     _notifications.setOnNotify(
         [this](NotificationManager::Level level, const std::string &title, const std::string &message) {
-            const ConsolePanel::Level consoleLevel = level == NotificationManager::Level::Success ? ConsolePanel::Level::Success
-                : level == NotificationManager::Level::Warning ? ConsolePanel::Level::Warning
-                : level == NotificationManager::Level::Error   ? ConsolePanel::Level::Error
-                                                                : ConsolePanel::Level::Info;
-            _console->log(consoleLevel, message.empty() ? title : title + ": " + message);
+            const LogLevel logLevel = level == NotificationManager::Level::Success ? LogLevel::Success
+                : level == NotificationManager::Level::Warning                   ? LogLevel::Warning
+                : level == NotificationManager::Level::Error                     ? LogLevel::Error
+                                                                                 : LogLevel::Info;
+            Logger::instance().log(logLevel, "Editor", message.empty() ? title : title + ": " + message);
             _statusBar.setMessage(title);
         });
     _gui.themes().setOnChange([this](const Theme &theme) { _notifications.info("Theme changed", theme.name); });
+}
+
+void Editor::registerCommands()
+{
+    const auto onOff = [](const std::vector<std::string> &args, std::size_t index, bool current) {
+        if (args.size() <= index)
+            return !current; // No argument: toggle
+        if (args[index] == "on" || args[index] == "1" || args[index] == "true")
+            return true;
+        if (args[index] == "off" || args[index] == "0" || args[index] == "false")
+            return false;
+        throw std::invalid_argument("expected on or off, got \"" + args[index] + "\"");
+    };
+    Logger &logger = Logger::instance();
+
+    _commands.add("clear", "clear", "Clear the console", [](const auto &) { Logger::instance().clear(); });
+    _commands.add("quit", "quit", "Quit the editor (asks for confirmation)", [this](const auto &) { requestQuit(); });
+    _commands.add("fps", "fps", "Print the frame rate and frame time", [this, &logger](const auto &) {
+        char text[96];
+        std::snprintf(text, sizeof(text), "%.0f FPS, %.2f ms per frame (max %.2f ms)", _gui.timer().getFps(),
+            _gui.timer().getAverageFrameTimeMs(), _gui.timer().getMaxFrameTimeMs());
+        logger.info("Console", text);
+    });
+    _commands.add("theme", "theme <name>", "Switch the editor theme", [this](const std::vector<std::string> &args) {
+        std::string names;
+        for (const std::string &name : _gui.themes().getThemeNames())
+            names += (names.empty() ? "" : ", ") + name;
+        if (args.empty() || !_gui.themes().setTheme(args[0]))
+            throw std::invalid_argument("available themes: " + names);
+    });
+    _commands.add("vsync", "vsync [on|off]", "Enable or disable VSync", [this, onOff](const std::vector<std::string> &args) {
+        const bool enabled = onOff(args, 0, _gui.isVSync());
+        _gui.setVSync(enabled);
+        Logger::instance().info("Console", std::string("VSync ") + (enabled ? "on" : "off"));
+    });
+    _commands.add("fullscreen", "fullscreen [on|off]", "Enter or leave fullscreen",
+        [this, onOff](const std::vector<std::string> &args) { _gui.setFullscreen(onOff(args, 0, _gui.isFullscreen())); });
+    _commands.add("events", "events <off|on|all>", "Log SDL events (on: without mouse motion)",
+        [this](const std::vector<std::string> &args) {
+            using Logging = EventManager::Logging;
+            const std::string mode = args.empty() ? "" : args[0];
+            if (mode == "off")
+                _gui.events().setLogging(Logging::Off);
+            else if (mode == "on")
+                _gui.events().setLogging(Logging::NoMotion);
+            else if (mode == "all")
+                _gui.events().setLogging(Logging::All);
+            else
+                throw std::invalid_argument("expected off, on or all");
+            Logger::instance().info("Console", "Event logging: " + mode + " (Debug level, category Events)");
+        });
+    _commands.add("log", "log <debug|info|success|warning|error> <message>", "Write a message to the log, e.g. to test filters",
+        [](const std::vector<std::string> &args) {
+            if (args.size() < 2)
+                throw std::invalid_argument("missing level or message");
+            static const std::pair<const char *, LogLevel> levels[] = {{"debug", LogLevel::Debug},
+                {"info", LogLevel::Info}, {"success", LogLevel::Success}, {"warning", LogLevel::Warning},
+                {"error", LogLevel::Error}};
+            const auto it = std::ranges::find(levels, args[0], [](const auto &level) { return std::string(level.first); });
+            if (it == std::end(levels))
+                throw std::invalid_argument("unknown level \"" + args[0] + "\"");
+            std::string message;
+            for (std::size_t i = 1; i < args.size(); i++)
+                message += (i > 1 ? " " : "") + args[i];
+            Logger::instance().log(it->second, "Console", message);
+        });
+    _commands.add("objects", "objects", "Count the objects of the scene", [this](const auto &) {
+        std::size_t count = 0;
+        for (HierarchyModel::ObjectId root : _scene.roots())
+            count += 1 + _scene.countDescendants(root);
+        Logger::instance().info("Console", std::to_string(count) + " objects in the scene");
+    });
+}
+
+void Editor::logStartupInfo() const
+{
+    Logger &logger = Logger::instance();
+    const int sdl = SDL_GetVersion();
+    char versions[128];
+    std::snprintf(versions, sizeof(versions), "SDL %d.%d.%d, Dear ImGui %s", SDL_VERSIONNUM_MAJOR(sdl),
+        SDL_VERSIONNUM_MINOR(sdl), SDL_VERSIONNUM_MICRO(sdl), IMGUI_VERSION);
+    logger.info("Editor", "Editor started");
+    logger.info("Editor", versions);
+    logger.info("Renderer", std::string("Video driver: ") + SDL_GetCurrentVideoDriver() + ", renderer: " + _gui.getRendererName());
+}
+
+void Editor::reportNewErrors()
+{
+    const Logger &logger = Logger::instance();
+    const std::size_t errorCount = logger.count(LogLevel::Error);
+    if (errorCount == _knownErrorCount)
+        return;
+    const bool newErrors = errorCount > _knownErrorCount; // Fewer: the log was cleared
+    _knownErrorCount = errorCount;
+    if (!newErrors)
+        return;
+
+    // Errors from the editor itself already come from a notification, and
+    // console errors are shown where the user is typing; the others (SDL,
+    // engine, renderer...) get one so they are not missed.
+    std::vector<LogEntry> entries;
+    logger.copyEntries(entries);
+    const LogEntry *latest = nullptr;
+    int unseen = 0;
+    for (const LogEntry &entry : entries) {
+        if (entry.level != LogLevel::Error || entry.id <= _lastReportedError)
+            continue;
+        _lastReportedError = entry.id;
+        if (entry.category == "Editor" || entry.category == "Console")
+            continue;
+        latest = &entry;
+        unseen++;
+    }
+    if (!latest)
+        return;
+    // The notification is itself logged under "Editor", so it is not reported again.
+    const std::string title = unseen == 1 ? "Error in " + latest->category : std::to_string(unseen) + " new errors";
+    _notifications.error(title, latest->message);
 }
 
 void Editor::requestQuit()
@@ -197,6 +346,7 @@ void Editor::drawFrame()
     // A dialog waits for an answer: editor shortcuts must not act behind it.
     if (!_dialogs.isOpen())
         _actions.processShortcuts();
+    reportNewErrors();
 
     // Bars first: each one reserves its space, and the dockspace fills the rest.
     _menuBar.draw();
