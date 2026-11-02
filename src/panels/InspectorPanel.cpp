@@ -39,6 +39,13 @@ float dragMax(const PropertyInfo &info)
     return info.min != info.max ? info.max : 0.0f;
 }
 
+// AlwaysClamp also clamps a 0..0 range (ImGuiSliderFlags_ClampZeroRange), which
+// would freeze unbounded fields at 0: it is only used for bounded properties.
+ImGuiSliderFlags clampFlags(const PropertyInfo &info)
+{
+    return info.min != info.max ? ImGuiSliderFlags_AlwaysClamp : ImGuiSliderFlags_None;
+}
+
 const char *formatOr(const PropertyInfo &info, const char *fallback)
 {
     return info.format.empty() ? fallback : info.format.c_str();
@@ -185,17 +192,17 @@ bool InspectorPanel::drawValue(const PropertyInfo &info, PropertyValue &value)
     case PropertyType::Int:
         return ImGui::DragInt("##Value", &std::get<int>(value), std::max(info.speed, 0.05f),
             static_cast<int>(dragMin(info)), static_cast<int>(dragMax(info)), formatOr(info, "%d"),
-            ImGuiSliderFlags_AlwaysClamp);
+            clampFlags(info));
     case PropertyType::Float:
         return ImGui::DragFloat("##Value", &std::get<float>(value), info.speed, dragMin(info), dragMax(info),
-            formatOr(info, "%.3f"), ImGuiSliderFlags_AlwaysClamp);
+            formatOr(info, "%.3f"), clampFlags(info));
     case PropertyType::String:
         // Written at every keystroke: the value is read back from the model
         // each frame, so it must never lag behind the field.
         return ImGui::InputText("##Value", &std::get<std::string>(value));
     case PropertyType::Vec2:
         return ImGui::DragFloat2("##Value", &std::get<Vec2>(value).x, info.speed, dragMin(info), dragMax(info),
-            formatOr(info, "%.3f"), ImGuiSliderFlags_AlwaysClamp);
+            formatOr(info, "%.3f"), clampFlags(info));
     case PropertyType::Color:
         return ImGui::ColorEdit4("##Value", &std::get<Color>(value).r, ImGuiColorEditFlags_AlphaBar);
     case PropertyType::Enum: {
