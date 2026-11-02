@@ -16,6 +16,7 @@
 #include <imgui.h>
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -43,6 +44,8 @@ public:
     void setClosable(bool closable) { _closable = closable; }
     // Size used the first time the panel appears (0 = fit content).
     void setInitialSize(ImVec2 size) { _initialSize = size; }
+    // Overrides the theme's window padding, e.g. 0 for a panel showing an image edge to edge.
+    void setWindowPadding(ImVec2 padding) { _windowPadding = padding; }
 
 protected:
     // Widgets of the panel, drawn between ImGui::Begin() and ImGui::End().
@@ -52,6 +55,7 @@ private:
     std::string _name;
     ImGuiWindowFlags _flags;
     ImVec2 _initialSize = ImVec2(0, 0);
+    std::optional<ImVec2> _windowPadding;
     bool _visible = true;
     bool _closable = true;
 };
