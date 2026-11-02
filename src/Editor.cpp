@@ -55,7 +55,7 @@ void Editor::registerPanels()
     _panels.registerPanel<ViewportPanel>(_performanceOverlay);
     _layout.setDefaultArea("Viewport", Area::Center);
 
-    _panels.registerPanel<InspectorPanel>(_scene, _selection);
+    _panels.registerPanel<InspectorPanel>(_scene, _scene, _selection, _notifications);
     _layout.setDefaultArea("Inspector", Area::Right);
     _panels.registerPanel<SettingsPanel>(_gui, _performanceOverlay);
     _layout.setDefaultArea("Settings", Area::Right);
