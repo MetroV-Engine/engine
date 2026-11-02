@@ -20,11 +20,15 @@
 #include "feedback/NotificationManager.hpp"
 #include "layout/EditorLayout.hpp"
 #include "layout/StatusBar.hpp"
+#include "log/CommandRegistry.hpp"
 #include "navigation/ActionRegistry.hpp"
 #include "navigation/MenuBar.hpp"
 #include "navigation/Toolbar.hpp"
 #include "scene/DemoScene.hpp"
 #include "scene/Selection.hpp"
+
+#include <cstddef>
+#include <cstdint>
 
 class ConsolePanel;
 class HierarchyPanel;
@@ -60,6 +64,7 @@ private:
     // Scene shown in the Hierarchy: a demo level until the ECS is connected.
     DemoScene _scene;
     Selection _selection;
+    CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;
     MenuBar _menuBar;
@@ -69,13 +74,20 @@ private:
     ConsolePanel *_console = nullptr;
     HierarchyPanel *_hierarchy = nullptr;
     bool _quitDialogOpen = false;
+    // Errors already reported with a notification (by Logger entry id / count).
+    std::uint64_t _lastReportedError = 0;
+    std::size_t _knownErrorCount = 0;
 
     void registerPanels();
     void registerActions();
     void buildMenuBar();
     void buildToolbar();
     void buildStatusBar();
+    void registerCommands();
     void connectFeedback();
+    void logStartupInfo() const;
+    // Shows a notification when the engine or a system logs a new error.
+    void reportNewErrors();
     void drawFrame();
     // Asks for confirmation, then quits.
     void requestQuit();

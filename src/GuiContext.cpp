@@ -12,6 +12,7 @@
 */
 
 #include "GuiContext.hpp"
+#include "log/Logger.hpp"
 
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
@@ -107,7 +108,7 @@ void GuiContext::destroy()
 void GuiContext::setFullscreen(bool fullscreen)
 {
     if (!SDL_SetWindowFullscreen(_window, fullscreen))
-        SDL_Log("SDL_SetWindowFullscreen failed: %s", SDL_GetError());
+        Logger::instance().error("Window", std::string("SDL_SetWindowFullscreen failed: ") + SDL_GetError());
 }
 
 bool GuiContext::isFullscreen() const
@@ -119,14 +120,26 @@ void GuiContext::setWindowSize(int width, int height)
 {
     // While fullscreen, SDL keeps the size and applies it when leaving fullscreen.
     if (!SDL_SetWindowSize(_window, width, height))
-        SDL_Log("SDL_SetWindowSize failed: %s", SDL_GetError());
+        Logger::instance().error("Window", std::string("SDL_SetWindowSize failed: ") + SDL_GetError());
     SDL_SetWindowPosition(_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+
+bool GuiContext::isVSync() const
+{
+    int vsync = 0;
+    return SDL_GetRenderVSync(_renderer, &vsync) && vsync != 0;
+}
+
+const char *GuiContext::getRendererName() const
+{
+    const char *name = SDL_GetRendererName(_renderer);
+    return name ? name : "unknown";
 }
 
 void GuiContext::setVSync(bool enabled)
 {
     if (!SDL_SetRenderVSync(_renderer, enabled ? 1 : SDL_RENDERER_VSYNC_DISABLED))
-        SDL_Log("SDL_SetRenderVSync failed: %s", SDL_GetError());
+        Logger::instance().error("Renderer", std::string("SDL_SetRenderVSync failed: ") + SDL_GetError());
 }
 
 void GuiContext::run(const std::function<void()> &buildUi)
@@ -163,14 +176,19 @@ void GuiContext::applyDisplayScale()
 
     _themes.setScale(scale);
     _displayScale = scale;
-    SDL_Log("UI scale set to %.2f", scale);
+    char text[32];
+    SDL_snprintf(text, sizeof(text), "%.2f", scale);
+    Logger::instance().info("Window", std::string("UI scale set to ") + text);
 }
 
 void GuiContext::beginFrame()
 {
     _timer.tick();
-    if (_timer.getDeltaTime() > SlowFrameSeconds)
-        SDL_Log("Slow frame: %.1f ms", _timer.getDeltaTime() * 1000.0);
+    if (_timer.getDeltaTime() > SlowFrameSeconds) {
+        char text[48];
+        SDL_snprintf(text, sizeof(text), "Slow frame: %.1f ms", _timer.getDeltaTime() * 1000.0);
+        Logger::instance().warning("Performance", text);
+    }
 
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();

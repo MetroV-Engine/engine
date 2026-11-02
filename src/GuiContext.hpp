@@ -61,6 +61,8 @@ public:
     bool isFullscreen() const;
     void setWindowSize(int width, int height);
     void setVSync(bool enabled);
+    bool isVSync() const;
+    const char *getRendererName() const;
 
 private:
     SDL_Window *_window = nullptr;

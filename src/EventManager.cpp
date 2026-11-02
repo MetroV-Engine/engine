@@ -13,7 +13,9 @@
 
 #include "EventManager.hpp"
 
-#include <iostream>
+#include "log/Logger.hpp"
+
+#include <string>
 #include <utility>
 
 void EventManager::subscribe(std::uint32_t type, Callback callback)
@@ -30,8 +32,7 @@ void EventManager::pollEvents()
 {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-
-        // logEvent(event); // Uncomment this line to log all events to the console
+        logEvent(event);
         dispatch(event);
     }
 }
@@ -48,12 +49,19 @@ void EventManager::waitEvents(int timeoutMs)
 
 void EventManager::logEvent(const SDL_Event &event) const
 {
+    if (_logging == Logging::Off)
+        return;
+    const bool motion = event.type == SDL_EVENT_MOUSE_MOTION || event.type == SDL_EVENT_PEN_MOTION
+        || event.type == SDL_EVENT_FINGER_MOTION || event.type == SDL_EVENT_PEN_AXIS;
+    if (motion && _logging == Logging::NoMotion)
+        return;
+
     char description[256];
     SDL_GetEventDescription(&event, description, sizeof(description));
-    std::cout << "[Event] " << description;
+    std::string message = description;
     if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP)
-        std::cout << " key=\"" << SDL_GetKeyName(event.key.key) << "\"";
-    std::cout << std::endl;
+        message += std::string(" key=\"") + SDL_GetKeyName(event.key.key) + "\"";
+    Logger::instance().debug("Events", message);
 }
 
 void EventManager::dispatch(const SDL_Event &event) const
