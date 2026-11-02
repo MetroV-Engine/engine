@@ -18,6 +18,7 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 
@@ -73,6 +74,11 @@ GuiContext::GuiContext(const char *title, int width, int height)
         for (const SDL_EventType type : {SDL_EVENT_WINDOW_RESTORED, SDL_EVENT_WINDOW_MAXIMIZED,
                  SDL_EVENT_WINDOW_SHOWN, SDL_EVENT_WINDOW_EXPOSED, SDL_EVENT_WINDOW_FOCUS_GAINED})
             _events.subscribe(type, [this](const SDL_Event &) { _idle = false; });
+        // Keep the normal geometry up to date, to save it (see getWindowState).
+        rememberNormalGeometry();
+        for (const SDL_EventType type : {SDL_EVENT_WINDOW_RESIZED, SDL_EVENT_WINDOW_MOVED})
+            _events.subscribe(type, [this](const SDL_Event &) { rememberNormalGeometry(); });
+
         // Moving to a monitor with another scale, or changing the system scale.
         _events.subscribe(SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED, [this](const SDL_Event &) { applyDisplayScale(); });
     } catch (...) {
@@ -114,6 +120,61 @@ void GuiContext::setFullscreen(bool fullscreen)
 bool GuiContext::isFullscreen() const
 {
     return (SDL_GetWindowFlags(_window) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+void GuiContext::rememberNormalGeometry()
+{
+    if (SDL_GetWindowFlags(_window) & (SDL_WINDOW_MAXIMIZED | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MINIMIZED))
+        return;
+    SDL_GetWindowSize(_window, &_normalWidth, &_normalHeight);
+    SDL_GetWindowPosition(_window, &_normalX, &_normalY);
+}
+
+WindowState GuiContext::getWindowState() const
+{
+    const SDL_WindowFlags flags = SDL_GetWindowFlags(_window);
+    WindowState state;
+    state.width = _normalWidth;
+    state.height = _normalHeight;
+    state.hasPosition = SDL_strcmp(SDL_GetCurrentVideoDriver(), "wayland") != 0;
+    state.x = _normalX;
+    state.y = _normalY;
+    state.maximized = (flags & SDL_WINDOW_MAXIMIZED) != 0;
+    state.fullscreen = (flags & SDL_WINDOW_FULLSCREEN) != 0;
+    return state;
+}
+
+void GuiContext::applyWindowState(const WindowState &state)
+{
+    constexpr int MinWidth = 640;
+    constexpr int MinHeight = 400;
+    SDL_Rect usable{0, 0, 0, 0};
+    const bool hasBounds = SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(_window), &usable);
+
+    if (state.fullscreen)
+        setFullscreen(false);
+    SDL_RestoreWindow(_window);
+    if (state.width > 0 && state.height > 0) {
+        int width = std::max(state.width, MinWidth);
+        int height = std::max(state.height, MinHeight);
+        if (hasBounds) {
+            width = std::min(width, usable.w);
+            height = std::min(height, usable.h);
+        }
+        SDL_SetWindowSize(_window, width, height);
+        _normalWidth = width;
+        _normalHeight = height;
+    }
+    // Only if the saved position is still on a display.
+    if (state.hasPosition) {
+        const SDL_Point corner{state.x, state.y};
+        if (SDL_GetDisplayForPoint(&corner) != 0)
+            SDL_SetWindowPosition(_window, state.x, state.y);
+    }
+    if (state.maximized)
+        SDL_MaximizeWindow(_window);
+    if (state.fullscreen)
+        setFullscreen(true);
 }
 
 void GuiContext::setWindowSize(int width, int height)
