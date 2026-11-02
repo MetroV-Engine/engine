@@ -133,7 +133,8 @@ void Theme::applyTo(ImGuiStyle &style) const
     col[ImGuiCol_InputTextCursor] = c.text;
     col[ImGuiCol_DragDropTarget] = c.warning;
     col[ImGuiCol_NavCursor] = accent.hovered;
-    col[ImGuiCol_ModalWindowDimBg] = withAlpha(c.background, 0.6f);
+    // Darkens everything behind a modal dialog, so it stands out.
+    col[ImGuiCol_ModalWindowDimBg] = dark ? ImVec4(0.0f, 0.0f, 0.0f, 0.55f) : ImVec4(0.1f, 0.1f, 0.15f, 0.35f);
 }
 
 Theme Theme::makeDark()
