@@ -12,6 +12,7 @@
 */
 
 #include "Toolbar.hpp"
+#include "theme/ThemeManager.hpp"
 
 // BeginViewportSideBar() is the only way to reserve space at the top of the
 // viewport like the main menu bar does (no public equivalent yet).
@@ -59,8 +60,14 @@ void Toolbar::draw() const
 void Toolbar::drawButton(const Action &action) const
 {
     const bool checked = action.checked();
-    if (checked)
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    // Active toggles use the theme accent so they stand out from plain buttons.
+    if (checked) {
+        const InteractiveColors accent = ThemeManager::active().interactive(ThemeManager::active().colors.accent);
+        ImGui::PushStyleColor(ImGuiCol_Button, accent.base);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent.hovered);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent.active);
+        ImGui::PushStyleColor(ImGuiCol_Text, ThemeManager::active().colors.textOnAccent);
+    }
     ImGui::BeginDisabled(!action.enabled());
 
     const std::string label = action.label + "##" + action.id;
@@ -69,7 +76,7 @@ void Toolbar::drawButton(const Action &action) const
 
     ImGui::EndDisabled();
     if (checked)
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(4);
 
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayShort)) {
         const std::string shortcut = ActionRegistry::shortcutText(action.shortcut);

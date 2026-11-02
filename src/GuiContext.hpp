@@ -15,6 +15,7 @@
 
 #include "EventManager.hpp"
 #include "FrameTimer.hpp"
+#include "theme/ThemeManager.hpp"
 
 #include <SDL3/SDL.h>
 #include <imgui.h>
@@ -49,6 +50,7 @@ public:
     void stop() { _running = false; }
     EventManager &events() { return _events; }
     const FrameTimer &timer() const { return _timer; }
+    ThemeManager &themes() { return _themes; }
     float getDisplayScale() const { return _displayScale; }
 
     // Window settings, applied immediately.
@@ -67,10 +69,10 @@ private:
     bool _idle = false;
     EventManager _events;
     FrameTimer _timer;
-    ImGuiStyle _baseStyle;
+    ThemeManager _themes;
     float _displayScale = 0.0f;
 
     void destroy();
-    // Rescales the ImGui style and fonts to the window's current display scale.
+    // Rescales the theme (style and fonts) to the window's current display scale.
     void applyDisplayScale();
 };

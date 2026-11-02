@@ -37,7 +37,9 @@ SettingsPanel::SettingsPanel(GuiContext &gui, PerformanceOverlay &overlay)
       _qualityRadio("Quality", {"Low", "Medium", "High"}, 1,
           [](int, const std::string &option) { std::cout << "Quality: " << option << std::endl; }),
       _overlayCheckbox("Show performance", overlay.isVisible(),
-          [&overlay](bool checked) { overlay.setVisible(checked); })
+          [&overlay](bool checked) { overlay.setVisible(checked); }),
+      _themeCombo("Theme", gui.themes().getThemeNames(), 0,
+          [&gui](int, const std::string &name) { gui.themes().setTheme(name); })
 {
     gui.setVSync(_vsyncCheckbox.isChecked());
     _qualityRadio.setHorizontal(true);
@@ -49,10 +51,15 @@ void SettingsPanel::drawContent()
     // window manager: always show the real state.
     _fullscreenCheckbox.setChecked(_gui.isFullscreen());
     _overlayCheckbox.setChecked(_overlay.isVisible());
+    const auto &themeNames = _themeCombo.getOptions();
+    for (std::size_t i = 0; i < themeNames.size(); i++)
+        if (themeNames[i] == _gui.themes().current().name)
+            _themeCombo.setSelected(static_cast<int>(i));
 
     _vsyncCheckbox.render();
     _fullscreenCheckbox.render();
     _resolutionCombo.render();
     _qualityRadio.render();
     _overlayCheckbox.render();
+    _themeCombo.render();
 }
