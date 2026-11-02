@@ -23,7 +23,7 @@
 #include "navigation/ActionRegistry.hpp"
 #include "navigation/MenuBar.hpp"
 #include "navigation/Toolbar.hpp"
-#include "scene/DemoHierarchy.hpp"
+#include "scene/DemoScene.hpp"
 #include "scene/Selection.hpp"
 
 class ConsolePanel;
@@ -58,7 +58,7 @@ private:
     NotificationManager _notifications;
     DialogManager _dialogs;
     // Scene shown in the Hierarchy: a demo level until the ECS is connected.
-    DemoHierarchy _scene;
+    DemoScene _scene;
     Selection _selection;
     PanelManager _panels;
     ActionRegistry _actions;
