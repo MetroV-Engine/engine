@@ -29,6 +29,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 class ConsolePanel;
 class HierarchyPanel;
@@ -48,16 +50,27 @@ class HierarchyPanel;
 //   +-----------+-----------------------+---------------+
 //   | Status bar                                        |
 //   +---------------------------------------------------+
+struct EditorOptions
+{
+    // Demo mode: loads the demo level and adds the widget demo panels
+    // (Buttons, Inputs, Dear ImGui Demo). Otherwise the editor starts clean,
+    // with an empty scene and only the editor panels.
+    bool demo = false;
+};
+
 class Editor
 {
 public:
-    explicit Editor(GuiContext &gui);
+    using Options = EditorOptions;
+
+    explicit Editor(GuiContext &gui, Options options = {});
 
     // Runs until the user quits.
     void run();
 
 private:
     GuiContext &_gui;
+    Options _options;
     PerformanceOverlay _performanceOverlay;
     NotificationManager _notifications;
     DialogManager _dialogs;
@@ -77,6 +90,9 @@ private:
     // Errors already reported with a notification (by Logger entry id / count).
     std::uint64_t _lastReportedError = 0;
     std::size_t _knownErrorCount = 0;
+
+    // Panels listed in View > Panels and restored by Reset Layout.
+    std::vector<std::string> _layoutPanels;
 
     void registerPanels();
     void registerActions();

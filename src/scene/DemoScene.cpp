@@ -185,7 +185,13 @@ PropertyValue clampValue(PropertyValue value, const PropertyInfo &info)
 
 } // namespace
 
-DemoScene::DemoScene()
+DemoScene::DemoScene(bool withDemoLevel)
+{
+    if (withDemoLevel)
+        loadDemoLevel();
+}
+
+void DemoScene::loadDemoLevel()
 {
     const ObjectId camera = create(InvalidId, "Main Camera");
     attach(camera, "Camera");

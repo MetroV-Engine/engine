@@ -33,14 +33,20 @@
 
 namespace {
 
-// Panels listed in View > Panels, in this order.
-const char *const EditorPanels[] = {"Hierarchy", "Viewport", "Inspector", "Console", "Settings", "Buttons", "Inputs"};
-
 } // namespace
 
-Editor::Editor(GuiContext &gui)
-    : _gui(gui), _performanceOverlay(gui.timer()), _menuBar(_actions), _toolbar(_actions)
+Editor::Editor(GuiContext &gui, Options options)
+    : _gui(gui),
+      _options(options),
+      _performanceOverlay(gui.timer()),
+      _scene(options.demo),
+      _menuBar(_actions),
+      _toolbar(_actions)
 {
+    // Each mode keeps its own panel layout, so the demo does not disturb the
+    // normal one. Must be set before the first frame, when ImGui loads it.
+    ImGui::GetIO().IniFilename = options.demo ? "imgui-demo.ini" : "imgui.ini";
+
     registerPanels();
     registerActions();
     buildMenuBar();
@@ -70,13 +76,19 @@ void Editor::registerPanels()
     _console = &_panels.registerPanel<ConsolePanel>(_commands);
     _layout.setDefaultArea("Console", Area::Bottom);
     // Widget demos, next to the console.
-    _panels.registerPanel<ButtonsPanel>(_notifications, _dialogs, [this] { requestQuit(); });
-    _layout.setDefaultArea("Buttons", Area::Bottom);
-    _panels.registerPanel<InputsPanel>();
-    _layout.setDefaultArea("Inputs", Area::Bottom);
+    _layoutPanels = {"Hierarchy", "Viewport", "Inspector", "Console", "Settings"};
 
-    // Floating windows, hidden until opened from the Help menu.
-    _panels.registerPanel<ImGuiDemoPanel>().setVisible(false);
+    if (_options.demo) {
+        _panels.registerPanel<ButtonsPanel>(_notifications, _dialogs, [this] { requestQuit(); });
+        _layout.setDefaultArea("Buttons", Area::Bottom);
+        _panels.registerPanel<InputsPanel>();
+        _layout.setDefaultArea("Inputs", Area::Bottom);
+        _layoutPanels.insert(_layoutPanels.end(), {"Buttons", "Inputs"});
+        // Floating, hidden until opened from the Help menu.
+        _panels.registerPanel<ImGuiDemoPanel>().setVisible(false);
+    }
+
+    // Floating, hidden until opened from the Help menu.
     _panels.registerPanel("About", [] {
         ImGui::TextUnformatted("MetroV Engine - Editor");
         ImGui::TextDisabled("Built with SDL3 and Dear ImGui %s", IMGUI_VERSION);
@@ -112,7 +124,7 @@ void Editor::registerActions()
 
     _actions.add({.id = "view.layout.reset", .label = "Reset Layout",
         .callback = [this] {
-            for (const char *name : EditorPanels)
+            for (const std::string &name : _layoutPanels)
                 _panels.setVisible(name, true);
             _layout.resetLayout();
             _notifications.info("Layout reset");
@@ -143,8 +155,8 @@ void Editor::buildMenuBar()
     _menuBar.addAction("Edit", "edit.rename");
     _menuBar.addAction("Edit", "edit.delete");
 
-    for (const char *name : EditorPanels)
-        _menuBar.addAction("View/Panels", std::string("view.panel.") + name);
+    for (const std::string &name : _layoutPanels)
+        _menuBar.addAction("View/Panels", "view.panel." + name);
     _menuBar.addAction("View", "view.console");
     _menuBar.addAction("View", "view.layout.reset");
     _menuBar.addSeparator("View");
@@ -154,7 +166,8 @@ void Editor::buildMenuBar()
     for (const std::string &name : _gui.themes().getThemeNames())
         _menuBar.addAction("View/Theme", "view.theme." + name);
 
-    _menuBar.addAction("Help", "view.panel.Dear ImGui Demo");
+    if (_options.demo)
+        _menuBar.addAction("Help", "view.panel.Dear ImGui Demo");
     _menuBar.addAction("Help", "view.panel.About");
 }
 
@@ -185,6 +198,8 @@ void Editor::buildStatusBar()
         if (clicked || ImGui::IsItemClicked())
             _actions.execute("view.console");
     });
+    if (_options.demo)
+        _statusBar.addItem([this] { ImGui::TextColored(_gui.themes().current().colors.accent, "DEMO"); });
     _statusBar.addItem([this] { ImGui::Text("%.0f FPS", _gui.timer().getFps()); });
     _statusBar.addItem([this] { ImGui::TextUnformatted(_gui.themes().current().name.c_str()); });
 }
@@ -283,7 +298,7 @@ void Editor::logStartupInfo() const
     char versions[128];
     std::snprintf(versions, sizeof(versions), "SDL %d.%d.%d, Dear ImGui %s", SDL_VERSIONNUM_MAJOR(sdl),
         SDL_VERSIONNUM_MINOR(sdl), SDL_VERSIONNUM_MICRO(sdl), IMGUI_VERSION);
-    logger.info("Editor", "Editor started");
+    logger.info("Editor", _options.demo ? "Editor started in demo mode" : "Editor started");
     logger.info("Editor", versions);
     logger.info("Renderer", std::string("Video driver: ") + SDL_GetCurrentVideoDriver() + ", renderer: " + _gui.getRendererName());
 }

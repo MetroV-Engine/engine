@@ -18,16 +18,16 @@
 
 #include <unordered_map>
 
-// In-memory scene used until the engine's ECS is connected: a small
-// MetroidVania level (rooms, tilemaps, enemies, collectibles) whose objects
-// carry components (Transform, Sprite, RigidBody, Health...).
+// In-memory scene used until the engine's ECS is connected. It can hold a
+// small MetroidVania demo level (rooms, tilemaps, enemies, collectibles)
+// whose objects carry components (Transform, Sprite, RigidBody, Health...).
 class DemoScene : public HierarchyModel, public PropertyModel
 {
 public:
     using ObjectId = HierarchyModel::ObjectId;
 
-    // Fills the demo level.
-    DemoScene();
+    // An empty scene, or the demo level if withDemoLevel is true.
+    explicit DemoScene(bool withDemoLevel = false);
 
     // HierarchyModel
     std::vector<ObjectId> roots() const override { return _roots; }
@@ -72,5 +72,6 @@ private:
     Component *findComponent(ObjectId id, const std::string &type);
     const Component *findComponent(ObjectId id, const std::string &type) const;
     // Demo setup helper: adds a component and overrides some of its defaults.
+    void loadDemoLevel();
     void attach(ObjectId id, const std::string &type, const std::vector<std::pair<std::string, PropertyValue>> &values = {});
 };

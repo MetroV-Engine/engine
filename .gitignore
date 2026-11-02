@@ -25,5 +25,7 @@ build/
 gui.sh
 *.claude
 imgui.ini
+imgui-demo.ini
+
 # Editor logs
 logs/
