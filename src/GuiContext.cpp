@@ -32,6 +32,10 @@ constexpr double SlowFrameSeconds = 0.1;
 GuiContext::GuiContext(const char *title, int width, int height)
 {
     try {
+        // Closing the window only sends SDL_EVENT_WINDOW_CLOSE_REQUESTED, so the
+        // editor can ask for confirmation first (see setCloseRequestHandler).
+        // SDL_EVENT_QUIT (Ctrl+C, system shutdown) still quits immediately.
+        SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
         if (!SDL_Init(SDL_INIT_VIDEO))
             throw std::runtime_error(std::string("SDL_Init failed: ") + SDL_GetError());
 
@@ -54,7 +58,12 @@ GuiContext::GuiContext(const char *title, int width, int height)
 
         _events.subscribeAll([](const SDL_Event &event) { ImGui_ImplSDL3_ProcessEvent(&event); });
         _events.subscribe(SDL_EVENT_QUIT, [this](const SDL_Event &) { _running = false; });
-        _events.subscribe(SDL_EVENT_WINDOW_CLOSE_REQUESTED, [this](const SDL_Event &) { _running = false; });
+        _events.subscribe(SDL_EVENT_WINDOW_CLOSE_REQUESTED, [this](const SDL_Event &) {
+            if (_closeRequestHandler)
+                _closeRequestHandler();
+            else
+                _running = false;
+        });
         // Nothing to draw while minimized/hidden. Any sign that the window is
         // visible again leaves idle mode: some compositors (e.g. Wayland) do
         // not always report the restore itself, but do report focus/exposure.

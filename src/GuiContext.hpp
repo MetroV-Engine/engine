@@ -48,6 +48,9 @@ public:
 
     bool isRunning() const { return _running; }
     void stop() { _running = false; }
+    // Called instead of stopping when the user closes the window (e.g. to
+    // ask for confirmation); call stop() from it to really quit.
+    void setCloseRequestHandler(std::function<void()> handler) { _closeRequestHandler = std::move(handler); }
     EventManager &events() { return _events; }
     const FrameTimer &timer() const { return _timer; }
     ThemeManager &themes() { return _themes; }
@@ -67,6 +70,7 @@ private:
     bool _imguiRendererBackend = false;
     bool _running = true;
     bool _idle = false;
+    std::function<void()> _closeRequestHandler;
     EventManager _events;
     FrameTimer _timer;
     ThemeManager _themes;
