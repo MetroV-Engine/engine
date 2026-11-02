@@ -54,6 +54,8 @@ std::uint64_t NotificationManager::notify(Level level, std::string title, std::s
     if (duration <= 0.0f)
         duration = level == Level::Error ? ErrorDuration : level == Level::Warning ? WarningDuration : InfoDuration;
     const std::uint64_t id = _nextId++;
+    if (_onNotify)
+        _onNotify(level, title, message);
     _notifications.push_back({id, level, std::move(title), std::move(message), duration, duration});
     return id;
 }

@@ -15,6 +15,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -52,6 +54,10 @@ public:
     // Older notifications beyond this count are hidden until space frees up.
     void setMaxVisible(std::size_t maxVisible) { _maxVisible = maxVisible; }
 
+    // Called for every new notification, e.g. to mirror it in a log or a status bar.
+    using OnNotify = std::function<void(Level, const std::string &title, const std::string &message)>;
+    void setOnNotify(OnNotify onNotify) { _onNotify = std::move(onNotify); }
+
 private:
     struct Notification
     {
@@ -68,4 +74,5 @@ private:
     std::vector<Notification> _notifications;
     std::uint64_t _nextId = 1;
     std::size_t _maxVisible = 5;
+    OnNotify _onNotify;
 };

@@ -16,17 +16,20 @@
 
 #include <imgui.h>
 
-void PerformanceOverlay::render() const
+void PerformanceOverlay::render()
 {
+    const bool hasAnchor = _hasAnchor;
+    _hasAnchor = false;
     if (!_visible)
         return;
 
     const Theme &theme = ThemeManager::active();
     const float margin = ImGui::GetStyle().WindowPadding.x;
 
-    // Anchored to the work area every frame, so it follows window resizes.
+    // Anchored every frame, so it follows window and panel resizes.
     const ImGuiViewport *viewport = ImGui::GetMainViewport();
-    const ImVec2 position(viewport->WorkPos.x + viewport->WorkSize.x - margin, viewport->WorkPos.y + margin);
+    const ImVec2 corner = hasAnchor ? _anchor : ImVec2(viewport->WorkPos.x + viewport->WorkSize.x, viewport->WorkPos.y);
+    const ImVec2 position(corner.x - margin, corner.y + margin);
     ImGui::SetNextWindowPos(position, ImGuiCond_Always, ImVec2(1.0f, 0.0f));
     ImGui::SetNextWindowBgAlpha(theme.metrics.overlayAlpha);
 

@@ -27,7 +27,7 @@ bool TextInput::render()
     if (_password)
         flags |= ImGuiInputTextFlags_Password;
 
-    if (_width > 0.0f)
+    if (_width != 0.0f)
         ImGui::SetNextItemWidth(_width);
     ImGui::BeginDisabled(!_enabled);
 

@@ -41,7 +41,7 @@ public:
     // Draws the field; returns true on the frame the value changes.
     bool render()
     {
-        if (_width > 0.0f)
+        if (_width != 0.0f)
             ImGui::SetNextItemWidth(_width);
         ImGui::BeginDisabled(!_enabled);
 
@@ -82,7 +82,7 @@ private:
     T _min = std::numeric_limits<T>::lowest();
     T _max = std::numeric_limits<T>::max();
     OnChange _onChange;
-    float _width = 0.0f; // 0 = ImGui default width
+    float _width = 0.0f; // 0 = ImGui default, < 0 = fill the available width minus abs(value)
     bool _enabled = true;
 
     static constexpr ImGuiDataType dataType()

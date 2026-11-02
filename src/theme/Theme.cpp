@@ -133,6 +133,10 @@ void Theme::applyTo(ImGuiStyle &style) const
     col[ImGuiCol_InputTextCursor] = c.text;
     col[ImGuiCol_DragDropTarget] = c.warning;
     col[ImGuiCol_NavCursor] = accent.hovered;
+#ifdef IMGUI_HAS_DOCK
+    col[ImGuiCol_DockingPreview] = withAlpha(accent.base, 0.5f);
+    col[ImGuiCol_DockingEmptyBg] = c.background;
+#endif
     // Darkens everything behind a modal dialog, so it stands out.
     col[ImGuiCol_ModalWindowDimBg] = dark ? ImVec4(0.0f, 0.0f, 0.0f, 0.55f) : ImVec4(0.1f, 0.1f, 0.15f, 0.35f);
 }

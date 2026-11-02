@@ -31,7 +31,7 @@ ComboBox::ComboBox(std::string label, std::vector<std::string> options, int sele
 
 bool ComboBox::render()
 {
-    if (_width > 0.0f)
+    if (_width != 0.0f)
         ImGui::SetNextItemWidth(_width);
     ImGui::BeginDisabled(!_enabled);
 

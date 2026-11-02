@@ -48,7 +48,7 @@ private:
     std::string _value;
     OnChange _onChange;
     OnChange _onSubmit;
-    float _width = 0.0f; // 0 = ImGui default width
+    float _width = 0.0f; // 0 = ImGui default, < 0 = fill the available width minus abs(value)
     bool _password = false;
     bool _enabled = true;
 };
