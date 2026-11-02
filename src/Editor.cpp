@@ -49,13 +49,13 @@ void Editor::registerPanels()
 {
     using Area = EditorLayout::Area;
 
-    _panels.registerPanel<HierarchyPanel>();
+    _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene, _selection, _notifications, _dialogs);
     _layout.setDefaultArea("Hierarchy", Area::Left);
 
     _panels.registerPanel<ViewportPanel>(_performanceOverlay);
     _layout.setDefaultArea("Viewport", Area::Center);
 
-    _panels.registerPanel<InspectorPanel>();
+    _panels.registerPanel<InspectorPanel>(_scene, _selection);
     _layout.setDefaultArea("Inspector", Area::Right);
     _panels.registerPanel<SettingsPanel>(_gui, _performanceOverlay);
     _layout.setDefaultArea("Settings", Area::Right);
@@ -87,6 +87,14 @@ void Editor::registerActions()
             .callback = [p] { p->setVisible(!p->isVisible()); }, .tooltip = "Show/hide the " + p->getName() + " panel",
             .isChecked = [p] { return p->isVisible(); }});
     }
+    _actions.add({.id = "edit.create", .label = "Create Object",
+        .callback = [this] { _hierarchy->createObject(HierarchyModel::InvalidId); },
+        .shortcut = ImGuiMod_Ctrl | ImGuiKey_N, .tooltip = "Create an object at the root of the scene"});
+    _actions.add({.id = "edit.rename", .label = "Rename", .callback = [this] { _hierarchy->startRename(_selection.get()); },
+        .isEnabled = [this] { return _selection.has(); }});
+    _actions.add({.id = "edit.delete", .label = "Delete", .callback = [this] { _hierarchy->requestDelete(_selection.get()); },
+        .isEnabled = [this] { return _selection.has(); }});
+
     _actions.add({.id = "view.layout.reset", .label = "Reset Layout",
         .callback = [this] {
             for (const char *name : EditorPanels)
@@ -115,6 +123,10 @@ void Editor::registerActions()
 void Editor::buildMenuBar()
 {
     _menuBar.addAction("File", "file.quit");
+
+    _menuBar.addAction("Edit", "edit.create");
+    _menuBar.addAction("Edit", "edit.rename");
+    _menuBar.addAction("Edit", "edit.delete");
 
     for (const char *name : EditorPanels)
         _menuBar.addAction("View/Panels", std::string("view.panel.") + name);

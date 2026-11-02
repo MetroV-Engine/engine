@@ -136,7 +136,10 @@ void NotificationManager::draw()
         const ImVec2 size = ImGui::GetWindowSize();
         ImGui::GetWindowDrawList()->AddRectFilled(pos, ImVec2(pos.x + AccentBarWidth, pos.y + size.y),
             ImGui::GetColorU32(accent), style.WindowRounding, ImDrawFlags_RoundCornersLeft);
-        ImGui::TextColored(accent, "%s", n.title.c_str());
+        // Long titles wrap like the message instead of overflowing.
+        ImGui::PushStyleColor(ImGuiCol_Text, accent);
+        ImGui::TextWrapped("%s", n.title.c_str());
+        ImGui::PopStyleColor();
         if (!n.message.empty())
             ImGui::TextWrapped("%s", n.message.c_str());
         n.hovered = ImGui::IsWindowHovered();

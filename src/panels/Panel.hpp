@@ -38,7 +38,12 @@ public:
 
     const std::string &getName() const { return _name; }
     bool isVisible() const { return _visible; }
-    void setVisible(bool visible) { _visible = visible; }
+    // Showing a hidden panel also brings it to the front (selects its tab if docked).
+    void setVisible(bool visible)
+    {
+        _focusRequested = visible && !_visible;
+        _visible = visible;
+    }
     // Whether the panel has a close button and appears in the View menu.
     bool isClosable() const { return _closable; }
     void setClosable(bool closable) { _closable = closable; }
@@ -58,6 +63,7 @@ private:
     std::optional<ImVec2> _windowPadding;
     bool _visible = true;
     bool _closable = true;
+    bool _focusRequested = false;
 };
 
 // Panel whose content is a callback, for small panels that do not need a class.

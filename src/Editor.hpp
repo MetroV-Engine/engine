@@ -23,8 +23,11 @@
 #include "navigation/ActionRegistry.hpp"
 #include "navigation/MenuBar.hpp"
 #include "navigation/Toolbar.hpp"
+#include "scene/DemoHierarchy.hpp"
+#include "scene/Selection.hpp"
 
 class ConsolePanel;
+class HierarchyPanel;
 
 // The editor application: assembles the panels, actions, menus, toolbar,
 // status bar, dockspace and feedback systems into the main interface, and
@@ -54,6 +57,9 @@ private:
     PerformanceOverlay _performanceOverlay;
     NotificationManager _notifications;
     DialogManager _dialogs;
+    // Scene shown in the Hierarchy: a demo level until the ECS is connected.
+    DemoHierarchy _scene;
+    Selection _selection;
     PanelManager _panels;
     ActionRegistry _actions;
     MenuBar _menuBar;
@@ -61,6 +67,7 @@ private:
     StatusBar _statusBar;
     EditorLayout _layout;
     ConsolePanel *_console = nullptr;
+    HierarchyPanel *_hierarchy = nullptr;
     bool _quitDialogOpen = false;
 
     void registerPanels();
