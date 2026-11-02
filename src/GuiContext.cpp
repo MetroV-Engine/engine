@@ -41,8 +41,7 @@ GuiContext::GuiContext(const char *title, int width, int height)
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         _imguiContext = true;
-        ImGui::StyleColorsDark();
-        _baseStyle = ImGui::GetStyle();
+        // Applies the default theme at the window's display scale.
         applyDisplayScale();
 
         if (!ImGui_ImplSDL3_InitForSDLRenderer(_window, _renderer))
@@ -153,10 +152,7 @@ void GuiContext::applyDisplayScale()
     if (scale == _displayScale)
         return;
 
-    ImGuiStyle &style = ImGui::GetStyle();
-    style = _baseStyle;
-    style.ScaleAllSizes(scale);
-    style.FontScaleDpi = scale;
+    _themes.setScale(scale);
     _displayScale = scale;
     SDL_Log("UI scale set to %.2f", scale);
 }
@@ -177,7 +173,8 @@ void GuiContext::present()
     ImGui::Render();
     const ImGuiIO &io = ImGui::GetIO();
     SDL_SetRenderScale(_renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-    SDL_SetRenderDrawColor(_renderer, 30, 30, 30, 255);
+    const ImVec4 &clear = _themes.current().colors.background;
+    SDL_SetRenderDrawColorFloat(_renderer, clear.x, clear.y, clear.z, 1.0f);
     SDL_RenderClear(_renderer);
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), _renderer);
     SDL_RenderPresent(_renderer);

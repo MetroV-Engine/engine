@@ -23,8 +23,8 @@
 #include <utility>
 #include <vector>
 
-// Window and display settings: VSync, fullscreen, resolution, quality and
-// the performance overlay.
+// Window and display settings: VSync, fullscreen, resolution, quality,
+// theme and the performance overlay.
 class SettingsPanel : public Panel
 {
 public:
@@ -42,4 +42,5 @@ private:
     ComboBox _resolutionCombo;
     RadioGroup _qualityRadio;
     Checkbox _overlayCheckbox;
+    ComboBox _themeCombo;
 };

@@ -65,6 +65,11 @@ int main()
                 .isChecked = [p] { return p->isVisible(); }});
         }
 
+        ThemeManager &themes = gui.themes();
+        for (const std::string &name : themes.getThemeNames())
+            actions.add({.id = "view.theme." + name, .label = name, .callback = [&themes, name] { themes.setTheme(name); },
+                .isChecked = [&themes, name] { return themes.current().name == name; }});
+
         MenuBar menuBar(actions);
         menuBar.addAction("File", "file.quit");
         for (const char *name : {"Buttons", "Inputs", "Settings"})
@@ -72,6 +77,8 @@ int main()
         menuBar.addSeparator("View");
         menuBar.addAction("View", "view.fullscreen");
         menuBar.addAction("View", "view.performance");
+        for (const std::string &name : themes.getThemeNames())
+            menuBar.addAction("View/Theme", "view.theme." + name);
         menuBar.addAction("Help", "view.panel.Dear ImGui Demo");
         menuBar.addAction("Help", "view.panel.About");
 
