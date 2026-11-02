@@ -27,6 +27,8 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <iterator>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -58,6 +60,14 @@ Editor::Editor(GuiContext &gui, Options options)
     buildToolbar();
     buildStatusBar();
     registerCommands();
+
+    // Restored before the feedback is connected, so restoring the theme does
+    // not show a "Theme changed" notification.
+    _workspace = std::make_unique<Workspace>([this](Workspace::Values &values) { collectWorkspace(values); },
+        [this](const Workspace::Values &values) { applyWorkspace(values); });
+    collectWorkspace(_defaultWorkspace);
+    _workspace->load();
+
     connectFeedback();
     loadShortcuts();
     _gui.setCloseRequestHandler([this] { requestQuit(); });
@@ -164,6 +174,8 @@ void Editor::registerActions()
             _notifications.info("Layout reset");
         },
         .shortcut = ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_R, .tooltip = "Restore the default panel arrangement"});
+    _actions.add({.id = "view.workspace.reset", .label = "Reset Workspace", .callback = [this] { resetWorkspace(); },
+        .tooltip = "Restore the default window, panels, theme and layout"});
     _actions.add({.id = "view.statusbar", .label = "Status Bar",
         .callback = [this] { _statusBar.setVisible(!_statusBar.isVisible()); },
         .isChecked = [this] { return _statusBar.isVisible(); }});
@@ -194,6 +206,7 @@ void Editor::buildMenuBar()
     _menuBar.addAction("View", "view.palette");
     _menuBar.addAction("View", "view.console");
     _menuBar.addAction("View", "view.layout.reset");
+    _menuBar.addAction("View", "view.workspace.reset");
     _menuBar.addSeparator("View");
     _menuBar.addAction("View", "view.fullscreen");
     _menuBar.addAction("View", "view.performance");
@@ -373,6 +386,17 @@ void Editor::registerCommands()
             }
             Logger::instance().info("Console", "Shortcut removed from " + args[0]);
         });
+    _commands.add("workspace", "workspace <save|reset>", "Save the workspace now, or reset it",
+        [this](const std::vector<std::string> &args) {
+            if (args.size() == 1 && args[0] == "save") {
+                _workspace->save();
+                Logger::instance().info("Console", std::string("Workspace saved to ") + ImGui::GetIO().IniFilename);
+            } else if (args.size() == 1 && args[0] == "reset") {
+                resetWorkspace();
+            } else {
+                throw std::invalid_argument("expected save or reset");
+            }
+        });
     _commands.add("objects", "objects", "Count the objects of the scene", [this](const auto &) {
         std::size_t count = 0;
         for (HierarchyModel::ObjectId root : _scene.roots())
@@ -390,6 +414,94 @@ void Editor::loadShortcuts()
         if (!_actions.saveShortcuts(ShortcutsFile))
             Logger::instance().error("Shortcuts", std::string("Cannot write ") + ShortcutsFile);
     });
+}
+
+void Editor::collectWorkspace(Workspace::Values &values) const
+{
+    const WindowState window = _gui.getWindowState();
+    Workspace::setInt(values, "window.width", window.width);
+    Workspace::setInt(values, "window.height", window.height);
+    if (window.hasPosition) {
+        Workspace::setInt(values, "window.x", window.x);
+        Workspace::setInt(values, "window.y", window.y);
+    }
+    Workspace::setBool(values, "window.maximized", window.maximized);
+    Workspace::setBool(values, "window.fullscreen", window.fullscreen);
+
+    values["editor.theme"] = _gui.themes().current().name;
+    Workspace::setBool(values, "editor.vsync", _gui.isVSync());
+    Workspace::setBool(values, "editor.statusBar", _statusBar.isVisible());
+    Workspace::setBool(values, "editor.performanceOverlay", _performanceOverlay.isVisible());
+
+    for (const auto &panel : _panels.getPanels())
+        Workspace::setBool(values, "panel." + panel->getName(), panel->isVisible());
+
+    std::string levels;
+    for (const LogLevel level : {LogLevel::Debug, LogLevel::Info, LogLevel::Success, LogLevel::Warning, LogLevel::Error})
+        levels += _console->isLevelVisible(level) ? '1' : '0';
+    values["console.levels"] = levels;
+    std::string hidden;
+    for (const std::string &category : _console->getHiddenCategories())
+        hidden += (hidden.empty() ? "" : ",") + category;
+    values["console.hiddenCategories"] = hidden;
+    Workspace::setBool(values, "console.autoScroll", _console->isAutoScroll());
+}
+
+void Editor::applyWorkspace(const Workspace::Values &values)
+{
+    WindowState window;
+    window.width = Workspace::getInt(values, "window.width", 0);
+    window.height = Workspace::getInt(values, "window.height", 0);
+    window.hasPosition = values.contains("window.x") && values.contains("window.y");
+    window.x = Workspace::getInt(values, "window.x", 0);
+    window.y = Workspace::getInt(values, "window.y", 0);
+    window.maximized = Workspace::getBool(values, "window.maximized", false);
+    window.fullscreen = Workspace::getBool(values, "window.fullscreen", false);
+    _gui.applyWindowState(window);
+
+    // A theme that no longer exists keeps the current one.
+    _gui.themes().setTheme(Workspace::getString(values, "editor.theme", _gui.themes().current().name));
+    _gui.setVSync(Workspace::getBool(values, "editor.vsync", _gui.isVSync()));
+    _statusBar.setVisible(Workspace::getBool(values, "editor.statusBar", true));
+    _performanceOverlay.setVisible(Workspace::getBool(values, "editor.performanceOverlay", true));
+
+    // Panels added since the save keep their default visibility.
+    for (const auto &panel : _panels.getPanels()) {
+        const bool visible = Workspace::getBool(values, "panel." + panel->getName(), panel->isVisible());
+        if (visible != panel->isVisible())
+            panel->setVisible(visible);
+    }
+
+    const std::string levels = Workspace::getString(values, "console.levels", "");
+    const LogLevel order[] = {LogLevel::Debug, LogLevel::Info, LogLevel::Success, LogLevel::Warning, LogLevel::Error};
+    for (std::size_t i = 0; i < levels.size() && i < std::size(order); i++)
+        _console->setLevelVisible(order[i], levels[i] == '1');
+    std::set<std::string> hidden;
+    const std::string list = Workspace::getString(values, "console.hiddenCategories", "");
+    for (std::size_t start = 0; start < list.size();) {
+        const std::size_t comma = list.find(',', start);
+        const std::string category = list.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+        if (!category.empty())
+            hidden.insert(category);
+        if (comma == std::string::npos)
+            break;
+        start = comma + 1;
+    }
+    _console->setHiddenCategories(std::move(hidden));
+    _console->setAutoScroll(Workspace::getBool(values, "console.autoScroll", true));
+}
+
+void Editor::resetWorkspace()
+{
+    _dialogs.confirm({.title = "Reset workspace",
+        .message = "Restore the default window size, panels, theme, layout and console filters?",
+        .confirmLabel = "Reset",
+        .destructive = true,
+        .onConfirm = [this] {
+            applyWorkspace(_defaultWorkspace);
+            _layout.resetLayout();
+            _notifications.info("Workspace reset");
+        }});
 }
 
 void Editor::logStartupInfo() const
@@ -475,6 +587,7 @@ void Editor::drawFrame()
     if (!_dialogs.isOpen() && !_shortcutsPanel->isRecording())
         _actions.processShortcuts();
     reportNewErrors();
+    _workspace->update();
 
     // Bars first: each one reserves its space, and the dockspace fills the rest.
     _menuBar.draw();

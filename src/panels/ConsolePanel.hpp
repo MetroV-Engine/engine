@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Developer console: every log of the editor and the engine (from the
@@ -32,6 +33,11 @@ public:
 
     // Shows or hides a level in the table (Debug is hidden by default).
     void setLevelVisible(LogLevel level, bool visible) { _levelVisible[static_cast<int>(level)] = visible; }
+    bool isLevelVisible(LogLevel level) const { return _levelVisible[static_cast<int>(level)]; }
+    const std::set<std::string> &getHiddenCategories() const { return _hiddenCategories; }
+    void setHiddenCategories(std::set<std::string> categories) { _hiddenCategories = std::move(categories); }
+    bool isAutoScroll() const { return _autoScroll; }
+    void setAutoScroll(bool autoScroll) { _autoScroll = autoScroll; }
     // Puts the keyboard focus on the command line on the next frame.
     void focusCommandLine() { _focusCommandLine = true; }
 

@@ -20,6 +20,7 @@
 #include "feedback/NotificationManager.hpp"
 #include "layout/EditorLayout.hpp"
 #include "layout/StatusBar.hpp"
+#include "layout/Workspace.hpp"
 #include "log/CommandRegistry.hpp"
 #include "navigation/ActionRegistry.hpp"
 #include "navigation/CommandPalette.hpp"
@@ -30,6 +31,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -94,6 +96,10 @@ private:
     // Errors already reported with a notification (by Logger entry id / count).
     std::uint64_t _lastReportedError = 0;
     std::size_t _knownErrorCount = 0;
+    // State of a fresh editor, used by Reset Workspace.
+    Workspace::Values _defaultWorkspace;
+    // Last member: destroyed first, while what it saves still exists.
+    std::unique_ptr<Workspace> _workspace;
 
     // Panels listed in View > Panels and restored by Reset Layout.
     std::vector<std::string> _layoutPanels;
@@ -107,6 +113,10 @@ private:
     void connectFeedback();
     // Loads the user's shortcuts and saves them whenever they change.
     void loadShortcuts();
+    // Saves / restores window geometry, open panels and preferences.
+    void collectWorkspace(Workspace::Values &values) const;
+    void applyWorkspace(const Workspace::Values &values);
+    void resetWorkspace();
     void logStartupInfo() const;
     // Shows a notification when the engine or a system logs a new error.
     void reportNewErrors();

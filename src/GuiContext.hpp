@@ -22,6 +22,20 @@
 
 #include <functional>
 
+// Size and position of the window, to save and restore it between launches.
+// width/height/x/y are the "normal" geometry (not maximized, not fullscreen),
+// so un-maximizing after a restore goes back to the right size.
+struct WindowState
+{
+    int width = 0;
+    int height = 0;
+    bool hasPosition = false; // Not available on Wayland (the compositor places windows)
+    int x = 0;
+    int y = 0;
+    bool maximized = false;
+    bool fullscreen = false;
+};
+
 class GuiContext
 {
 public:
@@ -59,6 +73,10 @@ public:
     // Window settings, applied immediately.
     void setFullscreen(bool fullscreen);
     bool isFullscreen() const;
+    WindowState getWindowState() const;
+    // Applies a saved state, clamped to the current display (a monitor may
+    // have been unplugged since).
+    void applyWindowState(const WindowState &state);
     void setWindowSize(int width, int height);
     void setVSync(bool enabled);
     bool isVSync() const;
@@ -73,6 +91,13 @@ private:
     bool _running = true;
     bool _idle = false;
     std::function<void()> _closeRequestHandler;
+    // Last geometry while neither maximized nor fullscreen.
+    int _normalWidth = 0;
+    int _normalHeight = 0;
+    int _normalX = 0;
+    int _normalY = 0;
+
+    void rememberNormalGeometry();
     EventManager _events;
     FrameTimer _timer;
     ThemeManager _themes;
