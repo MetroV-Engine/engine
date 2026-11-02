@@ -118,7 +118,7 @@ void MenuBar::drawEntries(const Menu &menu) const
 
 void MenuBar::drawAction(const Action &action) const
 {
-    const std::string shortcut = ActionRegistry::shortcutText(action.shortcut);
+    const std::string shortcut = _actions.shortcutLabel(action);
     // Action ids keep items unique even if two actions share a label.
     const std::string label = action.label + "##" + action.id;
     if (ImGui::MenuItem(label.c_str(), shortcut.empty() ? nullptr : shortcut.c_str(), action.checked(),

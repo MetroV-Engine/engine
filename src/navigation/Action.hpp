@@ -28,7 +28,9 @@ struct Action
     // Text shown in menus and as toolbar button.
     std::string label;
     std::function<void()> callback;
-    // Optional keyboard shortcut, e.g. ImGuiMod_Ctrl | ImGuiKey_Q.
+    // Optional default keyboard shortcut, e.g. ImGuiMod_Ctrl | ImGuiKey_Q.
+    // Users can change, add or remove shortcuts: the current ones are kept by
+    // the ActionRegistry (see ActionRegistry::shortcuts()).
     ImGuiKeyChord shortcut = ImGuiKey_None;
     // Optional hover text in the toolbar.
     std::string tooltip;
@@ -37,6 +39,10 @@ struct Action
     // Optional: makes the action a toggle, shown with a check mark (menu) or
     // highlighted (toolbar) while this returns true.
     std::function<bool()> isChecked;
+
+    // Shortcut shown in menus for keys handled by a panel itself, not by the
+    // registry (e.g. "F2" for rename, active only when the Hierarchy has focus).
+    std::string shortcutHint;
 
     bool enabled() const { return !isEnabled || isEnabled(); }
     bool checkable() const { return static_cast<bool>(isChecked); }

@@ -22,6 +22,7 @@
 #include "layout/StatusBar.hpp"
 #include "log/CommandRegistry.hpp"
 #include "navigation/ActionRegistry.hpp"
+#include "navigation/CommandPalette.hpp"
 #include "navigation/MenuBar.hpp"
 #include "navigation/Toolbar.hpp"
 #include "scene/DemoScene.hpp"
@@ -34,6 +35,7 @@
 
 class ConsolePanel;
 class HierarchyPanel;
+class ShortcutsPanel;
 
 // The editor application: assembles the panels, actions, menus, toolbar,
 // status bar, dockspace and feedback systems into the main interface, and
@@ -80,12 +82,14 @@ private:
     CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;
+    CommandPalette _palette;
     MenuBar _menuBar;
     Toolbar _toolbar;
     StatusBar _statusBar;
     EditorLayout _layout;
     ConsolePanel *_console = nullptr;
     HierarchyPanel *_hierarchy = nullptr;
+    ShortcutsPanel *_shortcutsPanel = nullptr;
     bool _quitDialogOpen = false;
     // Errors already reported with a notification (by Logger entry id / count).
     std::uint64_t _lastReportedError = 0;
@@ -101,10 +105,14 @@ private:
     void buildStatusBar();
     void registerCommands();
     void connectFeedback();
+    // Loads the user's shortcuts and saves them whenever they change.
+    void loadShortcuts();
     void logStartupInfo() const;
     // Shows a notification when the engine or a system logs a new error.
     void reportNewErrors();
     void drawFrame();
+    // Shows the panel (if hidden) and gives it the keyboard focus.
+    void focusPanel(const std::string &name);
     // Asks for confirmation, then quits.
     void requestQuit();
 };

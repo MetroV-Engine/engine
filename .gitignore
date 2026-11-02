@@ -26,6 +26,7 @@ gui.sh
 *.claude
 imgui.ini
 imgui-demo.ini
+shortcuts.ini
 
 # Editor logs
 logs/

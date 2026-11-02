@@ -79,7 +79,7 @@ void Toolbar::drawButton(const Action &action) const
         ImGui::PopStyleColor(4);
 
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayShort)) {
-        const std::string shortcut = ActionRegistry::shortcutText(action.shortcut);
+        const std::string shortcut = _actions.shortcutLabel(action);
         ImGui::BeginTooltip();
         ImGui::TextUnformatted(action.tooltip.empty() ? action.label.c_str() : action.tooltip.c_str());
         if (!shortcut.empty())

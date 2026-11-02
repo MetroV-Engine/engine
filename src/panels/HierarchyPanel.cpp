@@ -181,7 +181,9 @@ void HierarchyPanel::drawContent()
     const bool filtering = !filter.empty();
     const std::vector<Row> rows = buildRows(filter);
 
-    ImGui::BeginChild("##HierarchyTree");
+    // The tree handles its own keys (arrows, F2, Delete): ImGui's keyboard
+    // navigation is disabled inside it so both do not move at once.
+    ImGui::BeginChild("##HierarchyTree", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_NoNavInputs);
     handleKeyboard(rows);
     if (rows.empty())
         ImGui::TextDisabled(filtering ? "No object matches the search." : "The scene is empty.");
