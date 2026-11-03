@@ -23,6 +23,16 @@ cmake --build build
 ./build/gui --demo     # demo level and widget demo panels
 ```
 
+When working only on the editor, it can also be built from its own folder
+(it adds the ECS itself and uses the same manifest):
+
+```sh
+cd src/Editor
+cmake -S . -B build
+cmake --build build
+./build/gui --demo
+```
+
 The editor writes its layout and preferences (`imgui.ini`, `imgui-demo.ini`),
 custom shortcuts (`shortcuts.ini`) and log (`logs/editor.log`) in the working
 directory. They are ignored by git.
