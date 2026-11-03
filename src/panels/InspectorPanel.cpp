@@ -13,6 +13,7 @@
 
 #include "InspectorPanel.hpp"
 #include "components/Button.hpp"
+#include "theme/ThemeManager.hpp"
 
 #include <imgui_stdlib.h>
 
@@ -71,6 +72,13 @@ void InspectorPanel::drawContent()
         ImGui::TextDisabled("Select an object in the Hierarchy to see and edit its properties.");
         ImGui::PopTextWrapPos();
         return;
+    }
+
+    if (const std::string banner = _banner ? _banner() : std::string(); !banner.empty()) {
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextColored(ThemeManager::active().colors.warning, "%s", banner.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Separator();
     }
 
     const ObjectId id = _selection.get();

@@ -17,6 +17,8 @@
 // imgui_internal.h; it is used in this file only.
 #include <imgui_internal.h>
 
+#include <algorithm>
+
 namespace {
 
 constexpr const char *DockspaceName = "EditorDockspace";
@@ -75,10 +77,24 @@ void EditorLayout::buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size)
     const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, _leftRatio, nullptr, &center);
     const ImGuiID right =
         ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, _rightRatio / (1.0f - _leftRatio), nullptr, &center);
-    const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, _bottomRatio, nullptr, &center);
+    ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, _bottomRatio, nullptr, &center);
+
+    // The controls strip is cut off the top of the bottom area, just tall
+    // enough for one row of large buttons.
+    ImGuiID controls = bottom;
+    const bool hasControls = std::ranges::any_of(_defaultAreas, [](const auto &entry) { return entry.second == Area::Controls; });
+    if (hasControls) {
+        const float strip = ImGui::GetFrameHeight() * 1.6f + ImGui::GetStyle().WindowPadding.y * 2.0f;
+        const float bottomHeight = size.y * _bottomRatio;
+        controls = ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Up, std::min(strip / bottomHeight, 0.5f), nullptr, &bottom);
+    }
 
     for (const auto &[name, area] : _defaultAreas) {
-        const ImGuiID node = area == Area::Left ? left : area == Area::Right ? right : area == Area::Bottom ? bottom : center;
+        const ImGuiID node = area == Area::Left ? left
+            : area == Area::Right                ? right
+            : area == Area::Bottom               ? bottom
+            : area == Area::Controls             ? controls
+                                                 : center;
         ImGui::DockBuilderDockWindow(name.c_str(), node);
     }
     ImGui::DockBuilderFinish(dockspaceId);

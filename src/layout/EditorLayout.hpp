@@ -29,6 +29,7 @@
 //   |   Left    |          Center           |    Right    |
 //   |           |                           |             |
 //   |           +---------------------------+             |
+//   |           |         Controls          |             |
 //   |           |          Bottom           |             |
 //   +-----------+---------------------------+-------------+
 class EditorLayout
@@ -40,6 +41,8 @@ public:
         Center,
         Right,
         Bottom,
+        // Thin strip right above Bottom (e.g. the game controls).
+        Controls,
     };
 
     // Enables docking in ImGui. Requires an ImGui context (create after GuiContext).
