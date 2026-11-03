@@ -49,12 +49,27 @@ public:
     void setClosable(bool closable) { _closable = closable; }
     // Size used the first time the panel appears (0 = fit content).
     void setInitialSize(ImVec2 size) { _initialSize = size; }
+    // When docked in the editor, shows no tab: the panel looks like a fixed
+    // bar. Such a panel should draw a drawMoveGrip() to drag it out; once
+    // floating it has a normal title bar, to dock it somewhere else.
+    void setHideTabBar(bool hide) { _hideTabBar = hide; }
+    // Called by the grip's "Reset Position" (e.g. to restore the default layout).
+    void setOnResetPosition(std::function<void()> callback) { _onResetPosition = std::move(callback); }
     // Overrides the theme's window padding, e.g. 0 for a panel showing an image edge to edge.
     void setWindowPadding(ImVec2 padding) { _windowPadding = padding; }
 
 protected:
     // Widgets of the panel, drawn between ImGui::Begin() and ImGui::End().
     virtual void drawContent() = 0;
+    // Smallest size of the window when floating (0 = no minimum). Docked, the
+    // dock area decides.
+    virtual ImVec2 minimumSize() const { return ImVec2(0.0f, 0.0f); }
+
+    // Handle (a block of dots) to drag a panel that has no tab: dragging it
+    // undocks the panel and moves it; dropped on a dock area it docks again.
+    // Right click: undock, or put it back in the default layout.
+    void drawMoveGrip(float height);
+
 
 private:
     std::string _name;
@@ -64,6 +79,8 @@ private:
     bool _visible = true;
     bool _closable = true;
     bool _focusRequested = false;
+    bool _hideTabBar = false;
+    std::function<void()> _onResetPosition;
 };
 
 // Panel whose content is a callback, for small panels that do not need a class.

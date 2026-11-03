@@ -26,7 +26,10 @@
 #include "navigation/CommandPalette.hpp"
 #include "navigation/MenuBar.hpp"
 #include "navigation/Toolbar.hpp"
+#include "play/PlayController.hpp"
 #include "scene/DemoScene.hpp"
+#include "scene/DemoSceneRenderer.hpp"
+#include "scene/DemoSimulation.hpp"
 #include "scene/Selection.hpp"
 
 #include <cstddef>
@@ -81,6 +84,10 @@ private:
     // Scene shown in the Hierarchy: a demo level until the ECS is connected.
     DemoScene _scene;
     Selection _selection;
+    // Play mode: the demo game until the ECS runs the real one.
+    DemoSimulation _simulation;
+    PlayController _play;
+    DemoSceneRenderer _sceneRenderer;
     CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;
@@ -110,6 +117,7 @@ private:
     void buildToolbar();
     void buildStatusBar();
     void registerCommands();
+    void registerPlayControls();
     void connectFeedback();
     // Loads the user's shortcuts and saves them whenever they change.
     void loadShortcuts();

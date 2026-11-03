@@ -18,6 +18,7 @@
 #include "panels/ImGuiDemoPanel.hpp"
 #include "panels/InputsPanel.hpp"
 #include "panels/InspectorPanel.hpp"
+#include "panels/PlayControlsPanel.hpp"
 #include "panels/SettingsPanel.hpp"
 #include "panels/ShortcutsPanel.hpp"
 #include "panels/ViewportPanel.hpp"
@@ -43,6 +44,9 @@ Editor::Editor(GuiContext &gui, Options options)
       _options(options),
       _performanceOverlay(gui.timer()),
       _scene(options.demo),
+      _simulation(_scene),
+      _play(_simulation),
+      _sceneRenderer(_scene, _selection),
       _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
@@ -56,6 +60,7 @@ Editor::Editor(GuiContext &gui, Options options)
 
     registerPanels();
     registerActions();
+    registerPlayControls();
     buildMenuBar();
     buildToolbar();
     buildStatusBar();
@@ -81,18 +86,26 @@ void Editor::registerPanels()
     _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene, _selection, _notifications, _dialogs);
     _layout.setDefaultArea("Hierarchy", Area::Left);
 
-    _panels.registerPanel<ViewportPanel>(_performanceOverlay);
+    _panels.registerPanel<ViewportPanel>(_performanceOverlay, _play)
+        .setRenderer([this](ImDrawList *drawList, ImVec2 min, ImVec2 max) { _sceneRenderer.draw(drawList, min, max); });
     _layout.setDefaultArea("Viewport", Area::Center);
 
-    _panels.registerPanel<InspectorPanel>(_scene, _scene, _selection, _notifications);
+    _panels.registerPanel<InspectorPanel>(_scene, _scene, _selection, _notifications).setBanner([this] {
+        return _play.isStopped() ? std::string() : std::string("Play mode: changes are lost when the game stops.");
+    });
     _layout.setDefaultArea("Inspector", Area::Right);
     _panels.registerPanel<SettingsPanel>(_gui, _performanceOverlay);
     _layout.setDefaultArea("Settings", Area::Right);
 
+    _panels.registerPanel<PlayControlsPanel>(_actions, _play).setOnResetPosition([this] {
+        _panels.setVisible("Game Controls", true);
+        _layout.resetLayout();
+    });
+    _layout.setDefaultArea("Game Controls", Area::Controls);
     _console = &_panels.registerPanel<ConsolePanel>(_commands);
     _layout.setDefaultArea("Console", Area::Bottom);
     // Widget demos, next to the console.
-    _layoutPanels = {"Hierarchy", "Viewport", "Inspector", "Console", "Settings"};
+    _layoutPanels = {"Hierarchy", "Viewport", "Inspector", "Game Controls", "Console", "Settings"};
 
     if (_options.demo) {
         _panels.registerPanel<ButtonsPanel>(_notifications, _dialogs, [this] { requestQuit(); });
@@ -219,6 +232,12 @@ void Editor::buildMenuBar()
         if (_actions.has("window.focus." + name))
             _menuBar.addAction("Window", "window.focus." + name);
 
+    _menuBar.addAction("Game", "game.play");
+    _menuBar.addAction("Game", "game.pause");
+    _menuBar.addAction("Game", "game.stop");
+    _menuBar.addSeparator("Game");
+    _menuBar.addAction("Game", "game.step");
+
     if (_options.demo)
         _menuBar.addAction("Help", "view.panel.Dear ImGui Demo");
     _menuBar.addAction("Help", "help.shortcuts");
@@ -254,6 +273,17 @@ void Editor::buildStatusBar()
     });
     if (_options.demo)
         _statusBar.addItem([this] { ImGui::TextColored(_gui.themes().current().colors.accent, "DEMO"); });
+    _statusBar.addItem([this] {
+        const Theme &theme = _gui.themes().current();
+        const PlayState state = _play.getState();
+        const ImVec4 &color = state == PlayState::Playing ? theme.colors.success
+            : state == PlayState::Paused                  ? theme.colors.warning
+                                                          : theme.colors.textMuted;
+        if (state == PlayState::Stopped)
+            ImGui::TextColored(color, "Editing");
+        else
+            ImGui::TextColored(color, "%s %.1fs  x%.2g", PlayController::stateName(state), _play.getPlayTime(), _play.getTimeScale());
+    });
     _statusBar.addItem([this] { ImGui::Text("%.0f FPS", _gui.timer().getFps()); });
     _statusBar.addItem([this] { ImGui::TextUnformatted(_gui.themes().current().name.c_str()); });
 }
@@ -403,6 +433,56 @@ void Editor::registerCommands()
             count += 1 + _scene.countDescendants(root);
         Logger::instance().info("Console", std::to_string(count) + " objects in the scene");
     });
+}
+
+void Editor::registerPlayControls()
+{
+    _actions.add({.id = "game.play", .label = "Play", .callback = [this] { _play.play(); }, .shortcut = ImGuiKey_F5,
+        .tooltip = "Run the game (resume when paused)", .isEnabled = [this] { return _play.getState() != PlayState::Playing; },
+        .isChecked = [this] { return _play.getState() == PlayState::Playing; }});
+    _actions.add({.id = "game.pause", .label = "Pause",
+        .callback = [this] { _play.getState() == PlayState::Paused ? _play.play() : _play.pause(); }, .shortcut = ImGuiKey_F6,
+        .tooltip = "Pause or resume the game", .isEnabled = [this] { return !_play.isStopped(); },
+        .isChecked = [this] { return _play.getState() == PlayState::Paused; }});
+    _actions.add({.id = "game.stop", .label = "Stop", .callback = [this] { _play.stop(); },
+        .shortcut = ImGuiMod_Shift | ImGuiKey_F5, .tooltip = "Stop the game and go back to the edited scene",
+        .isEnabled = [this] { return !_play.isStopped(); }});
+    _actions.add({.id = "game.step", .label = "Step", .callback = [this] { _play.step(); }, .shortcut = ImGuiKey_F10,
+        .tooltip = "Advance the game by one frame", .isEnabled = [this] { return _play.getState() != PlayState::Playing; }});
+
+    _play.setOnStateChanged([this](PlayState state) {
+        Logger &logger = Logger::instance();
+        if (state == PlayState::Playing)
+            logger.info("Game", "Playing");
+        else if (state == PlayState::Paused)
+            logger.info("Game", "Paused");
+        else
+            logger.info("Game", "Stopped: the scene is back to its state before Play");
+        // Objects created during play no longer exist.
+        if (_selection.has() && !_scene.exists(_selection.get()))
+            _selection.clear();
+    });
+
+    _commands.add("play", "play", "Run or resume the game", [this](const auto &) { _play.play(); });
+    _commands.add("pause", "pause", "Pause the game", [this](const auto &) { _play.pause(); });
+    _commands.add("stop", "stop", "Stop the game and restore the scene", [this](const auto &) { _play.stop(); });
+    _commands.add("step", "step [frames]", "Advance the game by one or more frames",
+        [this](const std::vector<std::string> &args) {
+            const int frames = args.empty() ? 1 : std::stoi(args[0]);
+            if (frames < 1 || frames > 10000)
+                throw std::invalid_argument("frames must be between 1 and 10000");
+            for (int i = 0; i < frames; i++)
+                _play.step();
+        });
+    _commands.add("timescale", "timescale <factor>", "Speed of the game (1 = normal, 0.5 = half speed)",
+        [this](const std::vector<std::string> &args) {
+            if (args.size() != 1)
+                throw std::invalid_argument("expected a factor, e.g. 0.5");
+            _play.setTimeScale(std::stod(args[0]));
+            char text[48];
+            std::snprintf(text, sizeof(text), "Time scale: x%.2g", _play.getTimeScale());
+            Logger::instance().info("Console", text);
+        });
 }
 
 void Editor::loadShortcuts()
@@ -582,6 +662,9 @@ void Editor::run()
 
 void Editor::drawFrame()
 {
+    // The game advances before the panels draw it.
+    _play.update(_gui.timer().getDeltaTime());
+
     // A dialog waits for an answer, or a new shortcut is being recorded:
     // editor shortcuts must not act meanwhile.
     if (!_dialogs.isOpen() && !_shortcutsPanel->isRecording())

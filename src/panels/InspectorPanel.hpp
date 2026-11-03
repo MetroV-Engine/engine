@@ -39,6 +39,10 @@ public:
     InspectorPanel(HierarchyModel &hierarchy, PropertyModel &properties, const Selection &selection,
         NotificationManager &notifications);
 
+    // Text shown above the properties when it returns a non-empty string
+    // (e.g. a warning that play mode changes are not kept).
+    void setBanner(std::function<std::string()> banner) { _banner = std::move(banner); }
+
 protected:
     void drawContent() override;
 
@@ -53,6 +57,7 @@ private:
     ObjectId _nameObject = HierarchyModel::InvalidId;
     std::string _componentFilter;
     std::vector<std::function<void()>> _pending;
+    std::function<std::string()> _banner;
 
     void drawName(ObjectId id);
     void drawComponent(ObjectId id, const ComponentInfo &component);
