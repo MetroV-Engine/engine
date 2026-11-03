@@ -1,0 +1,109 @@
+/*
+    Created on: 30/03/2026
+    Filename: GuiContext.hpp
+    Description: ${DESCRIPTION}
+
+    ███╗   ███╗███████╗████████╗██████╗  ██████╗ ██╗   ██╗
+    ████╗ ████║██╔════╝╚══██╔══╝██╔══██╗██╔═══██╗██║   ██║
+    ██╔████╔██║█████╗     ██║   ██████╔╝██║   ██║██║   ██║
+    ██║╚██╔╝██║██╔══╝     ██║   ██╔══██╗██║   ██║╚██╗ ██╔╝
+    ██║ ╚═╝ ██║███████╗   ██║   ██║  ██║╚██████╔╝ ╚████╔╝
+    ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝   ╚═══╝
+*/
+
+#pragma once
+
+#include "EventManager.hpp"
+#include "FrameTimer.hpp"
+#include "theme/ThemeManager.hpp"
+
+#include <SDL3/SDL.h>
+#include <imgui.h>
+
+#include <functional>
+
+// Size and position of the window, to save and restore it between launches.
+// width/height/x/y are the "normal" geometry (not maximized, not fullscreen),
+// so un-maximizing after a restore goes back to the right size.
+struct WindowState
+{
+    int width = 0;
+    int height = 0;
+    bool hasPosition = false; // Not available on Wayland (the compositor places windows)
+    int x = 0;
+    int y = 0;
+    bool maximized = false;
+    bool fullscreen = false;
+};
+
+class GuiContext
+{
+public:
+    GuiContext(const char *title, int width, int height);
+    ~GuiContext();
+
+    GuiContext(const GuiContext &) = delete;
+    GuiContext &operator=(const GuiContext &) = delete;
+
+    // Frame lifecycle. run() loops over the four stages until the window is
+    // closed; each stage is also public for custom loops:
+    //   1. processEvents() - dispatch pending SDL events (input, resize, quit...)
+    //   2. beginFrame()    - measure frame time, start a new ImGui frame
+    //   3. buildUi()       - caller code: declare every widget of this frame
+    //   4. present()       - render ImGui draw data and show it on screen
+    // There is no fixed frame rate: VSync paces the loop when enabled. While
+    // the window is minimized or hidden nothing is drawn and the loop sleeps
+    // until an event arrives.
+    void run(const std::function<void()> &buildUi);
+
+    void processEvents() { _events.pollEvents(); }
+    void beginFrame();
+    void present();
+
+    bool isRunning() const { return _running; }
+    void stop() { _running = false; }
+    // Called instead of stopping when the user closes the window (e.g. to
+    // ask for confirmation); call stop() from it to really quit.
+    void setCloseRequestHandler(std::function<void()> handler) { _closeRequestHandler = std::move(handler); }
+    EventManager &events() { return _events; }
+    const FrameTimer &timer() const { return _timer; }
+    ThemeManager &themes() { return _themes; }
+    float getDisplayScale() const { return _displayScale; }
+
+    // Window settings, applied immediately.
+    void setFullscreen(bool fullscreen);
+    bool isFullscreen() const;
+    WindowState getWindowState() const;
+    // Applies a saved state, clamped to the current display (a monitor may
+    // have been unplugged since).
+    void applyWindowState(const WindowState &state);
+    void setWindowSize(int width, int height);
+    void setVSync(bool enabled);
+    bool isVSync() const;
+    const char *getRendererName() const;
+
+private:
+    SDL_Window *_window = nullptr;
+    SDL_Renderer *_renderer = nullptr;
+    bool _imguiContext = false;
+    bool _imguiSdlBackend = false;
+    bool _imguiRendererBackend = false;
+    bool _running = true;
+    bool _idle = false;
+    std::function<void()> _closeRequestHandler;
+    // Last geometry while neither maximized nor fullscreen.
+    int _normalWidth = 0;
+    int _normalHeight = 0;
+    int _normalX = 0;
+    int _normalY = 0;
+
+    void rememberNormalGeometry();
+    EventManager _events;
+    FrameTimer _timer;
+    ThemeManager _themes;
+    float _displayScale = 0.0f;
+
+    void destroy();
+    // Rescales the theme (style and fonts) to the window's current display scale.
+    void applyDisplayScale();
+};
