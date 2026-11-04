@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "Panel.hpp"
+#include "panels/Panel/Panel.hpp"
 
 // The Dear ImGui demo window as a panel. ShowDemoWindow() creates its own
 // window (titled "Dear ImGui Demo"), so draw() is overridden instead of drawContent().

@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "HierarchyModel.hpp"
+#include "scene/HierarchyModel.hpp"
 
 #include <string>
 #include <variant>
@@ -52,8 +52,8 @@ enum class PropertyType
 };
 
 // Description of one editable property, used by the Inspector to pick a widget.
-// It mirrors the engine's reflection (FieldInfo / TypeKind), so an ECS adapter
-// can build it from reflected components.
+// It mirrors the engine's reflection (FieldInfo / TypeKind): EcsScene builds it
+// from reflected components.
 struct PropertyInfo
 {
     std::string name;

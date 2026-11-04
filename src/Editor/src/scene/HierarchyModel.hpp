@@ -18,9 +18,9 @@
 #include <vector>
 
 // The scene objects shown by the Hierarchy panel, seen as a tree. The panel
-// only talks to this interface, so the data can come from a demo scene today
-// and from the engine's ECS later (an adapter mapping entities to ObjectIds and
-// a Parent component to parent()).
+// only talks to this interface, so the data can come from the built-in demo
+// scene (DemoScene) or from the engine's ECS (EcsScene, which maps entities to
+// ObjectIds; its tree is flat until the ECS has a parent component).
 class HierarchyModel
 {
 public:
@@ -48,6 +48,12 @@ public:
     // Moves the object (with its subtree) under newParent (InvalidId for the
     // root). Refused if newParent is the object itself or one of its descendants.
     virtual bool setParent(ObjectId id, ObjectId newParent) = 0;
+
+    // False for a flat scene, whose objects cannot have children: the
+    // Hierarchy then offers neither "Create Child" nor drag and drop.
+    virtual bool supportsParenting() const { return true; }
+    // Identity shown under the object's name in the Inspector.
+    virtual std::string idLabel(ObjectId id) const { return "Id " + std::to_string(id); }
 
     // True if ancestor is id's parent, grandparent, etc.
     bool isAncestor(ObjectId ancestor, ObjectId id) const

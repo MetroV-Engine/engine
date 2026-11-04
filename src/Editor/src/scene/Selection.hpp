@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "HierarchyModel.hpp"
+#include "scene/HierarchyModel.hpp"
 
 // The object currently selected in the editor, shared by the panels (the
 // Hierarchy sets it, the Inspector shows it). It stores an id, never a

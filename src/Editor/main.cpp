@@ -11,9 +11,11 @@
     ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝   ╚═══╝
 */
 
-#include "Editor.hpp"
-#include "GuiContext.hpp"
-#include "log/Logger.hpp"
+#include "core/Editor/Editor.hpp"
+#include "core/GuiContext/GuiContext.hpp"
+#include "core/Logger/Logger.hpp"
+
+#include "ECS/ECS.hpp"
 
 #include <cstdio>
 #include <exception>
@@ -24,7 +26,8 @@ namespace {
 void printUsage(const char *program)
 {
     std::printf("Usage: %s [--demo]\n\n"
-                "  --demo, -d   Start with the demo level and the widget demo panels\n"
+                "Without option, edits an empty ECS world.\n\n"
+                "  --demo, -d   Edit the built-in demo level instead, with the widget demo panels\n"
                 "  --help, -h   Show this help\n",
         program);
 }
@@ -55,8 +58,17 @@ int main(int argc, char **argv)
 
     try {
         GuiContext gui(options.demo ? "MetroV Editor (demo)" : "MetroV Editor", 1600, 900);
-        Editor editor(gui, options);
-        editor.run();
+        if (options.demo) {
+            Editor editor(gui, options);
+            editor.run();
+        } else {
+            // The world outlives the editor. A game passes its own world and
+            // systems instead (see examples/EcsExample.cpp).
+            ECS::Registry world;
+            ECS::SystemManager systems;
+            Editor editor(gui, world, systems, options);
+            editor.run();
+        }
     } catch (const std::exception &e) {
         // Kept in logs/editor.log, so the cause of a crash at startup is not lost.
         logger.error("Fatal", e.what());
