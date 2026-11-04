@@ -82,6 +82,10 @@ add_subdirectory(src/ECS)
 
 if(ENGINE_BUILD_GUI)
   add_subdirectory(src/Editor)
+
+  # The engine with its editor: src/Engine/main.cpp opens the editor on an ECS world.
+  add_executable(engine_gui src/Engine/main.cpp)
+  target_link_libraries(engine_gui PRIVATE engine_editor)
 endif()
 
 if(ENGINE_BUILD_APP)
