@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 
-# Editor GUI (src/Editor). Off by default: it needs SDL3 and Dear ImGui, which
-# CI does not build yet. Its vcpkg dependencies are the "gui" manifest feature,
-# selected here because vcpkg reads VCPKG_MANIFEST_FEATURES at project().
+# Editor GUI (src/Editor). Off by default: it needs SDL3 and Dear ImGui, long to
+# build the first time (CI builds it: project_scripts/build.py --gui). Its vcpkg
+# dependencies are the "gui" manifest feature, selected here because vcpkg
+# reads VCPKG_MANIFEST_FEATURES at project().
 option(ENGINE_BUILD_GUI "Build the editor GUI" OFF)
 if(ENGINE_BUILD_GUI)
   list(APPEND VCPKG_MANIFEST_FEATURES "gui")

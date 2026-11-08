@@ -11,8 +11,8 @@ parent: `git log <merge commit>^2`.
 
 ## Build and run
 
-The editor is optional (it needs SDL3 and Dear ImGui, which CI does not build
-yet). Enable it with `ENGINE_BUILD_GUI`; vcpkg (the `vcpkg` submodule:
+The editor is optional (it needs SDL3 and Dear ImGui, long to build the first
+time). Enable it with `ENGINE_BUILD_GUI`; vcpkg (the `vcpkg` submodule:
 `git submodule update --init vcpkg`) then installs the `gui` feature of the
 manifest:
 
@@ -23,6 +23,21 @@ cmake --build build
 ./build/gui --demo        # built-in demo level (no ECS) and widget demo panels
 ./build/gui_ecs_example   # a small game opening the editor on its own world
 ```
+
+or, with the engine's tests: `python project_scripts/build.py --compile-tests --gui`.
+
+It builds on Linux, Windows and macOS; CI compiles it on all three on every
+pull request to `dev` (`.github/workflows/build.yml`).
+
+- **Linux**: the SDL3 port needs the X11, Wayland and IBus headers:
+  `sudo apt install libx11-dev libxft-dev libxext-dev libwayland-dev libxkbcommon-dev libegl1-mesa-dev libibus-1.0-dev`
+  (Debian / Ubuntu names).
+- **Windows**: build with MSVC (Visual Studio 2022 or later, "Desktop
+  development with C++" workload), the compiler vcpkg builds SDL3 and Dear
+  ImGui with. With the Ninja generator, run the commands from a
+  "Developer PowerShell for VS" so `cl` is found first; `build.py` checks it.
+  The executables are `build\gui.exe`...; vcpkg copies `SDL3.dll` next to them.
+- **macOS**: Xcode or its command line tools (`xcode-select --install`).
 
 When working only on the editor, it can also be built from its own folder
 (it adds the ECS itself and uses the same manifest):
@@ -154,5 +169,5 @@ prefixes its test components (`SceneMover`, `SimPosition`...) so their names
 never collide. `SDL_VIDEO_DRIVER=x11 ./build/tests_editor` (or `wayland`)
 shows the editor window during the end-to-end test.
 
-The editor is not built in CI yet (SDL3 and Dear ImGui), so these tests run
-locally only.
+CI compiles `tests_editor` on Linux, Windows and macOS but does not run it:
+these tests run locally only.

@@ -7,13 +7,21 @@ on:
     branches: [dev]
 
 jobs:
+  # Engine, editor (src/Editor) and tests must compile on every platform: make
+  # these jobs required checks of dev to block a merge that breaks one of them.
   compile:
     name: Compile on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      # Every platform reports its own errors.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+
+    env:
+      # vcpkg keeps built packages here; restored by the cache step below so
+      # SDL3 and Dear ImGui are not rebuilt from source on every run.
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-binary-cache
 
     steps:
       - name: Checkout repository
@@ -33,19 +41,36 @@ jobs:
       - name: Init vcpkg submodule
         run: git submodule update --init --depth 1 vcpkg
 
-      - name: Install vcpkg bootstrap deps (Ubuntu)
+      # vcpkg bootstrap tools, and the X11 / Wayland / IBus headers the SDL3
+      # port needs on Linux.
+      - name: Install system dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip unzip
+          sudo apt-get install -y zip unzip \
+            libx11-dev libxft-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
+            libibus-1.0-dev
 
+      # vcpkg builds the dependencies with MSVC: the project must use it too.
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Create vcpkg binary cache directory
+        run: python -c "import os; os.makedirs(os.environ['VCPKG_DEFAULT_BINARY_CACHE'], exist_ok=True)"
+
+      # vcpkg names each package by a hash of its version, options and
+      # compiler, so an old entry is never used by mistake. A new entry is
+      # saved each run (run_id), restored from the latest one: packages
+      # rebuilt after a dependency or runner compiler update are kept.
       - name: Cache vcpkg packages
         uses: actions/cache@v4
         with:
-          path: vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', '.github/workflows/build.yml') }}
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             vcpkg-${{ runner.os }}-
 
-      - name: Compile project and tests
-        run: python project_scripts/build.py --compile-tests
+      - name: Compile project, editor and tests
+        run: python project_scripts/build.py --compile-tests --gui

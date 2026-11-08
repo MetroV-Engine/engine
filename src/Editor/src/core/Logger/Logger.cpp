@@ -26,7 +26,8 @@ namespace {
 // Path relative to the project, to keep log lines short.
 std::string shortPath(const char *file)
 {
-    const std::string path = file;
+    std::string path = file;
+    std::ranges::replace(path, '\\', '/'); // MSVC writes Windows paths
     for (const char *root : {"/src/", "/main.cpp"}) {
         const std::size_t position = path.rfind(root);
         if (position != std::string::npos)
