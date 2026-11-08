@@ -154,6 +154,11 @@ namespace {
     Run runEditor(ECS::Registry &world, ECS::SystemManager &systems, Script script)
     {
         FreshWorkingDirectory directory;
+        // No window on screen; SDL_VIDEO_DRIVER=x11 (or wayland...) shows it.
+        // Set for every run: SDL_Quit(), when the previous editor closed,
+        // cleared all hints, and without one a machine with no display (CI)
+        // has no video device.
+        SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
         GuiContext gui("tests_editor", 1280, 720);
         auto backend = std::make_unique<ScriptedBackend>(gui, world, systems, std::move(script));
         ScriptedBackend &scripted = *backend;
@@ -182,9 +187,6 @@ E_END
 
 void run_editor_on_ecs_tests()
 {
-    // No window on screen; SDL_VIDEO_DRIVER=x11 (or wayland...) shows it.
-    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
-
     "the editor edits, plays and stops an ECS world, without error"_test = [] {
         ECS::Registry world;
         ECS::SystemManager systems;

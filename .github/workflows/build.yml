@@ -42,13 +42,16 @@ jobs:
         run: git submodule update --init --depth 1 vcpkg
 
       # vcpkg bootstrap tools, and the X11 / Wayland / IBus headers the SDL3
-      # port needs on Linux.
+      # port needs on Linux. SDL 3.4 stops at configure when an X11 extension
+      # it enables is missing (Xcursor, Xi, Xfixes, Xrandr, Xtest; libxext-dev
+      # brings Xdbe, Xsync and Xshape).
       - name: Install system dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y zip unzip \
             libx11-dev libxft-dev libxext-dev \
+            libxcursor-dev libxi-dev libxfixes-dev libxrandr-dev libxtst-dev \
             libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
             libibus-1.0-dev
 

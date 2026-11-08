@@ -30,8 +30,8 @@ It builds on Linux, Windows and macOS; CI compiles it on all three on every
 pull request to `dev` (`.github/workflows/build.yml`).
 
 - **Linux**: the SDL3 port needs the X11, Wayland and IBus headers:
-  `sudo apt install libx11-dev libxft-dev libxext-dev libwayland-dev libxkbcommon-dev libegl1-mesa-dev libibus-1.0-dev`
-  (Debian / Ubuntu names).
+  `sudo apt install libx11-dev libxft-dev libxext-dev libxcursor-dev libxi-dev libxfixes-dev libxrandr-dev libxtst-dev libwayland-dev libxkbcommon-dev libegl1-mesa-dev libibus-1.0-dev`
+  (Debian / Ubuntu names; the list CI installs).
 - **Windows**: build with MSVC (Visual Studio 2022 or later, "Desktop
   development with C++" workload), the compiler vcpkg builds SDL3 and Dear
   ImGui with. With the Ninja generator, run the commands from a

@@ -11,7 +11,22 @@
     "gui": {
       "description": "Editor GUI (src/Editor): SDL3 and Dear ImGui with docking",
       "dependencies": [
-        "sdl3",
+        {
+          "$comment": "On Linux SDL3 enables IBus (default feature) whenever its headers are found, but its IBus code needs D-Bus: without the dbus feature, linking fails (undefined SDL_IBus_*). With it, IBus and Fcitx input methods work.",
+          "name": "sdl3",
+          "features": [
+            {
+              "name": "dbus",
+              "platform": "linux"
+            }
+          ]
+        },
+        {
+          "$comment": "Headers only for SDL3, which loads the system libdbus at run time: no systemd.",
+          "name": "dbus",
+          "default-features": false,
+          "platform": "linux"
+        },
         {
           "name": "imgui",
           "features": [
