@@ -1,0 +1,21 @@
+{
+  "_comment": "Technology monitoring config. One entry per team member. discordUserId: right-click the user in Discord (Developer Mode on) > Copy User ID. Feed types: reddit (https://www.reddit.com/r/<sub>/.rss), youtube (https://www.youtube.com/feeds/videos.xml?channel_id=<id>), newsletter (any RSS/Atom URL). Members whose discordUserId is all zeros are placeholders: their feeds are fetched but nothing is posted.",
+  "members": [
+    {
+      "name": "Example Member",
+      "discordUserId": "000000000000000000",
+      "feeds": [
+        {
+          "type": "reddit",
+          "url": "https://www.reddit.com/r/gamedev/.rss",
+          "label": "r/gamedev"
+        },
+        {
+          "type": "youtube",
+          "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCQG40havu4kNpB4pxUDQhYQ",
+          "label": "Acerola (graphics)"
+        }
+      ]
+    }
+  ]
+}

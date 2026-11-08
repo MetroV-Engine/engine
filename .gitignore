@@ -40,3 +40,6 @@ imgui.ini
 imgui-demo.ini
 shortcuts.ini
 logs/
+
+# Technology monitoring state (restored/saved via actions/cache)
+last-seen.json
