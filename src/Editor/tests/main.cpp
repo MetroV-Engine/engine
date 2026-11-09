@@ -6,6 +6,7 @@ void run_ecs_scene_tests();
 void run_ecs_simulation_tests();
 void run_ecs_backend_tests();
 void run_editor_on_ecs_tests();
+void run_entity_drag_drop_tests();
 
 int main()
 {
@@ -17,4 +18,5 @@ int main()
     run_ecs_simulation_tests();
     run_ecs_backend_tests();
     run_editor_on_ecs_tests();
+    run_entity_drag_drop_tests();
 }
