@@ -96,11 +96,9 @@ public:
     Editor &operator=(const Editor &) = delete;
 
     // Draws the game in the Viewport, replacing the scene's own renderer
-    // (until the engine renders into it, e.g. a game's debug drawing).
+    // (until the engine renders into it, e.g. a game's debug drawing). The
+    // view it returns lets the mouse place objects there.
     void setViewportRenderer(SceneBackend::Renderer renderer);
-    // How that renderer maps the world to the Viewport, so the mouse can
-    // place objects there.
-    void setViewportView(ViewportViewProvider provider);
 
     // Adds a template to the Entity Palette, after those of the scene.
     void addEntityTemplate(EntityTemplate entityTemplate);

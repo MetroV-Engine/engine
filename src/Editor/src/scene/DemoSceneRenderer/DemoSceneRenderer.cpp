@@ -80,13 +80,7 @@ Fit fitBoxes(const std::vector<Box> &boxes, ImVec2 min, ImVec2 max)
 
 } // namespace
 
-ViewportView DemoSceneRenderer::view(const DemoScene &scene, ImVec2 min, ImVec2 max)
-{
-    const std::vector<Box> boxes = collectBoxes(scene);
-    return boxes.empty() ? ViewportView{} : fitBoxes(boxes, min, max).view;
-}
-
-void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
+ViewportView DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
 {
     const Theme &theme = ThemeManager::active();
 
@@ -96,17 +90,15 @@ void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
         const ImVec2 size = ImGui::CalcTextSize(text);
         drawList->AddText(ImVec2((min.x + max.x - size.x) * 0.5f, (min.y + max.y - size.y) * 0.5f),
             ImGui::GetColorU32(theme.colors.textMuted), text);
-        return;
+        return {};
     }
 
     const Fit fit = fitBoxes(boxes, min, max);
-    const float left = fit.left;
-    const float right = fit.right;
     const auto toScreen = [&](float x, float y) { return fit.view.toScreen(Vec2{x, y}); };
 
     // Ground line.
     const ImU32 muted = ImGui::GetColorU32(theme.colors.textMuted);
-    drawList->AddLine(toScreen(left, DemoSimulation::GroundY), toScreen(right, DemoSimulation::GroundY), muted, 2.0f);
+    drawList->AddLine(toScreen(fit.left, DemoSimulation::GroundY), toScreen(fit.right, DemoSimulation::GroundY), muted, 2.0f);
 
     for (const Box &box : boxes) {
         const ImVec2 a = toScreen(box.center.x - box.size.x * 0.5f, box.center.y - box.size.y * 0.5f);
@@ -119,4 +111,5 @@ void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
         drawList->AddRectFilled(a, b, ImGui::GetColorU32(ImVec4(color.x, color.y, color.z, box.hasCollider ? 0.35f : 0.8f)));
         drawList->AddRect(a, b, ImGui::GetColorU32(color), 0.0f, 0, selected ? 2.0f : 1.0f);
     }
+    return fit.view;
 }

@@ -33,8 +33,9 @@ struct ViewportView
     Vec2 toWorld(ImVec2 screen) const { return Vec2{(screen.x - origin.x) / scale, (screen.y - origin.y) / scale}; }
 };
 
-// The view of a Viewport covering the screen rectangle min..max.
-using ViewportViewProvider = std::function<ViewportView(ImVec2 min, ImVec2 max)>;
+// Draws the game in the Viewport covering the screen rectangle min..max, and
+// returns how it mapped the world there (an invalid view if it does not say).
+using ViewportRenderer = std::function<ViewportView(ImDrawList *, ImVec2 min, ImVec2 max)>;
 
 // The property placed by the mouse: objects without it keep no position.
 inline constexpr const char *PositionComponent = "Transform";

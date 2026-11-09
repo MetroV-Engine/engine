@@ -38,9 +38,10 @@ void ViewportPanel::drawContent()
     drawList->AddRectFilled(min, max, ImGui::GetColorU32(theme.colors.background));
 
     // Will become ImGui::Image(gameTexture, size) once the engine renders.
+    ViewportView view;
     if (_renderer) {
         drawList->PushClipRect(min, max, true);
-        _renderer(drawList, min, max);
+        view = _renderer(drawList, min, max);
         drawList->PopClipRect();
     } else {
         const char *title = "Game viewport";
@@ -70,7 +71,6 @@ void ViewportPanel::drawContent()
 
     // A button rather than a Dummy: it captures the mouse for the object mover.
     ImGui::InvisibleButton("##ViewportArea", size);
-    const ViewportView view = _viewProvider ? _viewProvider(min, max) : ViewportView{};
     if (_objectMover)
         _objectMover->update(view, drawList);
     if (_entityDropTarget)

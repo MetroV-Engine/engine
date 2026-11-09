@@ -121,14 +121,10 @@ namespace {
         Renderer renderer(const Selection &selection) override
         {
             return [this, &selection](ImDrawList *, ImVec2 min, ImVec2) {
-                _viewportMin = min;
+                _view = ViewportView{min, ViewScale};
                 step(selection);
+                return _view;
             };
-        }
-
-        ViewportViewProvider viewportView() override
-        {
-            return [](ImVec2 min, ImVec2) { return ViewportView{min, ViewScale}; };
         }
 
     private:
@@ -137,18 +133,16 @@ namespace {
         DragResult &_result;
         CommandRegistry *_commands = nullptr;
         ImVec2 _grab;
-        ImVec2 _viewportMin;
-
-        ImVec2 viewportPixel(Vec2 world) const { return ViewportView{_viewportMin, ViewScale}.toScreen(world); }
+        ViewportView _view;
 
         ImVec2 mouseStart() const
         {
-            return _scenario.moveFrom ? viewportPixel(*_scenario.moveFrom) : paletteItem(_scenario.templateIndex);
+            return _scenario.moveFrom ? _view.toScreen(*_scenario.moveFrom) : paletteItem(_scenario.templateIndex);
         }
 
         ImVec2 mouseEnd() const
         {
-            return _scenario.moveFrom ? viewportPixel(_scenario.moveTo) : windowCenter(_scenario.target);
+            return _scenario.moveFrom ? _view.toScreen(_scenario.moveTo) : windowCenter(_scenario.target);
         }
 
         void step(const Selection &selection)
@@ -167,7 +161,7 @@ namespace {
             case 16: moveMouse(ImVec2(_grab.x + 25.0f, _grab.y + 2.0f)); break;
             case 19:
                 moveMouse(mouseEnd());
-                _result.releaseWorld = ViewportView{_viewportMin, ViewScale}.toWorld(mouseEnd());
+                _result.releaseWorld = _view.toWorld(mouseEnd());
                 break;
             case 22:
                 _result.draggingBeforeRelease = isDraggingTemplate();

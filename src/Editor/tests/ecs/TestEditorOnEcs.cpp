@@ -87,7 +87,10 @@ namespace {
             // The Editor owns a non-const Selection: the script selects like
             // the Hierarchy panel does.
             Selection &editable = const_cast<Selection &>(selection);
-            return [this, &editable](ImDrawList *, ImVec2, ImVec2) { step(editable); };
+            return [this, &editable](ImDrawList *, ImVec2, ImVec2) {
+                step(editable);
+                return ViewportView{};
+            };
         }
 
         int frames = 0;

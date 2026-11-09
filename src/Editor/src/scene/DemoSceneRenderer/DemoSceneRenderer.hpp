@@ -27,9 +27,8 @@ class DemoSceneRenderer
 public:
     DemoSceneRenderer(const DemoScene &scene, const Selection &selection) : _scene(scene), _selection(selection) {}
 
-    void draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const;
-    // The view draw() uses; invalid when the scene has nothing to show.
-    static ViewportView view(const DemoScene &scene, ImVec2 min, ImVec2 max);
+    // Returns the view used; invalid when the scene has nothing to show.
+    ViewportView draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const;
 
 private:
     const DemoScene &_scene;

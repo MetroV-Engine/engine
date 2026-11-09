@@ -109,11 +109,6 @@ void Editor::addEntityTemplate(EntityTemplate entityTemplate)
     _entityTemplates.push_back(std::move(entityTemplate));
 }
 
-void Editor::setViewportView(ViewportViewProvider provider)
-{
-    _viewport->setViewProvider(std::move(provider));
-}
-
 void Editor::spawnEntityFromTemplate(std::uint32_t index, const std::optional<Vec2> &worldPosition)
 {
     if (index >= _entityTemplates.size())
@@ -148,7 +143,6 @@ void Editor::registerPanels()
 
     _viewport = &_panels.registerPanel<ViewportPanel>(_performanceOverlay, _play);
     _viewport->setRenderer(_scene->renderer(_selection));
-    _viewport->setViewProvider(_scene->viewportView());
     _viewport->setEntityDropTarget(&_entityDropTarget);
     _viewport->setObjectMover(&_objectMover);
     _layout.setDefaultArea("Viewport", Area::Center);

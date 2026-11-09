@@ -32,13 +32,8 @@ public:
     Renderer renderer(const Selection &selection) override
     {
         return [renderer = DemoSceneRenderer(_scene, selection)](ImDrawList *drawList, ImVec2 min, ImVec2 max) {
-            renderer.draw(drawList, min, max);
+            return renderer.draw(drawList, min, max);
         };
-    }
-
-    ViewportViewProvider viewportView() override
-    {
-        return [this](ImVec2 min, ImVec2 max) { return DemoSceneRenderer::view(_scene, min, max); };
     }
 
     // Every demo object is created with a Transform: templates do not list it.
