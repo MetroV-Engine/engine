@@ -27,6 +27,7 @@
 #include "navigation/MenuBar/MenuBar.hpp"
 #include "navigation/Toolbar/Toolbar.hpp"
 #include "panels/EntityDropTarget/EntityDropTarget.hpp"
+#include "panels/ViewportObjectMover/ViewportObjectMover.hpp"
 #include "scene/PlayController/PlayController.hpp"
 #include "scene/SceneBackend.hpp"
 #include "scene/Selection.hpp"
@@ -120,6 +121,7 @@ private:
     // Only ever appended to: drag and drop payloads are indices into it.
     std::vector<EntityTemplate> _entityTemplates;
     EntityDropTarget _entityDropTarget;
+    ViewportObjectMover _objectMover;
     CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;

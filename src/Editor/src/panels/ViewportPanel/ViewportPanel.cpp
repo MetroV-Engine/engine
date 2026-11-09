@@ -13,6 +13,7 @@
 
 #include "ViewportPanel.hpp"
 #include "panels/EntityDropTarget/EntityDropTarget.hpp"
+#include "panels/ViewportObjectMover/ViewportObjectMover.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
 #include <cstdio>
@@ -67,8 +68,11 @@ void ViewportPanel::drawContent()
         drawList->AddText(ImVec2(badgeMin.x + padding.x, badgeMin.y + padding.y), ImGui::GetColorU32(theme.colors.textOnAccent), badge);
     }
 
-    ImGui::Dummy(size);
+    // A button rather than a Dummy: it captures the mouse for the object mover.
+    ImGui::InvisibleButton("##ViewportArea", size);
     const ViewportView view = _viewProvider ? _viewProvider(min, max) : ViewportView{};
+    if (_objectMover)
+        _objectMover->update(view, drawList);
     if (_entityDropTarget)
         _entityDropTarget->accept(view.valid() ? std::optional<Vec2>(view.toWorld(ImGui::GetMousePos())) : std::nullopt);
     _overlay.setAnchor(ImVec2(max.x, min.y));

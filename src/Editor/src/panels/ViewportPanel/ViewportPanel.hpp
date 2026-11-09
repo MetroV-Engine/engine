@@ -23,8 +23,10 @@
 // Game view, at the center of the editor. Until the engine renders into a
 // texture, a renderer callback draws the scene with ImGui shapes. A colored
 // frame and a badge show the play state; the performance overlay is pinned
-// to its corner. Entity templates can be dropped on it.
+// to its corner. Entity templates can be dropped on it, and its objects moved
+// with the mouse.
 class EntityDropTarget;
+class ViewportObjectMover;
 
 class ViewportPanel : public Panel
 {
@@ -39,6 +41,8 @@ public:
     void setViewProvider(ViewportViewProvider provider) { _viewProvider = std::move(provider); }
     // Where dropped entity templates go; target must outlive the panel.
     void setEntityDropTarget(const EntityDropTarget *target) { _entityDropTarget = target; }
+    // Selects and moves objects with the mouse; mover must outlive the panel.
+    void setObjectMover(ViewportObjectMover *mover) { _objectMover = mover; }
 
 protected:
     void drawContent() override;
@@ -49,4 +53,5 @@ private:
     Renderer _renderer;
     ViewportViewProvider _viewProvider;
     const EntityDropTarget *_entityDropTarget = nullptr;
+    ViewportObjectMover *_objectMover = nullptr;
 };

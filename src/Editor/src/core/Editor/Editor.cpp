@@ -56,6 +56,7 @@ Editor::Editor(GuiContext &gui, std::unique_ptr<SceneBackend> scene, Options opt
       _entityDropTarget(_play, [this](std::uint32_t index, const std::optional<Vec2> &worldPosition) {
           spawnEntityFromTemplate(index, worldPosition);
       }),
+      _objectMover(_scene->hierarchy(), _scene->properties(), _selection, _play),
       _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
@@ -149,6 +150,7 @@ void Editor::registerPanels()
     _viewport->setRenderer(_scene->renderer(_selection));
     _viewport->setViewProvider(_scene->viewportView());
     _viewport->setEntityDropTarget(&_entityDropTarget);
+    _viewport->setObjectMover(&_objectMover);
     _layout.setDefaultArea("Viewport", Area::Center);
 
     _panels.registerPanel<InspectorPanel>(_scene->hierarchy(), _scene->properties(), _selection, _notifications).setBanner([this] {
