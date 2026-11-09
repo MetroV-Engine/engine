@@ -53,10 +53,10 @@ Editor::Editor(GuiContext &gui, std::unique_ptr<SceneBackend> scene, Options opt
       _performanceOverlay(gui.timer()),
       _scene(scene ? std::move(scene) : throw std::invalid_argument("Editor: no scene to edit")),
       _play(_scene->simulation()),
+      _entityTemplates(_scene->entityTemplates()),
       _entityDropTarget(_play, [this](std::uint32_t index, const std::optional<Vec2> &worldPosition) {
           spawnEntityFromTemplate(index, worldPosition);
       }),
-      _objectMover(_scene->hierarchy(), _scene->properties(), _selection, _play),
       _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
@@ -132,19 +132,16 @@ void Editor::registerPanels()
 {
     using Area = EditorLayout::Area;
 
-    _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs);
-    _hierarchy->setEntityDropTarget(&_entityDropTarget);
+    _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs, _entityDropTarget);
     _layout.setDefaultArea("Hierarchy", Area::Left);
 
-    // In its own area: as a tab of the Hierarchy, it would hide the drop target.
-    _entityTemplates = _scene->entityTemplates();
     _panels.registerPanel<EntityPalettePanel>(_entityTemplates, _play);
+    // In its own area: as a tab of the Hierarchy, it would hide the drop target.
     _layout.setDefaultArea("Entity Palette", Area::LeftBottom);
 
-    _viewport = &_panels.registerPanel<ViewportPanel>(_performanceOverlay, _play);
+    _viewport = &_panels.registerPanel<ViewportPanel>(
+        _performanceOverlay, _play, _entityDropTarget, _scene->hierarchy(), _scene->properties(), _selection);
     _viewport->setRenderer(_scene->renderer(_selection));
-    _viewport->setEntityDropTarget(&_entityDropTarget);
-    _viewport->setObjectMover(&_objectMover);
     _layout.setDefaultArea("Viewport", Area::Center);
 
     _panels.registerPanel<InspectorPanel>(_scene->hierarchy(), _scene->properties(), _selection, _notifications).setBanner([this] {

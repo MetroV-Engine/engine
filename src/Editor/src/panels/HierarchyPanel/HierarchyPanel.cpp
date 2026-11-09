@@ -39,13 +39,14 @@ const void *imguiId(HierarchyModel::ObjectId id)
 
 } // namespace
 
-HierarchyPanel::HierarchyPanel(
-    HierarchyModel &model, Selection &selection, NotificationManager &notifications, DialogManager &dialogs)
+HierarchyPanel::HierarchyPanel(HierarchyModel &model, Selection &selection, NotificationManager &notifications,
+    DialogManager &dialogs, const EntityDropTarget &entityDropTarget)
     : Panel("Hierarchy"),
       _model(model),
       _selection(selection),
       _notifications(notifications),
       _dialogs(dialogs),
+      _entityDropTarget(entityDropTarget),
       _search("##HierarchySearch", "Search objects")
 {
     // Top-level objects start expanded.
@@ -227,8 +228,7 @@ void HierarchyPanel::drawContent()
     }
     ImGui::EndChild();
     // On the child window as a whole, so the rows accept templates too.
-    if (_entityDropTarget)
-        _entityDropTarget->accept();
+    _entityDropTarget.accept();
 
     // Apply the changes requested during this frame, now that the tree is drawn.
     std::vector<std::function<void()>> pending;

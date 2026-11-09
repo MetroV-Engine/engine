@@ -25,6 +25,8 @@
 #include <unordered_set>
 #include <vector>
 
+class EntityDropTarget;
+
 // Tree of the scene objects (from a HierarchyModel), to browse and organise
 // the level:
 //  - click to select (shared with the Inspector), arrows to move/expand;
@@ -34,23 +36,20 @@
 //    to move it to the root (unless the model is flat, see supportsParenting);
 //  - drop an entity template anywhere on the tree to create an object.
 // Changes are applied after the tree has been drawn, never while iterating it.
-class EntityDropTarget;
-
 class HierarchyPanel : public Panel
 {
 public:
     using ObjectId = HierarchyModel::ObjectId;
 
+    // entityDropTarget must outlive the panel.
     HierarchyPanel(HierarchyModel &model, Selection &selection, NotificationManager &notifications,
-        DialogManager &dialogs);
+        DialogManager &dialogs, const EntityDropTarget &entityDropTarget);
 
     // Creates an object under parent (InvalidId for the root), selects it and
     // starts renaming it.
     void createObject(ObjectId parent);
     // Clears the search, then scrolls to the object and selects it.
     void showObject(ObjectId id);
-    // Where dropped entity templates go; target must outlive the panel.
-    void setEntityDropTarget(const EntityDropTarget *target) { _entityDropTarget = target; }
     // Asks for confirmation, then deletes the object and its children.
     void requestDelete(ObjectId id);
     void startRename(ObjectId id);
@@ -70,8 +69,8 @@ private:
     Selection &_selection;
     NotificationManager &_notifications;
     DialogManager &_dialogs;
+    const EntityDropTarget &_entityDropTarget;
     TextInput _search;
-    const EntityDropTarget *_entityDropTarget = nullptr;
 
     std::unordered_set<ObjectId> _expanded;
     ObjectId _renaming = HierarchyModel::InvalidId;

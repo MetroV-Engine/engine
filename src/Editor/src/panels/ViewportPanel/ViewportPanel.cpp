@@ -13,14 +13,18 @@
 
 #include "ViewportPanel.hpp"
 #include "panels/EntityDropTarget/EntityDropTarget.hpp"
-#include "panels/ViewportObjectMover/ViewportObjectMover.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
 #include <cstdio>
 #include <optional>
 
-ViewportPanel::ViewportPanel(PerformanceOverlay &overlay, const PlayController &play)
-    : Panel("Viewport"), _overlay(overlay), _play(play)
+ViewportPanel::ViewportPanel(PerformanceOverlay &overlay, const PlayController &play, const EntityDropTarget &entityDropTarget,
+    const HierarchyModel &model, PropertyModel &properties, Selection &selection)
+    : Panel("Viewport"),
+      _overlay(overlay),
+      _play(play),
+      _entityDropTarget(entityDropTarget),
+      _objectMover(model, properties, selection, play)
 {
     // The game image goes edge to edge.
     setWindowPadding(ImVec2(0.0f, 0.0f));
@@ -71,9 +75,7 @@ void ViewportPanel::drawContent()
 
     // A button rather than a Dummy: it captures the mouse for the object mover.
     ImGui::InvisibleButton("##ViewportArea", size);
-    if (_objectMover)
-        _objectMover->update(view, drawList);
-    if (_entityDropTarget)
-        _entityDropTarget->accept(view.valid() ? std::optional<Vec2>(view.toWorld(ImGui::GetMousePos())) : std::nullopt);
+    _objectMover.update(view, drawList);
+    _entityDropTarget.accept(view.valid() ? std::optional<Vec2>(view.toWorld(ImGui::GetMousePos())) : std::nullopt);
     _overlay.setAnchor(ImVec2(max.x, min.y));
 }
