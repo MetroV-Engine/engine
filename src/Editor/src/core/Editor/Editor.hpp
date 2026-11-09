@@ -96,6 +96,9 @@ public:
     // (until the engine renders into it, e.g. a game's debug drawing).
     void setViewportRenderer(SceneBackend::Renderer renderer);
 
+    // Adds a template to the Entity Palette, after those of the scene.
+    void addEntityTemplate(EntityTemplate entityTemplate);
+
     // Runs until the user quits.
     void run();
 
@@ -109,6 +112,8 @@ private:
     std::unique_ptr<SceneBackend> _scene;
     Selection _selection;
     PlayController _play;
+    // Only ever appended to: drag and drop payloads are indices into it.
+    std::vector<EntityTemplate> _entityTemplates;
     CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;

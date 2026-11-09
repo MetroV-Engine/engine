@@ -36,6 +36,18 @@ public:
         };
     }
 
+    // Every demo object is created with a Transform: templates do not list it.
+    std::vector<EntityTemplate> entityTemplates() const override
+    {
+        return {
+            {"Empty Object", "Object", {}},
+            {"Sprite", "Sprite", {"Sprite"}},
+            {"Enemy", "Enemy", {"Sprite", "BoxCollider", "Health", "EnemyAI"}},
+            {"Collectible", "Collectible", {"Sprite", "BoxCollider", "Collectible"}},
+            {"Camera", "Camera", {"Camera"}},
+        };
+    }
+
     std::string description() const override
     {
         return _demoLevel ? "Editing the built-in demo level" : "Editing an empty built-in demo scene";

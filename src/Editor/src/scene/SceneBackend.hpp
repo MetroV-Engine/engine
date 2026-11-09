@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "scene/EntityTemplate.hpp"
 #include "scene/HierarchyModel.hpp"
 #include "scene/PropertyModel.hpp"
 #include "scene/Selection.hpp"
@@ -22,6 +23,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 class CommandRegistry;
 
@@ -45,6 +47,8 @@ public:
     // Draws the scene in the Viewport, highlighting the selection. An empty
     // renderer leaves the Viewport's placeholder.
     virtual Renderer renderer(const Selection &) { return {}; }
+    // What the Entity Palette offers for this scene.
+    virtual std::vector<EntityTemplate> entityTemplates() const { return {{"Empty Entity", "Entity", {}}}; }
     // Console commands specific to this scene.
     virtual void registerCommands(CommandRegistry &) {}
     // One line logged at startup, e.g. "ECS world: 12 entities".

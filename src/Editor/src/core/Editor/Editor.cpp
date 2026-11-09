@@ -15,6 +15,7 @@
 #include "ecs/EcsBackend/EcsBackend.hpp"
 #include "panels/ButtonsPanel/ButtonsPanel.hpp"
 #include "panels/ConsolePanel/ConsolePanel.hpp"
+#include "panels/EntityPalettePanel/EntityPalettePanel.hpp"
 #include "panels/HierarchyPanel/HierarchyPanel.hpp"
 #include "panels/ImGuiDemoPanel.hpp"
 #include "panels/InputsPanel/InputsPanel.hpp"
@@ -99,12 +100,22 @@ void Editor::setViewportRenderer(SceneBackend::Renderer renderer)
     _viewport->setRenderer(std::move(renderer));
 }
 
+void Editor::addEntityTemplate(EntityTemplate entityTemplate)
+{
+    _entityTemplates.push_back(std::move(entityTemplate));
+}
+
 void Editor::registerPanels()
 {
     using Area = EditorLayout::Area;
 
     _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs);
     _layout.setDefaultArea("Hierarchy", Area::Left);
+
+    // In its own area: as a tab of the Hierarchy, it would hide the drop target.
+    _entityTemplates = _scene->entityTemplates();
+    _panels.registerPanel<EntityPalettePanel>(_entityTemplates, _play);
+    _layout.setDefaultArea("Entity Palette", Area::LeftBottom);
 
     _viewport = &_panels.registerPanel<ViewportPanel>(_performanceOverlay, _play);
     _viewport->setRenderer(_scene->renderer(_selection));
@@ -125,7 +136,7 @@ void Editor::registerPanels()
     _console = &_panels.registerPanel<ConsolePanel>(_commands);
     _layout.setDefaultArea("Console", Area::Bottom);
     // Widget demos, next to the console.
-    _layoutPanels = {"Hierarchy", "Viewport", "Inspector", "Game Controls", "Console", "Settings"};
+    _layoutPanels = {"Hierarchy", "Entity Palette", "Viewport", "Inspector", "Game Controls", "Console", "Settings"};
 
     if (_options.demo) {
         _panels.registerPanel<ButtonsPanel>(_notifications, _dialogs, [this] { requestQuit(); });
