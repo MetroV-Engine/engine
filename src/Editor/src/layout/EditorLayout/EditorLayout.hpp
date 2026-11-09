@@ -28,9 +28,9 @@
 //   |           |                           |             |
 //   |   Left    |          Center           |    Right    |
 //   |           |                           |             |
-//   |           +---------------------------+             |
-//   |           |         Controls          |             |
-//   |           |          Bottom           |             |
+//   +-----------+---------------------------+             |
+//   |   Left    |         Controls          |             |
+//   |  Bottom   |          Bottom           |             |
 //   +-----------+---------------------------+-------------+
 class EditorLayout
 {
@@ -38,6 +38,9 @@ public:
     enum class Area
     {
         Left,
+        // Below Left, only split off when a panel uses it (e.g. a palette to
+        // drag from, which must stay visible next to the Hierarchy).
+        LeftBottom,
         Center,
         Right,
         Bottom,
@@ -68,6 +71,8 @@ private:
     // Frames to wait before selecting each area's first tab (its window must exist).
     int _selectFirstTabsIn = 0;
     float _leftRatio = 0.18f;
+    // Fraction of the left column given to LeftBottom.
+    float _leftBottomRatio = 0.35f;
     float _rightRatio = 0.24f;
     float _bottomRatio = 0.28f;
 

@@ -74,7 +74,11 @@ void EditorLayout::buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size)
     // Each split takes a slice off the remaining node; what is left in the
     // middle is the center area.
     ImGuiID center = dockspaceId;
-    const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, _leftRatio, nullptr, &center);
+    ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, _leftRatio, nullptr, &center);
+    ImGuiID leftBottom = left;
+    const bool hasLeftBottom = std::ranges::any_of(_defaultAreas, [](const auto &entry) { return entry.second == Area::LeftBottom; });
+    if (hasLeftBottom)
+        leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, _leftBottomRatio, nullptr, &left);
     const ImGuiID right =
         ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, _rightRatio / (1.0f - _leftRatio), nullptr, &center);
     ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, _bottomRatio, nullptr, &center);
@@ -91,6 +95,7 @@ void EditorLayout::buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size)
 
     for (const auto &[name, area] : _defaultAreas) {
         const ImGuiID node = area == Area::Left ? left
+            : area == Area::LeftBottom           ? leftBottom
             : area == Area::Right                ? right
             : area == Area::Bottom               ? bottom
             : area == Area::Controls             ? controls
@@ -105,7 +110,7 @@ void EditorLayout::selectFirstTabs() const
 {
     // ImGui selects the last tab docked in a node; the first panel declared
     // for an area is the one meant to be shown. Focusing selects its tab.
-    for (const Area area : {Area::Left, Area::Right, Area::Bottom, Area::Center}) {
+    for (const Area area : {Area::Left, Area::LeftBottom, Area::Right, Area::Bottom, Area::Center}) {
         for (const auto &[name, panelArea] : _defaultAreas) {
             if (panelArea == area) {
                 if (ImGui::FindWindowByName(name.c_str()))
