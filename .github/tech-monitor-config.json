@@ -1,0 +1,26 @@
+{
+  "_comment": "Technology monitoring config. One entry per team member. discordUserId: right-click the user in Discord (Developer Mode on) > Copy User ID. Feed types: reddit (https://www.reddit.com/r/<sub>/.rss), youtube (https://www.youtube.com/feeds/videos.xml?channel_id=<id>), github (https://github.com/<owner>/<repo>/releases.atom or commits/<branch>.atom), newsletter (any RSS/Atom URL). Members whose discordUserId is all zeros are placeholders: their feeds are fetched but nothing is posted.",
+  "members": [
+    {
+      "name": "Maxime KELLER",
+      "discordUserId": "304230562376450049",
+      "feeds": [
+        {
+          "type": "github",
+          "url": "https://github.com/libsdl-org/SDL/releases.atom",
+          "label": "SDL releases"
+        },
+        {
+          "type": "github",
+          "url": "https://github.com/bkaradzic/bgfx/commits/master.atom",
+          "label": "bgfx commits"
+        },
+        {
+          "type": "youtube",
+          "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCQG40havu4kNpB4pxUDQhYQ",
+          "label": "Acerola (graphics)"
+        }
+      ]
+    }
+  ]
+}

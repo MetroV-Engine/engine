@@ -1,0 +1,53 @@
+name: Technology monitoring
+
+# Polls each member's feeds (.github/tech-monitor-config.json) and pings them
+# on Discord when something new is published.
+# Note: `schedule` only fires from the default branch (main); use
+# workflow_dispatch to run it from other branches.
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tech-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Cache entries are immutable, so each run saves under a unique key and
+      # the next run restores the most recent one via the stable prefix.
+      - name: Restore last-seen state
+        uses: actions/cache/restore@v4
+        with:
+          path: last-seen.json
+          key: tech-monitor-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            tech-monitor-state-
+
+      - name: Check feeds and notify
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.TECH_MONITOR_DISCORD_WEBHOOK_URL }}
+        run: node .github/scripts/tech-monitor.js
+
+      - name: Save last-seen state
+        if: always() && hashFiles('last-seen.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: last-seen.json
+          key: tech-monitor-state-${{ github.run_id }}-${{ github.run_attempt }}
