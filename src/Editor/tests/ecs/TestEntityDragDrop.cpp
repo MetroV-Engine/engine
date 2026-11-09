@@ -12,10 +12,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "ECS/ECS.hpp"
@@ -31,6 +34,12 @@ using namespace boost::ut;
 // Prefixed with "Drop": the TypeRegistry is process-wide.
 namespace {
     struct DropHealth { int value = 10; };
+    struct DropVector { float x = 0, y = 0; };
+    // The component and field the mouse writes: the name matters here.
+    struct Transform { DropVector position; };
+
+    // Pixels of the Viewport per world unit, in these tests.
+    constexpr float ViewScale = 2.0f;
 
     enum class PlayMoment { Never, BeforeDrag, DuringDrag };
 
@@ -40,6 +49,10 @@ namespace {
         // Name of the window the mouse is released over.
         std::string target;
         PlayMoment play = PlayMoment::Never;
+        // If set, the mouse drags inside the Viewport instead of from the
+        // palette: from this world position to moveTo.
+        std::optional<Vec2> moveFrom = std::nullopt;
+        Vec2 moveTo{};
     };
 
     struct DragResult
@@ -49,7 +62,17 @@ namespace {
         int frames = 0;
         std::string selectedName;
         std::vector<std::string> selectedComponents;
+        std::optional<Vec2> selectedPosition;
+        // World position under the mouse where it was released.
+        Vec2 releaseWorld{};
     };
+
+    bool near(Vec2 a, Vec2 b)
+    {
+        // ImGui rounds the mouse position down to a pixel.
+        const float tolerance = 1.0f / ViewScale + 0.01f;
+        return std::abs(a.x - b.x) <= tolerance && std::abs(a.y - b.y) <= tolerance;
+    }
 
     bool isDraggingTemplate()
     {
@@ -97,7 +120,15 @@ namespace {
 
         Renderer renderer(const Selection &selection) override
         {
-            return [this, &selection](ImDrawList *, ImVec2, ImVec2) { step(selection); };
+            return [this, &selection](ImDrawList *, ImVec2 min, ImVec2) {
+                _viewportMin = min;
+                step(selection);
+            };
+        }
+
+        ViewportViewProvider viewportView() override
+        {
+            return [](ImVec2 min, ImVec2) { return ViewportView{min, ViewScale}; };
         }
 
     private:
@@ -106,6 +137,19 @@ namespace {
         DragResult &_result;
         CommandRegistry *_commands = nullptr;
         ImVec2 _grab;
+        ImVec2 _viewportMin;
+
+        ImVec2 viewportPixel(Vec2 world) const { return ViewportView{_viewportMin, ViewScale}.toScreen(world); }
+
+        ImVec2 mouseStart() const
+        {
+            return _scenario.moveFrom ? viewportPixel(*_scenario.moveFrom) : paletteItem(_scenario.templateIndex);
+        }
+
+        ImVec2 mouseEnd() const
+        {
+            return _scenario.moveFrom ? viewportPixel(_scenario.moveTo) : windowCenter(_scenario.target);
+        }
 
         void step(const Selection &selection)
         {
@@ -116,12 +160,15 @@ namespace {
                     _commands->execute("play");
                 break;
             case 10:
-                _grab = paletteItem(_scenario.templateIndex);
+                _grab = mouseStart();
                 moveMouse(_grab);
                 break;
             case 13: setMouseDown(true); break;
             case 16: moveMouse(ImVec2(_grab.x + 25.0f, _grab.y + 2.0f)); break;
-            case 19: moveMouse(windowCenter(_scenario.target)); break;
+            case 19:
+                moveMouse(mouseEnd());
+                _result.releaseWorld = ViewportView{_viewportMin, ViewScale}.toWorld(mouseEnd());
+                break;
             case 22:
                 _result.draggingBeforeRelease = isDraggingTemplate();
                 if (_scenario.play == PlayMoment::DuringDrag)
@@ -136,6 +183,9 @@ namespace {
                     _result.selectedName = hierarchy().name(selection.get());
                     for (const ComponentInfo &component : properties().components(selection.get()))
                         _result.selectedComponents.push_back(component.name);
+                    const PropertyValue position = properties().get(selection.get(), "Transform", "position");
+                    if (const Vec2 *value = std::get_if<Vec2>(&position))
+                        _result.selectedPosition = *value;
                 }
                 break;
             case 36: _gui.stop(); break;
@@ -183,6 +233,7 @@ namespace {
         {
             Editor editor(gui, std::make_unique<DragBackend>(world, systems, gui, std::move(scenario), result));
             editor.addEntityTemplate({"Drop Mob", "Mob", {"DropHealth"}});
+            editor.addEntityTemplate({"Placed", "Placed", {"Transform"}});
             editor.run();
         }
         return result;
@@ -195,9 +246,57 @@ namespace {
 }
 
 E_REFLECT(DropHealth) E_FIELD(value, int) E_END
+E_REFLECT(DropVector) E_FIELD(x, float) E_FIELD(y, float) E_END
+E_REFLECT(Transform) E_FIELD(position, DropVector) E_END
 
 void run_entity_drag_drop_tests()
 {
+    "dropping a template on the Viewport places its entity under the mouse"_test = [] {
+        ECS::Registry world;
+
+        const DragResult result = runDrag(world, {.templateIndex = 2, .target = "Viewport"});
+
+        expect(result.selectedName == std::string("Placed"));
+        expect(result.selectedPosition.has_value());
+        expect(result.selectedPosition && near(*result.selectedPosition, result.releaseWorld));
+        expect(result.selectedPosition && result.selectedPosition->x > 1.0f) << "not left at the origin";
+    };
+
+    "dragging an object in the Viewport selects and moves it"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity moved = world.spawnEntity("Moved");
+        world.addComponent(moved, Transform{{100, 80}});
+
+        const DragResult result = runDrag(world, {.target = "Viewport", .moveFrom = Vec2{100, 80}, .moveTo = Vec2{220, 150}});
+
+        expect(result.selectedName == std::string("Moved"));
+        const Transform &transform = world.getComponent<Transform>(moved);
+        expect(near(Vec2{transform.position.x, transform.position.y}, Vec2{220, 150}));
+    };
+
+    "clicking away from every object moves nothing"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity still = world.spawnEntity("Still");
+        world.addComponent(still, Transform{{100, 80}});
+
+        const DragResult result = runDrag(world, {.target = "Viewport", .moveFrom = Vec2{10, 10}, .moveTo = Vec2{220, 150}});
+
+        expect(result.selectedName.empty());
+        expect(world.getComponent<Transform>(still).position.x == 100.0f);
+    };
+
+    "objects cannot be moved during Play"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity still = world.spawnEntity("Still");
+        world.addComponent(still, Transform{{100, 80}});
+
+        const DragResult result = runDrag(
+            world, {.target = "Viewport", .play = PlayMoment::BeforeDrag, .moveFrom = Vec2{100, 80}, .moveTo = Vec2{220, 150}});
+
+        expect(result.selectedName.empty()) << "the click did not grab it";
+        expect(world.getComponent<Transform>(still).position.x == 100.0f);
+    };
+
     // Template 0 is the scene's "Empty Entity"; template 1 is "Drop Mob".
     "dropping a template on the Hierarchy creates its entity and selects it"_test = [] {
         ECS::Registry world;
