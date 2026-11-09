@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -34,18 +35,12 @@ struct Box
 std::vector<Box> collectBoxes(const DemoScene &scene)
 {
     std::vector<Box> boxes;
-    std::vector<ObjectId> stack = scene.roots();
-    while (!stack.empty()) {
-        const ObjectId id = stack.back();
-        stack.pop_back();
-        for (ObjectId child : scene.children(id))
-            stack.push_back(child);
-        const PropertyValue position = scene.get(id, "Transform", "position");
-        if (!std::holds_alternative<Vec2>(position))
+    for (ObjectId id : scene.allObjects()) {
+        const std::optional<Vec2> position = scene.getAs<Vec2>(id, PositionComponent, PositionProperty);
+        if (!position)
             continue;
-        const PropertyValue size = scene.get(id, "BoxCollider", "size");
-        const bool hasCollider = std::holds_alternative<Vec2>(size);
-        boxes.push_back({id, std::get<Vec2>(position), hasCollider ? std::get<Vec2>(size) : Vec2{6, 6}, hasCollider});
+        const std::optional<Vec2> size = scene.getAs<Vec2>(id, "BoxCollider", "size");
+        boxes.push_back({id, *position, size.value_or(Vec2{6, 6}), size.has_value()});
     }
     return boxes;
 }

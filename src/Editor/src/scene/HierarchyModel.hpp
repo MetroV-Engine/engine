@@ -72,4 +72,19 @@ public:
             count += 1 + countDescendants(child);
         return count;
     }
+
+    // Every object, each one before its children.
+    std::vector<ObjectId> allObjects() const
+    {
+        std::vector<ObjectId> result;
+        std::vector<ObjectId> stack = roots();
+        while (!stack.empty()) {
+            const ObjectId id = stack.back();
+            stack.pop_back();
+            result.push_back(id);
+            for (ObjectId child : children(id))
+                stack.push_back(child);
+        }
+        return result;
+    }
 };

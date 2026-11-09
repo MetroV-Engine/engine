@@ -50,7 +50,7 @@ private:
     // From the mouse to the object, so it does not jump when grabbed off-center.
     Vec2 _grabOffset;
 
-    std::optional<Vec2> positionOf(ObjectId id) const;
+    std::optional<Vec2> positionOf(ObjectId id) const { return _properties.getAs<Vec2>(id, PositionComponent, PositionProperty); }
     void startDrag(const ViewportView &view);
     void continueDrag();
     void drawSelection(const ViewportView &view, ImDrawList *drawList) const;

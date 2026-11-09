@@ -18,7 +18,6 @@
 #include <optional>
 #include <string>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "ECS/ECS.hpp"
@@ -177,9 +176,7 @@ namespace {
                     _result.selectedName = hierarchy().name(selection.get());
                     for (const ComponentInfo &component : properties().components(selection.get()))
                         _result.selectedComponents.push_back(component.name);
-                    const PropertyValue position = properties().get(selection.get(), "Transform", "position");
-                    if (const Vec2 *value = std::get_if<Vec2>(&position))
-                        _result.selectedPosition = *value;
+                    _result.selectedPosition = properties().getAs<Vec2>(selection.get(), "Transform", "position");
                 }
                 break;
             case 36: _gui.stop(); break;

@@ -14,9 +14,6 @@
 #include "ViewportObjectMover.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
-#include <variant>
-#include <vector>
-
 namespace {
 
 // How far from an object's position a click still grabs it.
@@ -29,13 +26,6 @@ ViewportObjectMover::ViewportObjectMover(
     const HierarchyModel &model, PropertyModel &properties, Selection &selection, const PlayController &play)
     : _model(model), _properties(properties), _selection(selection), _play(play)
 {
-}
-
-std::optional<Vec2> ViewportObjectMover::positionOf(ObjectId id) const
-{
-    const PropertyValue value = _properties.get(id, PositionComponent, PositionProperty);
-    const Vec2 *position = std::get_if<Vec2>(&value);
-    return position ? std::optional<Vec2>(*position) : std::nullopt;
 }
 
 void ViewportObjectMover::update(const ViewportView &view, ImDrawList *drawList)
@@ -57,24 +47,18 @@ void ViewportObjectMover::update(const ViewportView &view, ImDrawList *drawList)
 void ViewportObjectMover::startDrag(const ViewportView &view)
 {
     const ImVec2 mouse = ImGui::GetMousePos();
-    float closest = PickRadiusPixels * PickRadiusPixels;
+    float closestSquared = PickRadiusPixels * PickRadiusPixels;
     ObjectId picked = HierarchyModel::InvalidId;
     Vec2 pickedPosition;
 
-    std::vector<ObjectId> stack = _model.roots();
-    while (!stack.empty()) {
-        const ObjectId id = stack.back();
-        stack.pop_back();
-        for (ObjectId child : _model.children(id))
-            stack.push_back(child);
-
+    for (ObjectId id : _model.allObjects()) {
         const std::optional<Vec2> position = positionOf(id);
         if (!position)
             continue;
         const ImVec2 screen = view.toScreen(*position);
-        const float distance = (screen.x - mouse.x) * (screen.x - mouse.x) + (screen.y - mouse.y) * (screen.y - mouse.y);
-        if (distance <= closest) {
-            closest = distance;
+        const float distanceSquared = (screen.x - mouse.x) * (screen.x - mouse.x) + (screen.y - mouse.y) * (screen.y - mouse.y);
+        if (distanceSquared <= closestSquared) {
+            closestSquared = distanceSquared;
             picked = id;
             pickedPosition = *position;
         }
