@@ -6,5 +6,21 @@
   "builtin-baseline": "256acc64012b23a13041d8705805e1f23b43a024",
   "dependencies": [
     "bext-ut"
-  ]
+  ],
+  "features": {
+    "gui": {
+      "description": "Editor GUI (src/Editor): SDL3 and Dear ImGui with docking",
+      "dependencies": [
+        "sdl3",
+        {
+          "name": "imgui",
+          "features": [
+            "docking-experimental",
+            "sdl3-binding",
+            "sdl3-renderer-binding"
+          ]
+        }
+      ]
+    }
+  }
 }

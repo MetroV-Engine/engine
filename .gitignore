@@ -34,3 +34,9 @@ docs/
 
 # Personal Makefile wrapper
 Makefile
+
+# Editor (src/Editor): files written next to the working directory
+imgui.ini
+imgui-demo.ini
+shortcuts.ini
+logs/
