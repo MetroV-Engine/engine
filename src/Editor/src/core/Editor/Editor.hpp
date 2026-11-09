@@ -34,6 +34,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -96,6 +97,9 @@ public:
     // Draws the game in the Viewport, replacing the scene's own renderer
     // (until the engine renders into it, e.g. a game's debug drawing).
     void setViewportRenderer(SceneBackend::Renderer renderer);
+    // How that renderer maps the world to the Viewport, so the mouse can
+    // place objects there.
+    void setViewportView(ViewportViewProvider provider);
 
     // Adds a template to the Entity Palette, after those of the scene.
     void addEntityTemplate(EntityTemplate entityTemplate);
@@ -141,8 +145,9 @@ private:
     std::vector<std::string> _layoutPanels;
 
     void registerPanels();
-    // Creates the object of a dropped template, with its components, and selects it.
-    void spawnEntityFromTemplate(std::uint32_t index);
+    // Creates the object of a dropped template, with its components and at
+    // worldPosition if there is one, and selects it.
+    void spawnEntityFromTemplate(std::uint32_t index, const std::optional<Vec2> &worldPosition);
     void registerActions();
     void buildMenuBar();
     void buildToolbar();

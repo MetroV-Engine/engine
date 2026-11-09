@@ -235,14 +235,23 @@ void populate(ECS::Registry &world)
     world.addComponent(rock, Body{20.0f, {0.5f, 0.5f, 0.55f, 1.0f}});
 }
 
-// Draws the arena and the bodies in the Viewport, fitted to it, until the
-// engine renders there.
-void drawWorld(ECS::Registry &world, ImDrawList *drawList, ImVec2 min, ImVec2 max)
+// The arena, fitted to the Viewport.
+ViewportView arenaView(ECS::Registry &world, ImVec2 min, ImVec2 max)
 {
     const Arena &arena = world.getResource<Arena>();
     const float scale = std::min((max.x - min.x) / arena.width, (max.y - min.y) / arena.height) * 0.9f;
-    const ImVec2 origin(min.x + ((max.x - min.x) - arena.width * scale) * 0.5f,
-        min.y + ((max.y - min.y) - arena.height * scale) * 0.5f);
+    return {ImVec2(min.x + ((max.x - min.x) - arena.width * scale) * 0.5f,
+                min.y + ((max.y - min.y) - arena.height * scale) * 0.5f),
+        scale};
+}
+
+// Draws the arena and the bodies in the Viewport until the engine renders there.
+void drawWorld(ECS::Registry &world, ImDrawList *drawList, ImVec2 min, ImVec2 max)
+{
+    const Arena &arena = world.getResource<Arena>();
+    const ViewportView view = arenaView(world, min, max);
+    const ImVec2 origin = view.origin;
+    const float scale = view.scale;
     drawList->AddRect(origin, ImVec2(origin.x + arena.width * scale, origin.y + arena.height * scale),
         IM_COL32(128, 128, 128, 255));
 
@@ -272,6 +281,7 @@ int main()
         Editor editor(gui, world, systems);
         editor.setViewportRenderer(
             [&world](ImDrawList *drawList, ImVec2 min, ImVec2 max) { drawWorld(world, drawList, min, max); });
+        editor.setViewportView([&world](ImVec2 min, ImVec2 max) { return arenaView(world, min, max); });
         // Dragged from the Entity Palette onto the Hierarchy or the Viewport.
         editor.addEntityTemplate({"Ball", "Ball", {"Transform", "Velocity", "Body"}});
         editor.run();

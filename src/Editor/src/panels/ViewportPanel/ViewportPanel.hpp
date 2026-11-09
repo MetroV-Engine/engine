@@ -16,6 +16,7 @@
 #include "panels/Panel/Panel.hpp"
 #include "ui/PerformanceOverlay/PerformanceOverlay.hpp"
 #include "scene/PlayController/PlayController.hpp"
+#include "scene/ViewportView.hpp"
 
 #include <functional>
 
@@ -34,6 +35,8 @@ public:
 
     // Draws the scene; without one, a placeholder is shown.
     void setRenderer(Renderer renderer) { _renderer = std::move(renderer); }
+    // How the renderer maps the world to this panel.
+    void setViewProvider(ViewportViewProvider provider) { _viewProvider = std::move(provider); }
     // Where dropped entity templates go; target must outlive the panel.
     void setEntityDropTarget(const EntityDropTarget *target) { _entityDropTarget = target; }
 
@@ -44,5 +47,6 @@ private:
     PerformanceOverlay &_overlay;
     const PlayController &_play;
     Renderer _renderer;
+    ViewportViewProvider _viewProvider;
     const EntityDropTarget *_entityDropTarget = nullptr;
 };

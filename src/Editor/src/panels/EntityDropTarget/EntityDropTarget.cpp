@@ -21,7 +21,7 @@
 
 EntityDropTarget::EntityDropTarget(const PlayController &play, Handler onDrop) : _play(play), _onDrop(std::move(onDrop)) {}
 
-void EntityDropTarget::accept() const
+void EntityDropTarget::accept(const std::optional<Vec2> &worldPosition) const
 {
     if (!_play.isStopped() || !ImGui::BeginDragDropTarget())
         return;
@@ -30,7 +30,7 @@ void EntityDropTarget::accept() const
     if (payload && payload->DataSize == sizeof(EntityTemplatePayload)) {
         EntityTemplatePayload dropped;
         std::memcpy(&dropped, payload->Data, sizeof(dropped));
-        _onDrop(dropped.index);
+        _onDrop(dropped.index, worldPosition);
     }
     ImGui::EndDragDropTarget();
 }

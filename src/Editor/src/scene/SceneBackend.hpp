@@ -18,6 +18,7 @@
 #include "scene/PropertyModel.hpp"
 #include "scene/Selection.hpp"
 #include "scene/Simulation.hpp"
+#include "scene/ViewportView.hpp"
 
 #include <imgui.h>
 
@@ -47,6 +48,9 @@ public:
     // Draws the scene in the Viewport, highlighting the selection. An empty
     // renderer leaves the Viewport's placeholder.
     virtual Renderer renderer(const Selection &) { return {}; }
+    // How the renderer maps the world to the Viewport. Empty: objects cannot
+    // be placed with the mouse.
+    virtual ViewportViewProvider viewportView() { return {}; }
     // What the Entity Palette offers for this scene.
     virtual std::vector<EntityTemplate> entityTemplates() const { return {{"Empty Entity", "Entity", {}}}; }
     // Console commands specific to this scene.

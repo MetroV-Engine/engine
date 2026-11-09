@@ -16,6 +16,7 @@
 #include "ui/ThemeManager/ThemeManager.hpp"
 
 #include <cstdio>
+#include <optional>
 
 ViewportPanel::ViewportPanel(PerformanceOverlay &overlay, const PlayController &play)
     : Panel("Viewport"), _overlay(overlay), _play(play)
@@ -67,7 +68,8 @@ void ViewportPanel::drawContent()
     }
 
     ImGui::Dummy(size);
+    const ViewportView view = _viewProvider ? _viewProvider(min, max) : ViewportView{};
     if (_entityDropTarget)
-        _entityDropTarget->accept();
+        _entityDropTarget->accept(view.valid() ? std::optional<Vec2>(view.toWorld(ImGui::GetMousePos())) : std::nullopt);
     _overlay.setAnchor(ImVec2(max.x, min.y));
 }

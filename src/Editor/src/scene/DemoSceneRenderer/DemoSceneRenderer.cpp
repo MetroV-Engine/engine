@@ -31,35 +31,35 @@ struct Box
     bool hasCollider;
 };
 
-} // namespace
-
-void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
+std::vector<Box> collectBoxes(const DemoScene &scene)
 {
-    const Theme &theme = ThemeManager::active();
-
     std::vector<Box> boxes;
-    std::vector<ObjectId> stack = _scene.roots();
+    std::vector<ObjectId> stack = scene.roots();
     while (!stack.empty()) {
         const ObjectId id = stack.back();
         stack.pop_back();
-        for (ObjectId child : _scene.children(id))
+        for (ObjectId child : scene.children(id))
             stack.push_back(child);
-        const PropertyValue position = _scene.get(id, "Transform", "position");
+        const PropertyValue position = scene.get(id, "Transform", "position");
         if (!std::holds_alternative<Vec2>(position))
             continue;
-        const PropertyValue size = _scene.get(id, "BoxCollider", "size");
+        const PropertyValue size = scene.get(id, "BoxCollider", "size");
         const bool hasCollider = std::holds_alternative<Vec2>(size);
         boxes.push_back({id, std::get<Vec2>(position), hasCollider ? std::get<Vec2>(size) : Vec2{6, 6}, hasCollider});
     }
-    if (boxes.empty()) {
-        const char *text = "The scene is empty: create an object in the Hierarchy (Ctrl+N).";
-        const ImVec2 size = ImGui::CalcTextSize(text);
-        drawList->AddText(ImVec2((min.x + max.x - size.x) * 0.5f, (min.y + max.y - size.y) * 0.5f),
-            ImGui::GetColorU32(theme.colors.textMuted), text);
-        return;
-    }
+    return boxes;
+}
 
-    // Fit the world (objects + ground) in the view, keeping proportions.
+struct Fit
+{
+    float left;
+    float right;
+    ViewportView view;
+};
+
+// Fits the world (objects + ground) in the view, keeping proportions.
+Fit fitBoxes(const std::vector<Box> &boxes, ImVec2 min, ImVec2 max)
+{
     float left = FLT_MAX, top = FLT_MAX, right = -FLT_MAX, bottom = DemoSimulation::GroundY;
     for (const Box &box : boxes) {
         left = std::min(left, box.center.x - box.size.x * 0.5f);
@@ -75,7 +75,34 @@ void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
     const float scale = std::min((max.x - min.x) / std::max(right - left, 1.0f), (max.y - min.y) / std::max(bottom - top, 1.0f));
     const ImVec2 origin(min.x + ((max.x - min.x) - (right - left) * scale) * 0.5f - left * scale,
         min.y + ((max.y - min.y) - (bottom - top) * scale) * 0.5f - top * scale);
-    const auto toScreen = [&](float x, float y) { return ImVec2(origin.x + x * scale, origin.y + y * scale); };
+    return {left, right, {origin, scale}};
+}
+
+} // namespace
+
+ViewportView DemoSceneRenderer::view(const DemoScene &scene, ImVec2 min, ImVec2 max)
+{
+    const std::vector<Box> boxes = collectBoxes(scene);
+    return boxes.empty() ? ViewportView{} : fitBoxes(boxes, min, max).view;
+}
+
+void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
+{
+    const Theme &theme = ThemeManager::active();
+
+    const std::vector<Box> boxes = collectBoxes(_scene);
+    if (boxes.empty()) {
+        const char *text = "The scene is empty: create an object in the Hierarchy (Ctrl+N).";
+        const ImVec2 size = ImGui::CalcTextSize(text);
+        drawList->AddText(ImVec2((min.x + max.x - size.x) * 0.5f, (min.y + max.y - size.y) * 0.5f),
+            ImGui::GetColorU32(theme.colors.textMuted), text);
+        return;
+    }
+
+    const Fit fit = fitBoxes(boxes, min, max);
+    const float left = fit.left;
+    const float right = fit.right;
+    const auto toScreen = [&](float x, float y) { return fit.view.toScreen(Vec2{x, y}); };
 
     // Ground line.
     const ImU32 muted = ImGui::GetColorU32(theme.colors.textMuted);

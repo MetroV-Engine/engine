@@ -53,7 +53,9 @@ Editor::Editor(GuiContext &gui, std::unique_ptr<SceneBackend> scene, Options opt
       _performanceOverlay(gui.timer()),
       _scene(scene ? std::move(scene) : throw std::invalid_argument("Editor: no scene to edit")),
       _play(_scene->simulation()),
-      _entityDropTarget(_play, [this](std::uint32_t index) { spawnEntityFromTemplate(index); }),
+      _entityDropTarget(_play, [this](std::uint32_t index, const std::optional<Vec2> &worldPosition) {
+          spawnEntityFromTemplate(index, worldPosition);
+      }),
       _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
@@ -106,7 +108,12 @@ void Editor::addEntityTemplate(EntityTemplate entityTemplate)
     _entityTemplates.push_back(std::move(entityTemplate));
 }
 
-void Editor::spawnEntityFromTemplate(std::uint32_t index)
+void Editor::setViewportView(ViewportViewProvider provider)
+{
+    _viewport->setViewProvider(std::move(provider));
+}
+
+void Editor::spawnEntityFromTemplate(std::uint32_t index, const std::optional<Vec2> &worldPosition)
 {
     if (index >= _entityTemplates.size())
         return;
@@ -119,6 +126,9 @@ void Editor::spawnEntityFromTemplate(std::uint32_t index)
     for (const std::string &component : entityTemplate.components)
         if (!_scene->properties().addComponent(id, component))
             _notifications.warning("Cannot add \"" + component + "\"", "Component of the template \"" + entityTemplate.label + "\".");
+    // Refused for an object without a position (an empty entity): nothing to place.
+    if (worldPosition)
+        _scene->properties().set(id, PositionComponent, PositionProperty, *worldPosition);
     _hierarchy->showObject(id);
 }
 
@@ -137,6 +147,7 @@ void Editor::registerPanels()
 
     _viewport = &_panels.registerPanel<ViewportPanel>(_performanceOverlay, _play);
     _viewport->setRenderer(_scene->renderer(_selection));
+    _viewport->setViewProvider(_scene->viewportView());
     _viewport->setEntityDropTarget(&_entityDropTarget);
     _layout.setDefaultArea("Viewport", Area::Center);
 

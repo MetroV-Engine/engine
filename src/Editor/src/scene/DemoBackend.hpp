@@ -36,6 +36,11 @@ public:
         };
     }
 
+    ViewportViewProvider viewportView() override
+    {
+        return [this](ImVec2 min, ImVec2 max) { return DemoSceneRenderer::view(_scene, min, max); };
+    }
+
     // Every demo object is created with a Transform: templates do not list it.
     std::vector<EntityTemplate> entityTemplates() const override
     {

@@ -15,6 +15,7 @@
 
 #include "scene/DemoScene/DemoScene.hpp"
 #include "scene/Selection.hpp"
+#include "scene/ViewportView.hpp"
 
 #include <imgui.h>
 
@@ -27,6 +28,8 @@ public:
     DemoSceneRenderer(const DemoScene &scene, const Selection &selection) : _scene(scene), _selection(selection) {}
 
     void draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const;
+    // The view draw() uses; invalid when the scene has nothing to show.
+    static ViewportView view(const DemoScene &scene, ImVec2 min, ImVec2 max);
 
 private:
     const DemoScene &_scene;
