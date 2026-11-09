@@ -1,6 +1,6 @@
 // The real Editor on an ECS world, without a window on screen: a simulated
-// mouse drags entity templates from the Entity Palette, one event every few
-// frames. Run on macOS with:
+// mouse drags entity templates from the Entity Palette and moves objects in
+// the Viewport, one event every few frames. Run on macOS with:
 //   SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software ./build/src/Editor/tests_editor
 
 #include <boost/ut.hpp>
@@ -11,9 +11,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
-#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,6 +20,7 @@
 
 #include "ECS/ECS.hpp"
 #include "ECS/Reflection/Reflection.hpp"
+#include "Support/FreshWorkingDirectory.hpp"
 #include "Support/Logs.hpp"
 #include "core/CommandRegistry/CommandRegistry.hpp"
 #include "core/Editor/Editor.hpp"
@@ -185,36 +184,9 @@ namespace {
         }
     };
 
-    // The editor saves its layout in the working directory: each run gets a
-    // fresh one, removed afterwards.
-    class FreshDirectory
-    {
-    public:
-        FreshDirectory()
-            : _previous(std::filesystem::current_path()),
-              _path(std::filesystem::temp_directory_path()
-                    / ("metrov-editor-drop-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())))
-        {
-            std::filesystem::create_directories(_path);
-            std::filesystem::current_path(_path);
-        }
-        ~FreshDirectory()
-        {
-            std::filesystem::current_path(_previous);
-            std::error_code ignored;
-            std::filesystem::remove_all(_path, ignored);
-        }
-        FreshDirectory(const FreshDirectory &) = delete;
-        FreshDirectory &operator=(const FreshDirectory &) = delete;
-
-    private:
-        std::filesystem::path _previous;
-        std::filesystem::path _path;
-    };
-
     DragResult runDrag(ECS::Registry &world, DragScenario scenario)
     {
-        FreshDirectory directory;
+        FreshWorkingDirectory directory;
         // Set for every run: SDL_Quit(), when the previous editor closed, clears
         // the hints. The SDL_VIDEO_DRIVER environment variable takes precedence.
         SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
@@ -223,6 +195,7 @@ namespace {
         DragResult result;
         {
             Editor editor(gui, std::make_unique<DragBackend>(world, systems, gui, std::move(scenario), result));
+            // Templates 1 and 2; template 0 is the scene's "Empty Entity".
             editor.addEntityTemplate({"Drop Mob", "Mob", {"DropHealth"}});
             editor.addEntityTemplate({"Placed", "Placed", {"Transform"}});
             editor.run();
@@ -248,7 +221,6 @@ void run_entity_drag_drop_tests()
         const DragResult result = runDrag(world, {.templateIndex = 2, .target = "Viewport"});
 
         expect(result.selectedName == std::string("Placed"));
-        expect(result.selectedPosition.has_value());
         expect(result.selectedPosition && near(*result.selectedPosition, result.releaseWorld));
         expect(result.selectedPosition && result.selectedPosition->x > 1.0f) << "not left at the origin";
     };
@@ -258,7 +230,7 @@ void run_entity_drag_drop_tests()
         const ECS::Entity moved = world.spawnEntity("Moved");
         world.addComponent(moved, Transform{{100, 80}});
 
-        const DragResult result = runDrag(world, {.target = "Viewport", .moveFrom = Vec2{100, 80}, .moveTo = Vec2{220, 150}});
+        const DragResult result = runDrag(world, {.moveFrom = Vec2{100, 80}, .moveTo = Vec2{220, 150}});
 
         expect(result.selectedName == std::string("Moved"));
         const Transform &transform = world.getComponent<Transform>(moved);
@@ -270,7 +242,7 @@ void run_entity_drag_drop_tests()
         const ECS::Entity still = world.spawnEntity("Still");
         world.addComponent(still, Transform{{100, 80}});
 
-        const DragResult result = runDrag(world, {.target = "Viewport", .moveFrom = Vec2{10, 10}, .moveTo = Vec2{220, 150}});
+        const DragResult result = runDrag(world, {.moveFrom = Vec2{10, 10}, .moveTo = Vec2{220, 150}});
 
         expect(result.selectedName.empty());
         expect(world.getComponent<Transform>(still).position.x == 100.0f);
@@ -281,14 +253,12 @@ void run_entity_drag_drop_tests()
         const ECS::Entity still = world.spawnEntity("Still");
         world.addComponent(still, Transform{{100, 80}});
 
-        const DragResult result = runDrag(
-            world, {.target = "Viewport", .play = PlayMoment::BeforeDrag, .moveFrom = Vec2{100, 80}, .moveTo = Vec2{220, 150}});
+        const DragResult result = runDrag(world, {.play = PlayMoment::BeforeDrag, .moveFrom = Vec2{100, 80}, .moveTo = Vec2{220, 150}});
 
         expect(result.selectedName.empty()) << "the click did not grab it";
         expect(world.getComponent<Transform>(still).position.x == 100.0f);
     };
 
-    // Template 0 is the scene's "Empty Entity"; template 1 is "Drop Mob".
     "dropping a template on the Hierarchy creates its entity and selects it"_test = [] {
         ECS::Registry world;
         world.spawnEntity("A");
