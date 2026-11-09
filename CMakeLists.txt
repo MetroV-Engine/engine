@@ -79,6 +79,7 @@ if(ENGINE_ENABLE_COVERAGE)
 endif()
 
 add_subdirectory(src/ECS)
+add_subdirectory(src/Engine)
 
 if(ENGINE_BUILD_GUI)
   add_subdirectory(src/Editor)

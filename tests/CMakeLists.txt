@@ -35,7 +35,16 @@ set(ENGINE_SOURCE_FILES
 )
 
 set(ENGINE_TEST_FILES
-	# ADD ENGINE TEST FILES HERE
+	Engine/Common/Math/TestScalar.cpp
+	Engine/Common/Math/TestVector.cpp
+	Engine/Common/Physic/TestKinematics.cpp
+	Engine/Common/Physic/Forces/TestDynamics.cpp
+	Engine/Common/Physic/Forces/TestGravity.cpp
+	Engine/Common/Physic/Forces/TestFriction.cpp
+	Engine/Common/Physic/Forces/TestSurface.cpp
+	Engine/Common/Physic/Forces/TestSpring.cpp
+	Engine/Common/Physic/Forces/TestRadial.cpp
+	Engine/main.cpp
 )
 
 add_executable(tests_ecs
@@ -51,6 +60,6 @@ if(ENGINE_TEST_FILES)
 		${ENGINE_SOURCE_FILES}
 	)
 
-	target_link_libraries(tests_engine PRIVATE engine_ecs Boost::ut)
+	target_link_libraries(tests_engine PRIVATE engine_ecs engine_common Boost::ut)
 	add_test(NAME tests_engine COMMAND tests_engine)
 endif()
