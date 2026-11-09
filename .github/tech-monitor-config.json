@@ -1,14 +1,19 @@
 {
-  "_comment": "Technology monitoring config. One entry per team member. discordUserId: right-click the user in Discord (Developer Mode on) > Copy User ID. Feed types: reddit (https://www.reddit.com/r/<sub>/.rss), youtube (https://www.youtube.com/feeds/videos.xml?channel_id=<id>), newsletter (any RSS/Atom URL). Members whose discordUserId is all zeros are placeholders: their feeds are fetched but nothing is posted.",
+  "_comment": "Technology monitoring config. One entry per team member. discordUserId: right-click the user in Discord (Developer Mode on) > Copy User ID. Feed types: reddit (https://www.reddit.com/r/<sub>/.rss), youtube (https://www.youtube.com/feeds/videos.xml?channel_id=<id>), github (https://github.com/<owner>/<repo>/releases.atom or commits/<branch>.atom), newsletter (any RSS/Atom URL). Members whose discordUserId is all zeros are placeholders: their feeds are fetched but nothing is posted.",
   "members": [
     {
-      "name": "Example Member",
-      "discordUserId": "000000000000000000",
+      "name": "Maxime KELLER",
+      "discordUserId": "304230562376450049",
       "feeds": [
         {
-          "type": "reddit",
-          "url": "https://www.reddit.com/r/gamedev/.rss",
-          "label": "r/gamedev"
+          "type": "github",
+          "url": "https://github.com/libsdl-org/SDL/releases.atom",
+          "label": "SDL releases"
+        },
+        {
+          "type": "github",
+          "url": "https://github.com/bkaradzic/bgfx/commits/master.atom",
+          "label": "bgfx commits"
         },
         {
           "type": "youtube",
