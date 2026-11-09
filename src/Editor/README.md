@@ -1,8 +1,9 @@
 # Editor
 
 The MetroV Engine editor: a Dear ImGui (docking) interface on top of SDL3,
-with a hierarchy, an inspector, a game viewport with Play / Pause / Stop, a
-developer console, themes, customizable shortcuts and a saved workspace.
+with a hierarchy, an inspector, a palette of entities to drag into the scene,
+a game viewport with Play / Pause / Stop, a developer console, themes,
+customizable shortcuts and a saved workspace.
 
 It was developed in the [MetroV-Engine/GUI](https://github.com/MetroV-Engine/GUI)
 repository, whose history was merged here. In those commits the files were at
@@ -52,8 +53,8 @@ automatically.
 | --- | --- |
 | `src/core/` | `Editor` (assembles everything), `GuiContext` (SDL3 + ImGui, frame loop), `PanelManager`, `EventManager`, `FrameTimer`, `Logger` (central log, thread-safe), `CommandRegistry` (console commands) |
 | `src/ui/` | Reusable widgets (buttons, inputs, performance overlay...), dialogs and notifications, themes |
-| `src/panels/` | Hierarchy, Inspector, Viewport, Game Controls, Console, Settings, Keyboard Shortcuts... |
-| `src/scene/` | What the editor edits and runs: `HierarchyModel` and `PropertyModel` (what the Hierarchy and Inspector display), `Selection`, `SceneBackend`, `Simulation` and `PlayController` (Play / Pause / Stop / Step). `DemoScene` / `DemoBackend`: the built-in demo |
+| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Settings, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportObjectMover` selects and moves objects with the mouse |
+| `src/scene/` | What the editor edits and runs: `HierarchyModel` and `PropertyModel` (what the Hierarchy and Inspector display), `Selection`, `SceneBackend`, `EntityTemplate` (an entry of the Entity Palette), `ViewportView` (Viewport pixels to world positions), `Simulation` and `PlayController` (Play / Pause / Stop / Step). `DemoScene` / `DemoBackend`: the built-in demo |
 | `src/ecs/` | The editor on an ECS world: `EcsScene` (entities and reflected components), `EcsSimulation` (systems, world restored on Stop), `EcsBackend` |
 | `src/navigation/` | Actions, menu bar, toolbar, command palette, shortcuts |
 | `src/layout/` | Dockspace layout, status bar, saved workspace |
@@ -91,6 +92,7 @@ int main() {
     GuiContext gui("My game", 1600, 900);
     Editor editor(gui, world, systems);
     editor.setViewportRenderer(...);   // optional: draw the game with ImGui shapes
+    editor.addEntityTemplate({"Mob", "Mob", {"Health"}});   // optional: label, name, components
     editor.run();
 }
 ```
@@ -110,6 +112,16 @@ What the editor then does with the world:
   `optional` and unreflected fields are shown as a read-only summary. Add
   Component lists every reflected type with a default constructor (the
   `components` console command lists them).
+- **Entity Palette**: drag a template onto the Hierarchy or the Viewport to
+  create its entity and select it. An ECS world starts with `Empty Entity`;
+  `addEntityTemplate` adds more. A component that cannot be added gives a
+  warning and the entity is created without it. A layout saved before this
+  panel existed shows it floating until View > Reset Layout.
+- **Viewport**: a template dropped there lands under the mouse. Clicking near
+  an object selects it and dragging moves it (see
+  [Placing objects with the mouse](#placing-objects-with-the-mouse)).
+- **During Play**: the palette is disabled, a drag in progress is cancelled
+  and objects cannot be moved with the mouse.
 - **Play / Stop**: Play runs `SystemManager::update(world, dt)` every frame.
   Stop restores the world as it was on Play: entities spawned during play are
   killed, the others get their saved components back (added ones are removed,
@@ -125,6 +137,28 @@ Limits:
   holding its old handle no longer reach it.
 - Reflection gives no ranges, formats or enum names, so fields are edited
   with generic widgets.
+
+### Placing objects with the mouse
+
+The renderer given to `setViewportRenderer` returns how it mapped the world to
+the screen, as a `ViewportView`: the screen position of the world's (0, 0) and
+the pixels per world unit.
+
+```cpp
+editor.setViewportRenderer([&world](ImDrawList *drawList, ImVec2 min, ImVec2 max) {
+    const ViewportView view{min, 2.0f};
+    // ... draw each object at view.toScreen(Vec2{x, y}) ...
+    return view;
+});
+```
+
+The mouse reads and writes the `position` field of the `Transform` component,
+so a game needs a reflected component with these names, the field being a
+struct `{float x, y;}`. A click grabs the nearest such object within 24 pixels.
+
+Without a view (`ViewportView{}`, or no renderer as in `./build/gui`) the mouse
+cannot select or move anything in the Viewport. A template dropped there, or
+on the Hierarchy, keeps its default position.
 
 ## Tests
 
@@ -148,6 +182,12 @@ ctest --test-dir build --output-on-failure
 | `tests/ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
 | `tests/ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
 | `tests/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged |
+| `tests/ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved; nothing is created or moved during Play, even when Play is pressed during the drag or at the drop |
+
+On macOS SDL's `offscreen` driver cannot start, so the tests opening the real
+Editor fail under plain `ctest`. Run them with
+`SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software ./build/tests_editor`
+(`./build/src/Editor/tests_editor` from the engine root).
 
 The reflection registry is shared by the whole test program: each file
 prefixes its test components (`SceneMover`, `SimPosition`...) so their names
