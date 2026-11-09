@@ -12,6 +12,7 @@
 */
 
 #include "EntityPalettePanel.hpp"
+#include "panels/EntityDropTarget/EntityDropTarget.hpp"
 
 #include <cstdint>
 

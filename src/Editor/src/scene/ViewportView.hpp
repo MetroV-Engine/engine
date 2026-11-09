@@ -36,7 +36,3 @@ struct ViewportView
 // Draws the game in the Viewport covering the screen rectangle min..max, and
 // returns how it mapped the world there (an invalid view if it does not say).
 using ViewportRenderer = std::function<ViewportView(ImDrawList *, ImVec2 min, ImVec2 max)>;
-
-// The property placed by the mouse: objects without it keep no position.
-inline constexpr const char *PositionComponent = "Transform";
-inline constexpr const char *PositionProperty = "position";

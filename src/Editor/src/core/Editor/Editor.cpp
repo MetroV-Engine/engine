@@ -54,9 +54,8 @@ Editor::Editor(GuiContext &gui, std::unique_ptr<SceneBackend> scene, Options opt
       _scene(scene ? std::move(scene) : throw std::invalid_argument("Editor: no scene to edit")),
       _play(_scene->simulation()),
       _entityTemplates(_scene->entityTemplates()),
-      _entityDropTarget(_play, [this](std::uint32_t index, const std::optional<Vec2> &worldPosition) {
-          spawnEntityFromTemplate(index, worldPosition);
-      }),
+      _entityDropTarget(_entityTemplates, _scene->hierarchy(), _scene->properties(), _notifications, _play,
+          [this](HierarchyModel::ObjectId id) { _hierarchy->showObject(id); }),
       _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
@@ -107,25 +106,6 @@ void Editor::setViewportRenderer(SceneBackend::Renderer renderer)
 void Editor::addEntityTemplate(EntityTemplate entityTemplate)
 {
     _entityTemplates.push_back(std::move(entityTemplate));
-}
-
-void Editor::spawnEntityFromTemplate(std::uint32_t index, const std::optional<Vec2> &worldPosition)
-{
-    if (index >= _entityTemplates.size())
-        return;
-    const EntityTemplate &entityTemplate = _entityTemplates[index];
-    const HierarchyModel::ObjectId id = _scene->hierarchy().create(HierarchyModel::InvalidId, entityTemplate.objectName);
-    if (id == HierarchyModel::InvalidId) {
-        _notifications.warning("Cannot create \"" + entityTemplate.label + "\"");
-        return;
-    }
-    for (const std::string &component : entityTemplate.components)
-        if (!_scene->properties().addComponent(id, component))
-            _notifications.warning("Cannot add \"" + component + "\"", "Component of the template \"" + entityTemplate.label + "\".");
-    // Refused for an object without a position (an empty entity): nothing to place.
-    if (worldPosition)
-        _scene->properties().set(id, PositionComponent, PositionProperty, *worldPosition);
-    _hierarchy->showObject(id);
 }
 
 void Editor::registerPanels()

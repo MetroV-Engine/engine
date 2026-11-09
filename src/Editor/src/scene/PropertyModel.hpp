@@ -80,6 +80,10 @@ struct ComponentInfo
     bool removable = true;
 };
 
+// The property the mouse writes in the Viewport; objects without it cannot be placed.
+inline constexpr const char *PositionComponent = "Transform";
+inline constexpr const char *PositionProperty = "position";
+
 // The data shown by the Inspector: components of an object and their
 // properties. Properties are addressed by a path inside their component, like
 // the engine's Ref::path(): "speed", or "movement.speed" inside a Group.

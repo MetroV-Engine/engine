@@ -34,7 +34,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -144,9 +143,6 @@ private:
     std::vector<std::string> _layoutPanels;
 
     void registerPanels();
-    // Creates the object of a dropped template, with its components and at
-    // worldPosition if there is one, and selects it.
-    void spawnEntityFromTemplate(std::uint32_t index, const std::optional<Vec2> &worldPosition);
     void registerActions();
     void buildMenuBar();
     void buildToolbar();
