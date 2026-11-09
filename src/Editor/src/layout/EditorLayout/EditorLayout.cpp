@@ -22,6 +22,8 @@
 namespace {
 
 constexpr const char *DockspaceName = "EditorDockspace";
+// Fraction of the left column given to LeftBottom.
+constexpr float LeftBottomRatio = 0.35f;
 
 } // namespace
 
@@ -75,10 +77,7 @@ void EditorLayout::buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size)
     // middle is the center area.
     ImGuiID center = dockspaceId;
     ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, _leftRatio, nullptr, &center);
-    ImGuiID leftBottom = left;
-    const bool hasLeftBottom = std::ranges::any_of(_defaultAreas, [](const auto &entry) { return entry.second == Area::LeftBottom; });
-    if (hasLeftBottom)
-        leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, _leftBottomRatio, nullptr, &left);
+    const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, LeftBottomRatio, nullptr, &left);
     const ImGuiID right =
         ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, _rightRatio / (1.0f - _leftRatio), nullptr, &center);
     ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, _bottomRatio, nullptr, &center);
