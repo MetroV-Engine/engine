@@ -44,6 +44,8 @@ set(ENGINE_TEST_FILES
 	Engine/Common/Physic/Forces/TestSurface.cpp
 	Engine/Common/Physic/Forces/TestSpring.cpp
 	Engine/Common/Physic/Forces/TestRadial.cpp
+	Engine/System/Gravity/TestGravitySystem.cpp
+	Engine/System/Integration/TestIntegrationSystem.cpp
 	Engine/main.cpp
 )
 
@@ -60,6 +62,6 @@ if(ENGINE_TEST_FILES)
 		${ENGINE_SOURCE_FILES}
 	)
 
-	target_link_libraries(tests_engine PRIVATE engine_ecs engine_common Boost::ut)
+	target_link_libraries(tests_engine PRIVATE engine_systems Boost::ut)
 	add_test(NAME tests_engine COMMAND tests_engine)
 endif()
