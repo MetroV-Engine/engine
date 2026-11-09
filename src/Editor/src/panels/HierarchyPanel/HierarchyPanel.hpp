@@ -31,8 +31,11 @@
 //  - search box: shows matching objects with their parents;
 //  - right click: create child, rename (F2), delete (Del, with confirmation);
 //  - drag an object onto another to make it its child, or onto the empty area
-//    to move it to the root (unless the model is flat, see supportsParenting).
+//    to move it to the root (unless the model is flat, see supportsParenting);
+//  - drop an entity template anywhere on the tree to create an object.
 // Changes are applied after the tree has been drawn, never while iterating it.
+class EntityDropTarget;
+
 class HierarchyPanel : public Panel
 {
 public:
@@ -44,6 +47,10 @@ public:
     // Creates an object under parent (InvalidId for the root), selects it and
     // starts renaming it.
     void createObject(ObjectId parent);
+    // Clears the search, then scrolls to the object and selects it.
+    void showObject(ObjectId id);
+    // Where dropped entity templates go; target must outlive the panel.
+    void setEntityDropTarget(const EntityDropTarget *target) { _entityDropTarget = target; }
     // Asks for confirmation, then deletes the object and its children.
     void requestDelete(ObjectId id);
     void startRename(ObjectId id);
@@ -64,6 +71,7 @@ private:
     NotificationManager &_notifications;
     DialogManager &_dialogs;
     TextInput _search;
+    const EntityDropTarget *_entityDropTarget = nullptr;
 
     std::unordered_set<ObjectId> _expanded;
     ObjectId _renaming = HierarchyModel::InvalidId;

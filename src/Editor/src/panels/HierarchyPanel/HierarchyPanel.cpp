@@ -12,6 +12,7 @@
 */
 
 #include "HierarchyPanel.hpp"
+#include "panels/EntityDropTarget/EntityDropTarget.hpp"
 #include "ui/Button/Button.hpp"
 
 #include <imgui_stdlib.h>
@@ -58,11 +59,16 @@ void HierarchyPanel::createObject(ObjectId parent)
         const ObjectId id = _model.create(parent, "New Object");
         if (id == HierarchyModel::InvalidId)
             return;
-        _search.setValue("");
-        reveal(id);
-        select(id);
+        showObject(id);
         startRename(id);
     });
+}
+
+void HierarchyPanel::showObject(ObjectId id)
+{
+    _search.setValue("");
+    reveal(id);
+    select(id);
 }
 
 void HierarchyPanel::requestDelete(ObjectId id)
@@ -220,6 +226,9 @@ void HierarchyPanel::drawContent()
         ImGui::EndPopup();
     }
     ImGui::EndChild();
+    // On the child window as a whole, so the rows accept templates too.
+    if (_entityDropTarget)
+        _entityDropTarget->accept();
 
     // Apply the changes requested during this frame, now that the tree is drawn.
     std::vector<std::function<void()>> pending;

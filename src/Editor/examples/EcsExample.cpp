@@ -272,6 +272,8 @@ int main()
         Editor editor(gui, world, systems);
         editor.setViewportRenderer(
             [&world](ImDrawList *drawList, ImVec2 min, ImVec2 max) { drawWorld(world, drawList, min, max); });
+        // Dragged from the Entity Palette onto the Hierarchy or the Viewport.
+        editor.addEntityTemplate({"Ball", "Ball", {"Transform", "Velocity", "Body"}});
         editor.run();
     } catch (const std::exception &e) {
         logger.error("Fatal", e.what());

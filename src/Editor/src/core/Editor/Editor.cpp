@@ -53,6 +53,7 @@ Editor::Editor(GuiContext &gui, std::unique_ptr<SceneBackend> scene, Options opt
       _performanceOverlay(gui.timer()),
       _scene(scene ? std::move(scene) : throw std::invalid_argument("Editor: no scene to edit")),
       _play(_scene->simulation()),
+      _entityDropTarget(_play, [this](std::uint32_t index) { spawnEntityFromTemplate(index); }),
       _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
@@ -105,11 +106,28 @@ void Editor::addEntityTemplate(EntityTemplate entityTemplate)
     _entityTemplates.push_back(std::move(entityTemplate));
 }
 
+void Editor::spawnEntityFromTemplate(std::uint32_t index)
+{
+    if (index >= _entityTemplates.size())
+        return;
+    const EntityTemplate &entityTemplate = _entityTemplates[index];
+    const HierarchyModel::ObjectId id = _scene->hierarchy().create(HierarchyModel::InvalidId, entityTemplate.objectName);
+    if (id == HierarchyModel::InvalidId) {
+        _notifications.warning("Cannot create \"" + entityTemplate.label + "\"");
+        return;
+    }
+    for (const std::string &component : entityTemplate.components)
+        if (!_scene->properties().addComponent(id, component))
+            _notifications.warning("Cannot add \"" + component + "\"", "Component of the template \"" + entityTemplate.label + "\".");
+    _hierarchy->showObject(id);
+}
+
 void Editor::registerPanels()
 {
     using Area = EditorLayout::Area;
 
     _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs);
+    _hierarchy->setEntityDropTarget(&_entityDropTarget);
     _layout.setDefaultArea("Hierarchy", Area::Left);
 
     // In its own area: as a tab of the Hierarchy, it would hide the drop target.
@@ -119,6 +137,7 @@ void Editor::registerPanels()
 
     _viewport = &_panels.registerPanel<ViewportPanel>(_performanceOverlay, _play);
     _viewport->setRenderer(_scene->renderer(_selection));
+    _viewport->setEntityDropTarget(&_entityDropTarget);
     _layout.setDefaultArea("Viewport", Area::Center);
 
     _panels.registerPanel<InspectorPanel>(_scene->hierarchy(), _scene->properties(), _selection, _notifications).setBanner([this] {

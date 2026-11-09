@@ -12,6 +12,7 @@
 */
 
 #include "ViewportPanel.hpp"
+#include "panels/EntityDropTarget/EntityDropTarget.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
 #include <cstdio>
@@ -66,5 +67,7 @@ void ViewportPanel::drawContent()
     }
 
     ImGui::Dummy(size);
+    if (_entityDropTarget)
+        _entityDropTarget->accept();
     _overlay.setAnchor(ImVec2(max.x, min.y));
 }

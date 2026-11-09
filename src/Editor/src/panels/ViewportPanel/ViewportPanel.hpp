@@ -22,7 +22,9 @@
 // Game view, at the center of the editor. Until the engine renders into a
 // texture, a renderer callback draws the scene with ImGui shapes. A colored
 // frame and a badge show the play state; the performance overlay is pinned
-// to its corner.
+// to its corner. Entity templates can be dropped on it.
+class EntityDropTarget;
+
 class ViewportPanel : public Panel
 {
 public:
@@ -32,6 +34,8 @@ public:
 
     // Draws the scene; without one, a placeholder is shown.
     void setRenderer(Renderer renderer) { _renderer = std::move(renderer); }
+    // Where dropped entity templates go; target must outlive the panel.
+    void setEntityDropTarget(const EntityDropTarget *target) { _entityDropTarget = target; }
 
 protected:
     void drawContent() override;
@@ -40,4 +44,5 @@ private:
     PerformanceOverlay &_overlay;
     const PlayController &_play;
     Renderer _renderer;
+    const EntityDropTarget *_entityDropTarget = nullptr;
 };

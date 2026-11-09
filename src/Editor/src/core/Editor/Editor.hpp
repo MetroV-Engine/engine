@@ -26,6 +26,7 @@
 #include "navigation/CommandPalette/CommandPalette.hpp"
 #include "navigation/MenuBar/MenuBar.hpp"
 #include "navigation/Toolbar/Toolbar.hpp"
+#include "panels/EntityDropTarget/EntityDropTarget.hpp"
 #include "scene/PlayController/PlayController.hpp"
 #include "scene/SceneBackend.hpp"
 #include "scene/Selection.hpp"
@@ -114,6 +115,7 @@ private:
     PlayController _play;
     // Only ever appended to: drag and drop payloads are indices into it.
     std::vector<EntityTemplate> _entityTemplates;
+    EntityDropTarget _entityDropTarget;
     CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;
@@ -139,6 +141,8 @@ private:
     std::vector<std::string> _layoutPanels;
 
     void registerPanels();
+    // Creates the object of a dropped template, with its components, and selects it.
+    void spawnEntityFromTemplate(std::uint32_t index);
     void registerActions();
     void buildMenuBar();
     void buildToolbar();
