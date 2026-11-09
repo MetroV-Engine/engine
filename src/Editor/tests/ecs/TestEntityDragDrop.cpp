@@ -39,7 +39,7 @@ namespace {
     // Pixels of the Viewport per world unit, in these tests.
     constexpr float ViewScale = 2.0f;
 
-    enum class PlayMoment { Never, BeforeDrag, DuringDrag };
+    enum class PlayMoment { Never, BeforeDrag, DuringDrag, OnRelease };
 
     struct DragScenario
     {
@@ -56,7 +56,7 @@ namespace {
     struct DragResult
     {
         bool draggingBeforeRelease = false;
-        bool draggingAfterPlay = false;
+        bool draggingAtRelease = false;
         int frames = 0;
         std::string selectedName;
         std::vector<std::string> selectedComponents;
@@ -167,7 +167,9 @@ namespace {
                     _commands->execute("play");
                 break;
             case 28:
-                _result.draggingAfterPlay = isDraggingTemplate();
+                _result.draggingAtRelease = isDraggingTemplate();
+                if (_scenario.play == PlayMoment::OnRelease)
+                    _commands->execute("play");
                 setMouseDown(false);
                 break;
             case 34:
@@ -303,9 +305,19 @@ void run_entity_drag_drop_tests()
         const DragResult result = runDrag(world, {.templateIndex = 1, .target = "Hierarchy", .play = PlayMoment::DuringDrag});
 
         expect(result.draggingBeforeRelease) << "the drag had started before Play";
-        expect(!result.draggingAfterPlay) << "PayloadAutoExpire cancelled it";
+        expect(!result.draggingAtRelease) << "PayloadAutoExpire cancelled it";
         expect(world.entityCount() == 0_ul);
         expect(result.selectedName.empty());
+    };
+
+    "pressing Play at the moment of the drop creates nothing"_test = [] {
+        ECS::Registry world;
+
+        const DragResult result = runDrag(world, {.templateIndex = 1, .target = "Hierarchy", .play = PlayMoment::OnRelease});
+
+        expect(result.draggingAtRelease) << "the payload was still active";
+        expect(result.selectedName.empty()) << "the drop was refused";
+        expect(world.entityCount() == 0_ul);
     };
 
     "a template cannot be dragged during Play"_test = [] {
