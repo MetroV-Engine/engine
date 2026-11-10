@@ -15,16 +15,43 @@
 #include "panels/EntityDropTarget/EntityDropTarget.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <optional>
 
+namespace {
+
+// Closer grid lines would hide the game: none are drawn then.
+constexpr float MinGridSpacingPixels = 6.0f;
+
+void drawGrid(ImDrawList *drawList, const ViewportView &view, const ViewportGrid &grid, ImVec2 min, ImVec2 max)
+{
+    const float step = static_cast<float>(grid.size);
+    if (!grid.snap || !view.valid() || step * view.scale < MinGridSpacingPixels)
+        return;
+    const ImU32 color = ImGui::GetColorU32(ThemeManager::active().colors.border);
+    const Vec2 first = view.toWorld(min);
+    const Vec2 last = view.toWorld(max);
+    for (float x = std::ceil(first.x / step) * step; x <= last.x; x += step) {
+        const float screenX = view.toScreen(Vec2{x, 0.0f}).x;
+        drawList->AddLine(ImVec2(screenX, min.y), ImVec2(screenX, max.y), color);
+    }
+    for (float y = std::ceil(first.y / step) * step; y <= last.y; y += step) {
+        const float screenY = view.toScreen(Vec2{0.0f, y}).y;
+        drawList->AddLine(ImVec2(min.x, screenY), ImVec2(max.x, screenY), color);
+    }
+}
+
+} // namespace
+
 ViewportPanel::ViewportPanel(PerformanceOverlay &overlay, const PlayController &play, const EntityDropTarget &entityDropTarget,
-    const HierarchyModel &model, PropertyModel &properties, Selection &selection)
+    const HierarchyModel &model, PropertyModel &properties, Selection &selection, const ViewportGrid &grid)
     : Panel("Viewport"),
       _overlay(overlay),
       _play(play),
       _entityDropTarget(entityDropTarget),
-      _transformTool(model, properties, selection, play)
+      _grid(grid),
+      _transformTool(model, properties, selection, play, grid)
 {
     // The game image goes edge to edge.
     setWindowPadding(ImVec2(0.0f, 0.0f));
@@ -45,7 +72,12 @@ void ViewportPanel::drawContent()
     ViewportView view;
     if (_renderer) {
         drawList->PushClipRect(min, max, true);
+        _layers.Split(drawList, 2);
+        _layers.SetCurrentChannel(drawList, 1);
         view = _renderer(drawList, min, max);
+        _layers.SetCurrentChannel(drawList, 0);
+        drawGrid(drawList, view, _grid, min, max);
+        _layers.Merge(drawList);
         drawList->PopClipRect();
     } else {
         const char *title = "Game viewport";
@@ -76,6 +108,6 @@ void ViewportPanel::drawContent()
     // A button rather than a Dummy: it captures the mouse for the transform tool.
     ImGui::InvisibleButton("##ViewportArea", size);
     _transformTool.update(view, drawList);
-    _entityDropTarget.accept(view.valid() ? std::optional<Vec2>(view.toWorld(ImGui::GetMousePos())) : std::nullopt);
+    _entityDropTarget.accept(view.valid() ? std::optional<Vec2>(_grid.snapPosition(view.toWorld(ImGui::GetMousePos()))) : std::nullopt);
     _overlay.setAnchor(ImVec2(max.x, min.y));
 }

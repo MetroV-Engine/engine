@@ -36,9 +36,9 @@ float distance(ImVec2 a, ImVec2 b)
 
 } // namespace
 
-ViewportTransformTool::ViewportTransformTool(
-    const HierarchyModel &model, PropertyModel &properties, Selection &selection, const PlayController &play)
-    : _model(model), _properties(properties), _selection(selection), _play(play)
+ViewportTransformTool::ViewportTransformTool(const HierarchyModel &model, PropertyModel &properties, Selection &selection,
+    const PlayController &play, const ViewportGrid &grid)
+    : _model(model), _properties(properties), _selection(selection), _play(play), _grid(grid)
 {
 }
 
@@ -141,9 +141,10 @@ void ViewportTransformTool::continueDrag()
     const ImVec2 mouse = ImGui::GetMousePos();
     if (_handle == Handle::Position) {
         const Vec2 world = _dragView.toWorld(mouse);
-        _properties.set(_dragged, TransformComponent, PositionProperty, Vec2{world.x + _grabOffset.x, world.y + _grabOffset.y});
+        const Vec2 position{world.x + _grabOffset.x, world.y + _grabOffset.y};
+        _properties.set(_dragged, TransformComponent, PositionProperty, _grid.snapPosition(position));
     } else {
-        _properties.set(_dragged, TransformComponent, ScaleProperty, draggedScale(mouse));
+        _properties.set(_dragged, TransformComponent, ScaleProperty, _grid.snapScale(draggedScale(mouse)));
     }
 }
 

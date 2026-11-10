@@ -30,6 +30,7 @@
 #include "scene/PlayController/PlayController.hpp"
 #include "scene/SceneBackend.hpp"
 #include "scene/Selection.hpp"
+#include "scene/ViewportGrid.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -115,6 +116,8 @@ private:
     std::unique_ptr<SceneBackend> _scene;
     Selection _selection;
     PlayController _play;
+    // Snapping of the Viewport's mouse edits, set in Settings, saved with the workspace.
+    ViewportGrid _grid;
     // Only ever appended to: drag and drop payloads are indices into it.
     std::vector<EntityTemplate> _entityTemplates;
     EntityDropTarget _entityDropTarget;

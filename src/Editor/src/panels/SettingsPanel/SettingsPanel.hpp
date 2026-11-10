@@ -18,17 +18,20 @@
 #include "ui/Checkbox/Checkbox.hpp"
 #include "ui/ComboBox/ComboBox.hpp"
 #include "ui/PerformanceOverlay/PerformanceOverlay.hpp"
+#include "ui/NumberInput.hpp"
 #include "ui/RadioGroup/RadioGroup.hpp"
+#include "scene/ViewportGrid.hpp"
 
 #include <utility>
 #include <vector>
 
 // Window and display settings: VSync, fullscreen, resolution, quality,
-// theme and the performance overlay.
+// theme and the performance overlay, then the Viewport's grid snapping.
 class SettingsPanel : public Panel
 {
 public:
-    SettingsPanel(GuiContext &gui, PerformanceOverlay &overlay);
+    // Everything given must outlive the panel.
+    SettingsPanel(GuiContext &gui, PerformanceOverlay &overlay, ViewportGrid &grid);
 
 protected:
     void drawContent() override;
@@ -36,6 +39,7 @@ protected:
 private:
     GuiContext &_gui;
     PerformanceOverlay &_overlay;
+    ViewportGrid &_grid;
     const std::vector<std::pair<int, int>> _resolutions = {{1280, 720}, {1920, 1080}, {2560, 1440}};
     Checkbox _vsyncCheckbox;
     Checkbox _fullscreenCheckbox;
@@ -43,4 +47,6 @@ private:
     RadioGroup _qualityRadio;
     Checkbox _overlayCheckbox;
     ComboBox _themeCombo;
+    Checkbox _snapCheckbox;
+    NumberInput<int> _gridSizeInput;
 };

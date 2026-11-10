@@ -17,6 +17,7 @@
 #include "scene/PlayController/PlayController.hpp"
 #include "scene/PropertyModel.hpp"
 #include "scene/Selection.hpp"
+#include "scene/ViewportGrid.hpp"
 #include "scene/ViewportView.hpp"
 
 #include <imgui.h>
@@ -27,7 +28,8 @@
 // PropertyModel, only while the game is stopped (like the Entity Palette).
 // Clicking near an object selects it and dragging moves it. The selected
 // object, marked by a ring, also gets scale handles if it has a scale: one
-// per axis and one for both.
+// per axis and one for both. Positions and scales snap to the grid when it
+// is on.
 class ViewportTransformTool
 {
 public:
@@ -37,7 +39,8 @@ public:
     static constexpr float HandleDistancePixels = 48.0f;
 
     // Everything given must outlive the tool.
-    ViewportTransformTool(const HierarchyModel &model, PropertyModel &properties, Selection &selection, const PlayController &play);
+    ViewportTransformTool(const HierarchyModel &model, PropertyModel &properties, Selection &selection, const PlayController &play,
+        const ViewportGrid &grid);
 
     // Call right after the item covering the Viewport.
     void update(const ViewportView &view, ImDrawList *drawList);
@@ -56,6 +59,7 @@ private:
     PropertyModel &_properties;
     Selection &_selection;
     const PlayController &_play;
+    const ViewportGrid &_grid;
 
     ObjectId _dragged = HierarchyModel::InvalidId;
     Handle _handle = Handle::Position;
