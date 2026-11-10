@@ -7,6 +7,12 @@ void run_friction_tests();
 void run_surface_tests();
 void run_spring_tests();
 void run_radial_tests();
+void run_collision_rectangle_tests();
+void run_collision_circle_tests();
+void run_collision_overlap_tests();
+void run_collision_collide_tests();
+void run_collision_raycast_tests();
+void run_collision_sweep_tests();
 void run_gravity_system_tests();
 void run_integration_system_tests();
 
@@ -21,6 +27,12 @@ int main()
     run_surface_tests();
     run_spring_tests();
     run_radial_tests();
+    run_collision_rectangle_tests();
+    run_collision_circle_tests();
+    run_collision_overlap_tests();
+    run_collision_collide_tests();
+    run_collision_raycast_tests();
+    run_collision_sweep_tests();
     run_gravity_system_tests();
     run_integration_system_tests();
 }

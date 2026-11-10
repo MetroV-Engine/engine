@@ -44,6 +44,12 @@ set(ENGINE_TEST_FILES
 	Engine/Common/Physic/Forces/TestSurface.cpp
 	Engine/Common/Physic/Forces/TestSpring.cpp
 	Engine/Common/Physic/Forces/TestRadial.cpp
+	Engine/Common/Collision/Shapes/TestRectangle.cpp
+	Engine/Common/Collision/Shapes/TestCircle.cpp
+	Engine/Common/Collision/TestOverlap.cpp
+	Engine/Common/Collision/TestCollide.cpp
+	Engine/Common/Collision/TestRaycast.cpp
+	Engine/Common/Collision/TestSweep.cpp
 	Engine/System/Gravity/TestGravitySystem.cpp
 	Engine/System/Integration/TestIntegrationSystem.cpp
 	Engine/main.cpp
