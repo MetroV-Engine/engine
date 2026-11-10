@@ -111,6 +111,7 @@ void HierarchyPanel::startRename(ObjectId id)
 void HierarchyPanel::select(ObjectId id)
 {
     _selection.set(id);
+    _shownSelection = id;
 }
 
 void HierarchyPanel::reveal(ObjectId id)
@@ -175,6 +176,11 @@ void HierarchyPanel::drawContent()
     // The selected object may have been destroyed elsewhere.
     if (_selection.has() && !_model.exists(_selection.get()))
         _selection.clear();
+    if (_selection.get() != _shownSelection) {
+        _shownSelection = _selection.get();
+        if (_selection.has())
+            reveal(_shownSelection);
+    }
 
     const float buttonWidth = ImGui::GetFrameHeight();
     _search.setWidth(-(buttonWidth + ImGui::GetStyle().ItemSpacing.x));

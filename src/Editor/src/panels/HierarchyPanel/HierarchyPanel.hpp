@@ -35,7 +35,8 @@ class EntityDropTarget;
 //  - right click: create child, rename (F2), delete (Del, with confirmation);
 //  - drag an object onto another to make it its child, or onto the empty area
 //    to move it to the root (unless the model is flat, see supportsParenting);
-//  - drop an entity template anywhere on the tree to create an object.
+//  - drop an entity template anywhere on the tree to create an object;
+//  - an object selected elsewhere (in the Viewport) is revealed and scrolled to.
 // Objects can only be created while the game is stopped, like with the Entity
 // Palette: created during play, they would vanish on Stop.
 // Changes are applied after the tree has been drawn, never while iterating it.
@@ -81,6 +82,8 @@ private:
     std::string _renameBuffer;
     bool _focusRename = false;
     ObjectId _scrollTo = HierarchyModel::InvalidId;
+    // The selection the tree last showed: a different one was made elsewhere.
+    ObjectId _shownSelection = HierarchyModel::InvalidId;
     // Model changes requested while drawing, applied at the end of the frame.
     std::vector<std::function<void()>> _pending;
 
