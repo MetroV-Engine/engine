@@ -4,7 +4,9 @@
 #include <cmath>
 
 #include "ECS/ECS.hpp"
+#include "Engine/Common/Physic/Forces/Surface.hpp"
 #include "Engine/Common/Physic/Kinematics.hpp"
+#include "Engine/System/Friction/FrictionSystem.hpp"
 #include "Engine/System/Gravity/GravitySystem.hpp"
 #include "Engine/System/Integration/IntegrationSystem.hpp"
 #include "../../Support/Approx.hpp"
@@ -12,7 +14,9 @@
 using namespace boost::ut;
 using namespace Engine;
 using Component::RigidBody;
+using Component::SurfaceContact;
 using Component::Transform;
+using System::FrictionSystem;
 using System::GravitySettings;
 using System::GravitySystem;
 using System::IntegrationSystem;
@@ -120,6 +124,103 @@ void test_gravity_then_integration() {
     };
 }
 
+// Gravity (g = 10, Y up), friction, integration, in that order, at 60 Hz. Nothing holds the
+// bodies up yet (that is the collision response's job), so they sink into the surface: the
+// tests only look at the motion along it.
+struct FrictionScene {
+    ECS::Registry world;
+    ECS::SystemManager systems;
+    ECS::Entity body;
+
+    FrictionScene(V velocity, SurfaceContact contact) {
+        world.setResource<GravitySettings>(GravitySettings{V(0.f, -10.f), 1.f});
+        systems.addSystem<GravitySystem>(world);
+        systems.addSystem<FrictionSystem>(world);
+        systems.addSystem<IntegrationSystem>(world);
+        body = world.spawnEntity();
+        world.addComponent(body, Transform{V::zero()});
+        world.addComponent(body, makeBody(1.f, 1.f, velocity));
+        world.addComponent(body, contact);
+    }
+
+    void step() { systems.update(world, 1.0 / 60.0); }
+    V velocity() { return world.getComponent<RigidBody>(body).velocity; }
+    V position() { return world.getComponent<Transform>(body).position; }
+};
+
+SurfaceContact makeContact(V normal, float staticFriction, float kineticFriction, V surfaceVelocity = V::zero()) {
+    SurfaceContact contact;
+    contact.normal = normal;
+    contact.staticFriction = staticFriction;
+    contact.kineticFriction = kineticFriction;
+    contact.surfaceVelocity = surfaceVelocity;
+    return contact;
+}
+
+void test_friction_then_integration() {
+    "a sliding body stops after about v^2 / (2 muKinetic g), then stays still"_test = [] {
+        FrictionScene scene(V(6.f, 0.f), makeContact(V(0.f, 1.f), 0.6f, 0.5f));
+
+        bool movedBack = false;
+        int stepsToStop = -1;
+        for (int step = 1; step <= 120; ++step) {
+            const float before = scene.position().x;
+            scene.step();
+            movedBack = movedBack || scene.velocity().x < 0.f || scene.position().x < before;
+            if (stepsToStop < 0 && scene.velocity().x == 0.f) {
+                stepsToStop = step;
+            }
+        }
+
+        // 6 m/s at 5 m/s^2: 1.2 s, so 72 steps. Semi-implicit Euler covers
+        // 6^2 / (2 * 5) - 6 / 60 / 2 = 3.55 m instead of the continuous 3.6 m.
+        expect(!movedBack);
+        expect(stepsToStop >= 71_i && stepsToStop <= 72_i);
+        expect(near(scene.position().x, 3.55f, 2e-3f));
+        expect(scene.velocity().x == 0.f);
+    };
+
+    "on a slope too steep for static friction, a body slides down at g (sin - muKinetic cos)"_test = [] {
+        const V normal{-0.5f, std::sqrt(3.f) / 2.f};  // 30 degrees, rising to the right
+        const V downSlope{-std::sqrt(3.f) / 2.f, -0.5f};
+        FrictionScene scene(V::zero(), makeContact(normal, 0.3f, 0.2f));
+
+        for (int step = 0; step < 60; ++step) {
+            scene.step();
+        }
+
+        // 10 * (0.5 - 0.2 * 0.866) = 3.268 m/s^2, for 1 s.
+        expect(near(scene.velocity().dot(downSlope), 3.268f, 1e-3f));
+    };
+
+    "on a gentle enough slope, static friction keeps a resting body still"_test = [] {
+        const V normal{-0.5f, std::sqrt(3.f) / 2.f};
+        FrictionScene scene(V::zero(), makeContact(normal, 0.7f, 0.5f));  // tan(30 degrees) = 0.577 < 0.7
+
+        for (int step = 0; step < 60; ++step) {
+            scene.step();
+        }
+
+        expect(near(Physic::tangentialComponent(scene.velocity(), normal), V::zero(), 1e-5f));
+    };
+
+    "a conveyor belt brings a resting body up to its speed, then carries it"_test = [] {
+        FrictionScene scene(V::zero(), makeContact(V(0.f, 1.f), 0.6f, 0.5f, V(3.f, 0.f)));
+
+        for (int step = 0; step < 18; ++step) {
+            scene.step();
+        }
+        // Dragged at muKinetic * g = 5 m/s^2 for 0.3 s.
+        expect(near(scene.velocity().x, 1.5f, 1e-4f));
+
+        for (int step = 18; step < 120; ++step) {
+            scene.step();
+        }
+        // Up to the belt's 3 m/s after 0.6 s, then held there by static friction.
+        expect(near(scene.velocity().x, 3.f, 1e-4f));
+    };
+}
+
 // A planet of mass 500 at the origin with G = 1, and one satellite of mass 1
 // launched perpendicular to its radius at speedFactor times the circular speed.
 struct Orbit {
@@ -219,5 +320,6 @@ void test_orbit_fates() {
 void run_integration_system_tests() {
     test_integration_step();
     test_gravity_then_integration();
+    test_friction_then_integration();
     test_orbit_fates();
 }
