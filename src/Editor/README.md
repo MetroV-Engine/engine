@@ -38,7 +38,8 @@ cmake --build build
 The editor writes its layout and preferences (`imgui.ini`, `imgui-demo.ini`),
 custom shortcuts (`shortcuts.ini`) and log (`logs/editor.log`) in the working
 directory. They are ignored by git. Levels are saved there too, in `levels/`
-(see [Levels](#levels)): they are not ignored.
+(see [Levels](#levels)): they are not ignored. The Asset Browser reads `assets/`
+there (see [Assets](#assets)).
 
 ## Layout
 
@@ -52,9 +53,9 @@ automatically.
 
 | Folder | Content |
 | --- | --- |
-| `src/core/` | `Editor` (assembles everything), `GuiContext` (SDL3 + ImGui, frame loop), `PanelManager`, `EventManager`, `FrameTimer`, `Logger` (central log, thread-safe), `CommandRegistry` (console commands) |
+| `src/core/` | `Editor` (assembles everything), `AssetLibrary` (the files of the assets folder), `GuiContext` (SDL3 + ImGui, frame loop), `PanelManager`, `EventManager`, `FrameTimer`, `Logger` (central log, thread-safe), `CommandRegistry` (console commands) |
 | `src/ui/` | Reusable widgets (buttons, inputs, performance overlay...), dialogs and notifications, themes |
-| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Settings, Levels, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportTransformTool` selects, moves and scales objects with the mouse |
+| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Assets, Settings, Levels, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportTransformTool` selects, moves and scales objects with the mouse |
 | `src/scene/` | What the editor edits and runs: `HierarchyModel` and `PropertyModel` (what the Hierarchy and Inspector display), `Selection`, `SceneBackend`, `EntityTemplate` (an entry of the Entity Palette), `ViewportView` (Viewport pixels to world positions), `ViewportGrid` (snapping of the mouse edits), `LevelFile` and `LevelManager` (levels saved as files), `Simulation` and `PlayController` (Play / Pause / Stop / Step). `DemoScene` / `DemoBackend`: the built-in demo |
 | `src/ecs/` | The editor on an ECS world: `EcsScene` (entities and reflected components), `EcsSimulation` (systems, world restored on Stop), `EcsBackend` |
 | `src/navigation/` | Actions, menu bar, toolbar, command palette, shortcuts |
@@ -208,6 +209,19 @@ saved under the name the Hierarchy shows (`Entity <index>`), and parents are
 ignored (the hierarchy is flat). This format belongs to the editor until the
 engine has its own scene format.
 
+### Assets
+
+The Assets panel (next to the Console) shows the files of `assets/`, in the
+working directory, as a tree of folders, or the matching files while
+searching. The selected file shows its type (from its extension: image, audio,
+font, level, text) and size, with a button to copy its path. Dragging a file
+onto a text field of the Inspector (a sprite's texture...) writes its path,
+relative to `assets/`, there. The folder is read again every two seconds
+while the panel is shown; hidden files are skipped, and a scan stops at 10000
+files. The `assets` console command counts them.
+
+Images are not previewed: the editor has no image loader yet.
+
 ## Tests
 
 `tests_editor` checks that the editor works on an ECS world, with the
@@ -229,8 +243,9 @@ ctest --test-dir build --output-on-failure
 | `tests/ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
 | `tests/ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
 | `tests/ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
-| `tests/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged. A panel missing from a saved layout is docked in its area; Create Object does nothing during Play, even from a shortcut; an object selected outside the Hierarchy is scrolled to there; the Game Controls keep their place in every play state and fit the smallest window; levels are saved, created, opened and renamed from the console, never during Play nor over unsaved changes |
+| `tests/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged. A panel missing from a saved layout is docked in its area; Create Object does nothing during Play, even from a shortcut; an object selected outside the Hierarchy is scrolled to there; the Game Controls keep their place in every play state and fit the smallest window; levels are saved, created, opened and renamed from the console, never during Play nor over unsaved changes; the assets folder is read and the Asset Browser shows it |
 | `tests/ecs/TestLevels.cpp` | A level written and read back gives the same ECS world and the same demo scene (order, parents, every value type, escaped strings); an invalid file leaves the scene untouched; what the scene refuses is reported; the levels folder: create, save, save as, open, rename, delete, unsaved changes, refused names and files |
+| `tests/ecs/TestAssets.cpp` | The assets folder: files of every subfolder, sorted, with their type (extensions in any case) and size; hidden files and folders skipped; a missing folder; a new scan sees new files |
 | `tests/ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved, and scaled with the handles of the selected one, and clicking empty space clears the selection; with snapping on, moves, drops and scales land on the grid, and the settings are saved; nothing is created, moved or scaled during Play, even when Play is pressed during the drag or at the drop |
 
 On macOS SDL's `offscreen` driver cannot start, so the tests opening the real
