@@ -26,7 +26,8 @@
 
 // Edits the Transform of the Viewport's objects with the mouse, through the
 // PropertyModel, only while the game is stopped (like the Entity Palette).
-// Clicking near an object selects it and dragging moves it. The selected
+// Clicking near an object selects it and dragging moves it; clicking away
+// from every object clears the selection, like in the Hierarchy. The selected
 // object, marked by a ring, also gets scale handles if it has a scale: one
 // per axis and one for both. Positions and scales snap to the grid when it
 // is on.
