@@ -18,6 +18,7 @@
 #include "ui/DialogManager/DialogManager.hpp"
 #include "ui/NotificationManager/NotificationManager.hpp"
 #include "scene/HierarchyModel.hpp"
+#include "scene/PlayController/PlayController.hpp"
 #include "scene/Selection.hpp"
 
 #include <functional>
@@ -35,18 +36,20 @@ class EntityDropTarget;
 //  - drag an object onto another to make it its child, or onto the empty area
 //    to move it to the root (unless the model is flat, see supportsParenting);
 //  - drop an entity template anywhere on the tree to create an object.
+// Objects can only be created while the game is stopped, like with the Entity
+// Palette: created during play, they would vanish on Stop.
 // Changes are applied after the tree has been drawn, never while iterating it.
 class HierarchyPanel : public Panel
 {
 public:
     using ObjectId = HierarchyModel::ObjectId;
 
-    // entityDropTarget must outlive the panel.
+    // entityDropTarget and play must outlive the panel.
     HierarchyPanel(HierarchyModel &model, Selection &selection, NotificationManager &notifications,
-        DialogManager &dialogs, const EntityDropTarget &entityDropTarget);
+        DialogManager &dialogs, const EntityDropTarget &entityDropTarget, const PlayController &play);
 
     // Creates an object under parent (InvalidId for the root), selects it and
-    // starts renaming it.
+    // starts renaming it. Its callers are disabled while the game is not stopped.
     void createObject(ObjectId parent);
     // Clears the search, then scrolls to the object and selects it.
     void showObject(ObjectId id);
@@ -70,6 +73,7 @@ private:
     NotificationManager &_notifications;
     DialogManager &_dialogs;
     const EntityDropTarget &_entityDropTarget;
+    const PlayController &_play;
     TextInput _search;
 
     std::unordered_set<ObjectId> _expanded;

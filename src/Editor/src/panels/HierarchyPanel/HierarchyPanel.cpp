@@ -40,13 +40,14 @@ const void *imguiId(HierarchyModel::ObjectId id)
 } // namespace
 
 HierarchyPanel::HierarchyPanel(HierarchyModel &model, Selection &selection, NotificationManager &notifications,
-    DialogManager &dialogs, const EntityDropTarget &entityDropTarget)
+    DialogManager &dialogs, const EntityDropTarget &entityDropTarget, const PlayController &play)
     : Panel("Hierarchy"),
       _model(model),
       _selection(selection),
       _notifications(notifications),
       _dialogs(dialogs),
       _entityDropTarget(entityDropTarget),
+      _play(play),
       _search("##HierarchySearch", "Search objects")
 {
     // Top-level objects start expanded.
@@ -179,9 +180,12 @@ void HierarchyPanel::drawContent()
     _search.setWidth(-(buttonWidth + ImGui::GetStyle().ItemSpacing.x));
     _search.render();
     ImGui::SameLine();
+    const bool stopped = _play.isStopped();
+    ImGui::BeginDisabled(!stopped);
     if (Button("+", {}, Button::Variant::Secondary, ImVec2(buttonWidth, 0.0f)).render())
         createObject(HierarchyModel::InvalidId);
-    ImGui::SetItemTooltip("Create an object at the root");
+    ImGui::EndDisabled();
+    ImGui::SetItemTooltip(stopped ? "Create an object at the root" : "Stop the game to add entities.");
     ImGui::Separator();
 
     const std::string filter = toLower(_search.getValue());
@@ -222,7 +226,7 @@ void HierarchyPanel::drawContent()
         ImGui::EndDragDropTarget();
     }
     if (ImGui::BeginPopupContextItem("##HierarchyEmptyMenu")) {
-        if (ImGui::MenuItem("Create Object"))
+        if (ImGui::MenuItem("Create Object", nullptr, false, stopped))
             createObject(HierarchyModel::InvalidId);
         ImGui::EndPopup();
     }
@@ -323,7 +327,7 @@ void HierarchyPanel::drawContextMenu(ObjectId id)
     if (!ImGui::BeginPopupContextItem("##ObjectMenu"))
         return;
     select(id);
-    if (_model.supportsParenting() && ImGui::MenuItem("Create Child"))
+    if (_model.supportsParenting() && ImGui::MenuItem("Create Child", nullptr, false, _play.isStopped()))
         createObject(id);
     if (ImGui::MenuItem("Rename", "F2"))
         startRename(id);
