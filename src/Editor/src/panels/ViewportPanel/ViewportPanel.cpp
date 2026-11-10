@@ -24,7 +24,7 @@ ViewportPanel::ViewportPanel(PerformanceOverlay &overlay, const PlayController &
       _overlay(overlay),
       _play(play),
       _entityDropTarget(entityDropTarget),
-      _objectMover(model, properties, selection, play)
+      _transformTool(model, properties, selection, play)
 {
     // The game image goes edge to edge.
     setWindowPadding(ImVec2(0.0f, 0.0f));
@@ -73,9 +73,9 @@ void ViewportPanel::drawContent()
         drawList->AddText(ImVec2(badgeMin.x + padding.x, badgeMin.y + padding.y), ImGui::GetColorU32(theme.colors.textOnAccent), badge);
     }
 
-    // A button rather than a Dummy: it captures the mouse for the object mover.
+    // A button rather than a Dummy: it captures the mouse for the transform tool.
     ImGui::InvisibleButton("##ViewportArea", size);
-    _objectMover.update(view, drawList);
+    _transformTool.update(view, drawList);
     _entityDropTarget.accept(view.valid() ? std::optional<Vec2>(view.toWorld(ImGui::GetMousePos())) : std::nullopt);
     _overlay.setAnchor(ImVec2(max.x, min.y));
 }

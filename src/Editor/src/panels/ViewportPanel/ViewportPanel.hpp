@@ -14,7 +14,7 @@
 #pragma once
 
 #include "panels/Panel/Panel.hpp"
-#include "panels/ViewportObjectMover/ViewportObjectMover.hpp"
+#include "panels/ViewportTransformTool/ViewportTransformTool.hpp"
 #include "ui/PerformanceOverlay/PerformanceOverlay.hpp"
 #include "scene/PlayController/PlayController.hpp"
 #include "scene/ViewportView.hpp"
@@ -45,6 +45,6 @@ private:
     PerformanceOverlay &_overlay;
     const PlayController &_play;
     const EntityDropTarget &_entityDropTarget;
-    ViewportObjectMover _objectMover;
+    ViewportTransformTool _transformTool;
     Renderer _renderer;
 };

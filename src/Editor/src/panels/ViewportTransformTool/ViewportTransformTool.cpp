@@ -1,6 +1,6 @@
 /*
     Created on: 09/11/2026
-    Filename: ViewportObjectMover.cpp
+    Filename: ViewportTransformTool.cpp
     Description: Selects and moves the objects of the Viewport with the mouse
 
     ███╗   ███╗███████╗████████╗██████╗  ██████╗ ██╗   ██╗
@@ -11,7 +11,7 @@
     ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝   ╚═══╝
 */
 
-#include "ViewportObjectMover.hpp"
+#include "ViewportTransformTool.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
 namespace {
@@ -22,13 +22,13 @@ constexpr float SelectionRingPixels = 14.0f;
 
 } // namespace
 
-ViewportObjectMover::ViewportObjectMover(
+ViewportTransformTool::ViewportTransformTool(
     const HierarchyModel &model, PropertyModel &properties, Selection &selection, const PlayController &play)
     : _model(model), _properties(properties), _selection(selection), _play(play)
 {
 }
 
-void ViewportObjectMover::update(const ViewportView &view, ImDrawList *drawList)
+void ViewportTransformTool::update(const ViewportView &view, ImDrawList *drawList)
 {
     if (!view.valid()) {
         _dragged = HierarchyModel::InvalidId;
@@ -44,7 +44,7 @@ void ViewportObjectMover::update(const ViewportView &view, ImDrawList *drawList)
     drawSelection(view, drawList);
 }
 
-void ViewportObjectMover::startDrag(const ViewportView &view)
+void ViewportTransformTool::startDrag(const ViewportView &view)
 {
     const ImVec2 mouse = ImGui::GetMousePos();
     float closestSquared = PickRadiusPixels * PickRadiusPixels;
@@ -73,7 +73,7 @@ void ViewportObjectMover::startDrag(const ViewportView &view)
     _grabOffset = Vec2{pickedPosition.x - world.x, pickedPosition.y - world.y};
 }
 
-void ViewportObjectMover::continueDrag()
+void ViewportTransformTool::continueDrag()
 {
     if (!ImGui::IsItemActive() || !_model.exists(_dragged)) {
         _dragged = HierarchyModel::InvalidId;
@@ -82,11 +82,11 @@ void ViewportObjectMover::continueDrag()
     // Past the drag threshold, so that a simple click never moves the object.
     if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
         const Vec2 world = _dragView.toWorld(ImGui::GetMousePos());
-        _properties.set(_dragged, PositionComponent, PositionProperty, Vec2{world.x + _grabOffset.x, world.y + _grabOffset.y});
+        _properties.set(_dragged, TransformComponent, PositionProperty, Vec2{world.x + _grabOffset.x, world.y + _grabOffset.y});
     }
 }
 
-void ViewportObjectMover::drawSelection(const ViewportView &view, ImDrawList *drawList) const
+void ViewportTransformTool::drawSelection(const ViewportView &view, ImDrawList *drawList) const
 {
     if (!_selection.has())
         return;

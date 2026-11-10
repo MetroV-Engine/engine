@@ -36,7 +36,7 @@ std::vector<Box> collectBoxes(const DemoScene &scene)
 {
     std::vector<Box> boxes;
     for (ObjectId id : scene.allObjects()) {
-        const std::optional<Vec2> position = scene.getAs<Vec2>(id, PositionComponent, PositionProperty);
+        const std::optional<Vec2> position = scene.getAs<Vec2>(id, TransformComponent, PositionProperty);
         if (!position)
             continue;
         const std::optional<Vec2> size = scene.getAs<Vec2>(id, "BoxCollider", "size");

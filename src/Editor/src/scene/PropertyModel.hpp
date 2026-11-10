@@ -82,7 +82,7 @@ struct ComponentInfo
 };
 
 // The property the mouse writes in the Viewport; objects without it cannot be placed.
-inline constexpr const char *PositionComponent = "Transform";
+inline constexpr const char *TransformComponent = "Transform";
 inline constexpr const char *PositionProperty = "position";
 
 // The data shown by the Inspector: components of an object and their

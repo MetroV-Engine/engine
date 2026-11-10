@@ -55,6 +55,6 @@ void EntityDropTarget::create(const EntityTemplate &entityTemplate, const std::o
             _notifications.warning("Cannot add \"" + component + "\"", "Component of the template \"" + entityTemplate.label + "\".");
     // Refused for an object without a position (an empty entity): nothing to place.
     if (worldPosition)
-        _properties.set(id, PositionComponent, PositionProperty, *worldPosition);
+        _properties.set(id, TransformComponent, PositionProperty, *worldPosition);
     _onCreated(id);
 }

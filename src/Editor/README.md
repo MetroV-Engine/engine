@@ -53,7 +53,7 @@ automatically.
 | --- | --- |
 | `src/core/` | `Editor` (assembles everything), `GuiContext` (SDL3 + ImGui, frame loop), `PanelManager`, `EventManager`, `FrameTimer`, `Logger` (central log, thread-safe), `CommandRegistry` (console commands) |
 | `src/ui/` | Reusable widgets (buttons, inputs, performance overlay...), dialogs and notifications, themes |
-| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Settings, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportObjectMover` selects and moves objects with the mouse |
+| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Settings, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportTransformTool` selects and moves objects with the mouse |
 | `src/scene/` | What the editor edits and runs: `HierarchyModel` and `PropertyModel` (what the Hierarchy and Inspector display), `Selection`, `SceneBackend`, `EntityTemplate` (an entry of the Entity Palette), `ViewportView` (Viewport pixels to world positions), `Simulation` and `PlayController` (Play / Pause / Stop / Step). `DemoScene` / `DemoBackend`: the built-in demo |
 | `src/ecs/` | The editor on an ECS world: `EcsScene` (entities and reflected components), `EcsSimulation` (systems, world restored on Stop), `EcsBackend` |
 | `src/navigation/` | Actions, menu bar, toolbar, command palette, shortcuts |
