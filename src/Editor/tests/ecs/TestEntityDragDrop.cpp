@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -58,6 +60,8 @@ namespace {
         // Added on screen to moveFrom and moveTo, in pixels: to grab a scale handle.
         ImVec2 fromOffset{};
         ImVec2 toOffset{};
+        // If set, snapping to a grid of this size is on, as if saved in the workspace.
+        int snapGrid = 0;
     };
 
     struct DragResult
@@ -72,6 +76,8 @@ namespace {
         std::optional<Vec2> selectedScale;
         // World position under the mouse where it was released.
         Vec2 releaseWorld{};
+        // The workspace file the editor saved when it closed.
+        std::string savedWorkspace;
     };
 
     bool near(Vec2 a, Vec2 b)
@@ -84,6 +90,17 @@ namespace {
     bool closeTo(Vec2 a, Vec2 b)
     {
         return std::abs(a.x - b.x) <= 0.05f && std::abs(a.y - b.y) <= 0.05f;
+    }
+
+    // Snapped values are exact, the mouse is not.
+    bool same(Vec2 a, Vec2 b)
+    {
+        return std::abs(a.x - b.x) <= 0.001f && std::abs(a.y - b.y) <= 0.001f;
+    }
+
+    bool onGrid(float value, float size)
+    {
+        return std::abs(value / size - std::round(value / size)) <= 0.0001f;
     }
 
     bool isDraggingTemplate()
@@ -225,6 +242,8 @@ namespace {
         // Set for every run: SDL_Quit(), when the previous editor closed, clears
         // the hints. The SDL_VIDEO_DRIVER environment variable takes precedence.
         SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
+        if (scenario.snapGrid > 0)
+            std::ofstream("imgui.ini") << "[Workspace][Editor]\nviewport.snap=1\nviewport.gridSize=" << scenario.snapGrid << "\n";
         ECS::SystemManager systems;
         GuiContext gui("tests_editor", 1280, 720);
         DragResult result;
@@ -235,6 +254,8 @@ namespace {
             editor.addEntityTemplate({"Placed", "Placed", {"Transform"}});
             editor.run();
         }
+        std::ifstream saved("imgui.ini");
+        result.savedWorkspace.assign(std::istreambuf_iterator<char>(saved), std::istreambuf_iterator<char>());
         return result;
     }
 
@@ -355,6 +376,49 @@ void run_entity_drag_drop_tests()
 
         expect(result.selectedName == std::string("Box")) << "selected before Play";
         expect(result.selectedScale && closeTo(*result.selectedScale, Vec2{1, 1})) << "unchanged during Play";
+    };
+
+    "with snapping on, a moved object lands on the grid"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity moved = world.spawnEntity("Moved");
+        world.addComponent(moved, Transform{{100, 80}});
+
+        runDrag(world, {.moveFrom = Vec2{100, 80}, .moveTo = Vec2{123, 147}, .snapGrid = 10});
+
+        const Transform &transform = world.getComponent<Transform>(moved);
+        expect(same(Vec2{transform.position.x, transform.position.y}, Vec2{120, 150}));
+    };
+
+    "with snapping on, a dropped template lands on the grid"_test = [] {
+        ECS::Registry world;
+
+        const DragResult result = runDrag(world, {.templateIndex = 2, .target = "Viewport", .snapGrid = 10});
+
+        expect(result.selectedPosition && onGrid(result.selectedPosition->x, 10) && onGrid(result.selectedPosition->y, 10));
+        expect(result.selectedPosition && std::abs(result.selectedPosition->x - result.releaseWorld.x) <= 5.5f
+            && std::abs(result.selectedPosition->y - result.releaseWorld.y) <= 5.5f)
+            << "the grid point nearest to the mouse";
+    };
+
+    "with snapping on, scales step by tenths"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity box = world.spawnEntity("Box");
+        world.addComponent(box, Transform{{100, 80}});
+
+        runDrag(world, {.moveFrom = Vec2{100, 80}, .moveTo = Vec2{100, 80}, .selectFirst = true,
+                           .fromOffset = {HandleDistance, 0}, .toOffset = {1.78f * HandleDistance, 0}, .snapGrid = 10});
+
+        const Transform &transform = world.getComponent<Transform>(box);
+        expect(same(Vec2{transform.scale.x, transform.scale.y}, Vec2{1.8f, 1}));
+    };
+
+    "snapping settings are saved with the workspace"_test = [] {
+        ECS::Registry world;
+
+        const DragResult result = runDrag(world, {.target = "Inspector", .snapGrid = 24});
+
+        expect(result.savedWorkspace.find("viewport.snap=1") != std::string::npos);
+        expect(result.savedWorkspace.find("viewport.gridSize=24") != std::string::npos);
     };
 
     "dropping a template on the Hierarchy creates its entity and selects it"_test = [] {
