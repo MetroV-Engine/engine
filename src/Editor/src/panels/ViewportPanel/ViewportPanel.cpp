@@ -24,22 +24,28 @@ namespace {
 // Closer grid lines would hide the game: none are drawn then.
 constexpr float MinGridSpacingPixels = 6.0f;
 
+// Calls draw with the screen position of each grid line between screenMin and
+// screenMax, along one axis. Lines are counted by index from the world's
+// origin: far from it, adding a step to a float coordinate leaves it
+// unchanged, and the loop would never end.
+template <typename Draw>
+void forEachLine(float screenMin, float screenMax, float origin, double spacing, Draw draw)
+{
+    const double first = std::ceil((screenMin - origin) / spacing);
+    const double last = std::floor((screenMax - origin) / spacing);
+    for (double index = first; index <= last; index += 1.0)
+        draw(static_cast<float>(origin + index * spacing));
+}
+
 void drawGrid(ImDrawList *drawList, const ViewportView &view, const ViewportGrid &grid, ImVec2 min, ImVec2 max)
 {
-    const float step = static_cast<float>(grid.size);
-    if (!grid.snap || !view.valid() || step * view.scale < MinGridSpacingPixels)
+    // Pixels between two lines: at least MinGridSpacingPixels, so their number is bounded.
+    const double spacing = static_cast<double>(grid.size) * view.scale;
+    if (!grid.snap || !view.valid() || spacing < MinGridSpacingPixels)
         return;
     const ImU32 color = ImGui::GetColorU32(ThemeManager::active().colors.border);
-    const Vec2 first = view.toWorld(min);
-    const Vec2 last = view.toWorld(max);
-    for (float x = std::ceil(first.x / step) * step; x <= last.x; x += step) {
-        const float screenX = view.toScreen(Vec2{x, 0.0f}).x;
-        drawList->AddLine(ImVec2(screenX, min.y), ImVec2(screenX, max.y), color);
-    }
-    for (float y = std::ceil(first.y / step) * step; y <= last.y; y += step) {
-        const float screenY = view.toScreen(Vec2{0.0f, y}).y;
-        drawList->AddLine(ImVec2(min.x, screenY), ImVec2(max.x, screenY), color);
-    }
+    forEachLine(min.x, max.x, view.origin.x, spacing, [&](float x) { drawList->AddLine(ImVec2(x, min.y), ImVec2(x, max.y), color); });
+    forEachLine(min.y, max.y, view.origin.y, spacing, [&](float y) { drawList->AddLine(ImVec2(min.x, y), ImVec2(max.x, y), color); });
 }
 
 } // namespace
