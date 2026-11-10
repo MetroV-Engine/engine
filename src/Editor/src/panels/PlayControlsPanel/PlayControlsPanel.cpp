@@ -21,6 +21,23 @@
 namespace {
 
 constexpr float TimeScales[] = {0.25f, 0.5f, 1.0f, 2.0f, 4.0f};
+constexpr const char *ControlActions[] = {"game.play", "game.pause", "game.stop", "game.step"};
+
+// Between the buttons, the status and the speed.
+float groupGap()
+{
+    return ImGui::GetStyle().ItemSpacing.x * 3.0f;
+}
+
+float dotRadius()
+{
+    return ImGui::GetFontSize() * 0.3f;
+}
+
+float speedSelectorWidth()
+{
+    return ImGui::GetFontSize() * 4.5f;
+}
 
 ImVec4 withAlpha(ImVec4 color, float alpha)
 {
@@ -68,7 +85,7 @@ void PlayControlsPanel::drawIcon(ImDrawList *drawList, Icon icon, ImVec2 center,
     }
 }
 
-bool PlayControlsPanel::controlButton(const char *actionId, Icon icon, const ImVec4 &color, float height) const
+bool PlayControlsPanel::controlButton(const char *actionId, Icon icon, const ImVec4 &color, float height, bool label) const
 {
     const Action *action = _actions.get(actionId);
     if (!action)
@@ -80,7 +97,7 @@ bool PlayControlsPanel::controlButton(const char *actionId, Icon icon, const ImV
 
     const float iconSize = height * 0.42f;
     const ImVec2 labelSize = ImGui::CalcTextSize(action->label.c_str());
-    const ImVec2 size(buttonWidth(action->label.c_str(), height), height);
+    const ImVec2 size(label ? buttonWidth(action->label.c_str(), height) : height, height);
 
     ImGui::PushID(actionId);
     ImGui::BeginDisabled(!enabled);
@@ -106,35 +123,59 @@ bool PlayControlsPanel::controlButton(const char *actionId, Icon icon, const ImV
             rounding + 2, 0, 2.0f);
 
     const ImU32 foreground = ImGui::GetColorU32(withAlpha(theme.colors.textOnAccent, faded ? 0.45f : 1.0f));
-    const ImVec2 iconCenter(min.x + height * 0.55f + iconSize * 0.5f - height * 0.1f, (min.y + max.y) * 0.5f);
+    const ImVec2 iconCenter(label ? min.x + height * 0.55f + iconSize * 0.5f - height * 0.1f : (min.x + max.x) * 0.5f,
+        (min.y + max.y) * 0.5f);
     drawIcon(drawList, icon, iconCenter, iconSize, foreground);
-    drawList->AddText(ImVec2(iconCenter.x + iconSize * 0.5f + style.ItemInnerSpacing.x + height * 0.1f, (min.y + max.y - labelSize.y) * 0.5f),
-        foreground, action->label.c_str());
+    if (label)
+        drawList->AddText(ImVec2(iconCenter.x + iconSize * 0.5f + style.ItemInnerSpacing.x + height * 0.1f,
+                              (min.y + max.y - labelSize.y) * 0.5f),
+            foreground, action->label.c_str());
 
     if (hovered) {
-        const std::string shortcut = _actions.shortcutLabel(*action);
-        ImGui::SetItemTooltip("%s%s%s", action->tooltip.c_str(), shortcut.empty() ? "" : "  -  ", shortcut.c_str());
+        std::string tooltip = label ? action->tooltip : action->label + ": " + action->tooltip;
+        if (const std::string shortcut = _actions.shortcutLabel(*action); !shortcut.empty())
+            tooltip += "  -  " + shortcut;
+        ImGui::SetItemTooltip("%s", tooltip.c_str());
     }
     return clicked && enabled;
 }
 
-std::string PlayControlsPanel::statusText(PlayState state, double time)
+std::string PlayControlsPanel::statusText(PlayState state, double time, bool captions)
 {
-    if (state == PlayState::Stopped)
+    if (captions && state == PlayState::Stopped)
         return "Editing";
     const int minutes = static_cast<int>(time / 60.0);
     char text[64];
-    std::snprintf(text, sizeof(text), "%s  %02d:%05.2f", PlayController::stateName(state), minutes, time - minutes * 60.0);
+    if (captions)
+        std::snprintf(text, sizeof(text), "%s  %02d:%05.2f", PlayController::stateName(state), minutes, time - minutes * 60.0);
+    else
+        std::snprintf(text, sizeof(text), "%02d:%05.2f", minutes, time - minutes * 60.0);
     return text;
 }
 
-float PlayControlsPanel::statusWidth()
+float PlayControlsPanel::statusWidth(bool captions)
 {
     // Measured with the timer at zero: digits are equally wide.
     float width = 0.0f;
     for (const PlayState state : {PlayState::Stopped, PlayState::Playing, PlayState::Paused})
-        width = std::max(width, ImGui::CalcTextSize(statusText(state, 0.0).c_str()).x);
+        width = std::max(width, ImGui::CalcTextSize(statusText(state, 0.0, captions).c_str()).x);
     return width;
+}
+
+float PlayControlsPanel::rowWidth(const RowParts &parts, float height) const
+{
+    // The same items and gaps as drawContent() draws.
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    float width = 0.0f;
+    for (const char *id : ControlActions)
+        if (const Action *action = _actions.get(id))
+            width += (parts.labels ? buttonWidth(action->label.c_str(), height) : height) + spacing;
+    width += groupGap() - spacing;
+    if (parts.status)
+        width += dotRadius() * 2.0f + spacing + statusWidth(parts.captions) + groupGap();
+    if (parts.captions)
+        width += ImGui::CalcTextSize("Speed").x + spacing;
+    return width + speedSelectorWidth();
 }
 
 ImVec2 PlayControlsPanel::minimumSize() const
@@ -155,42 +196,41 @@ void PlayControlsPanel::drawContent()
     const ImVec4 &stateColor = state == PlayState::Playing ? theme.colors.success
         : state == PlayState::Paused                       ? theme.colors.warning
                                                            : theme.colors.textMuted;
-    const std::string status = statusText(state, _play.getPlayTime());
-    const float statusRoom = statusWidth();
-
-    // Center the row: buttons, then status and speed on the right of them.
-    const char *actions[] = {"game.play", "game.pause", "game.stop", "game.step"};
-    float buttonsWidth = 0.0f;
-    for (const char *id : actions)
-        if (const Action *action = _actions.get(id))
-            buttonsWidth += buttonWidth(action->label.c_str(), height) + style.ItemSpacing.x;
-    const float rightWidth = ImGui::GetFontSize() + statusRoom + style.ItemSpacing.x * 3.0f + ImGui::CalcTextSize("Speed").x
-        + ImGui::GetFontSize() * 5.0f;
-    const float total = buttonsWidth + rightWidth;
     const float rowTop = std::max(ImGui::GetCursorPosY(), (ImGui::GetWindowHeight() - height) * 0.5f);
 
     // Handle on the left, to move the bar (it has no tab to drag).
     ImGui::SetCursorPosY(rowTop);
     drawMoveGrip(height);
     ImGui::SameLine();
-    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX() + style.ItemSpacing.x, (ImGui::GetWindowWidth() - total) * 0.5f));
+
+    // What fits in the room left, centered: buttons, then status and speed.
+    const float available = ImGui::GetContentRegionAvail().x - style.ItemSpacing.x;
+    RowParts parts;
+    if (rowWidth(parts, height) > available)
+        parts.labels = false;
+    if (rowWidth(parts, height) > available)
+        parts.captions = false;
+    if (rowWidth(parts, height) > available)
+        parts.status = false;
+    ImGui::SetCursorPosX(
+        std::max(ImGui::GetCursorPosX() + style.ItemSpacing.x, (ImGui::GetWindowWidth() - rowWidth(parts, height)) * 0.5f));
     ImGui::SetCursorPosY(rowTop);
 
-    if (controlButton("game.play", Icon::Play, theme.colors.success, height))
+    if (controlButton("game.play", Icon::Play, theme.colors.success, height, parts.labels))
         _actions.execute("game.play");
     ImGui::SameLine();
-    if (controlButton("game.pause", Icon::Pause, theme.colors.warning, height))
+    if (controlButton("game.pause", Icon::Pause, theme.colors.warning, height, parts.labels))
         _actions.execute("game.pause");
     ImGui::SameLine();
-    if (controlButton("game.stop", Icon::Stop, theme.colors.danger, height))
+    if (controlButton("game.stop", Icon::Stop, theme.colors.danger, height, parts.labels))
         _actions.execute("game.stop");
     ImGui::SameLine();
-    if (controlButton("game.step", Icon::Step, theme.colors.secondary, height))
+    if (controlButton("game.step", Icon::Step, theme.colors.secondary, height, parts.labels))
         _actions.execute("game.step");
 
     // The rest of the row is vertically centered on the buttons: each item
     // starts a frame-height line in the middle of the button height.
-    ImGui::SameLine(0.0f, style.ItemSpacing.x * 3.0f);
+    ImGui::SameLine(0.0f, groupGap());
     const float rowY = ImGui::GetCursorPosY();
     const float lineY = rowY + (height - ImGui::GetFrameHeight()) * 0.5f;
     const auto centerNext = [lineY] {
@@ -198,29 +238,36 @@ void PlayControlsPanel::drawContent()
         ImGui::AlignTextToFramePadding();
     };
 
-    // State dot (pulsing while the game runs) and timer.
-    centerNext();
-    const ImVec2 dot = ImGui::GetCursorScreenPos();
-    const float radius = ImGui::GetFontSize() * 0.3f;
-    const float pulse = state == PlayState::Playing ? 0.6f + 0.4f * std::sin(static_cast<float>(ImGui::GetTime()) * 5.0f) : 1.0f;
-    ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(dot.x + radius, dot.y + ImGui::GetFrameHeight() * 0.5f), radius,
-        ImGui::GetColorU32(withAlpha(stateColor, pulse)));
-    ImGui::Dummy(ImVec2(radius * 2.0f, ImGui::GetFrameHeight()));
-    ImGui::SameLine();
-    centerNext();
-    const float statusX = ImGui::GetCursorPosX();
-    ImGui::TextColored(stateColor, "%s", status.c_str());
+    if (parts.status) {
+        // State dot (pulsing while the game runs) and timer.
+        centerNext();
+        const ImVec2 dot = ImGui::GetCursorScreenPos();
+        const float radius = dotRadius();
+        const float pulse = state == PlayState::Playing ? 0.6f + 0.4f * std::sin(static_cast<float>(ImGui::GetTime()) * 5.0f) : 1.0f;
+        ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(dot.x + radius, dot.y + ImGui::GetFrameHeight() * 0.5f), radius,
+            ImGui::GetColorU32(withAlpha(stateColor, pulse)));
+        ImGui::Dummy(ImVec2(radius * 2.0f, ImGui::GetFrameHeight()));
+        ImGui::SameLine();
+        centerNext();
+        const float statusX = ImGui::GetCursorPosX();
+        ImGui::TextColored(stateColor, "%s", statusText(state, _play.getPlayTime(), parts.captions).c_str());
+        // The speed after the room of the widest status.
+        ImGui::SameLine(statusX + statusWidth(parts.captions) + groupGap());
+    }
 
-    // Speed selector, after the room of the widest status.
-    ImGui::SameLine(statusX + statusRoom + style.ItemSpacing.x * 3.0f);
-    centerNext();
-    ImGui::TextDisabled("Speed");
-    ImGui::SameLine();
+    // Speed selector.
+    if (parts.captions) {
+        centerNext();
+        ImGui::TextDisabled("Speed");
+        ImGui::SameLine();
+    }
     ImGui::SetCursorPosY(lineY);
     char preview[16];
     std::snprintf(preview, sizeof(preview), "x%.2g", _play.getTimeScale());
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 4.5f);
-    if (ImGui::BeginCombo("##Speed", preview)) {
+    ImGui::SetNextItemWidth(speedSelectorWidth());
+    const bool speedOpen = ImGui::BeginCombo("##Speed", preview);
+    ImGui::SetItemTooltip("Speed of the game");
+    if (speedOpen) {
         for (const float scale : TimeScales) {
             char label[16];
             std::snprintf(label, sizeof(label), "x%.2g", scale);
