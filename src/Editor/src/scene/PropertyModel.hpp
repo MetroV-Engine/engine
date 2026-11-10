@@ -81,9 +81,12 @@ struct ComponentInfo
     bool removable = true;
 };
 
-// The property the mouse writes in the Viewport; objects without it cannot be placed.
+// What the mouse edits in the Viewport (see ViewportTransformTool): objects
+// without a position cannot be placed or moved, objects without a scale
+// cannot be resized.
 inline constexpr const char *TransformComponent = "Transform";
 inline constexpr const char *PositionProperty = "position";
+inline constexpr const char *ScaleProperty = "scale";
 
 // The data shown by the Inspector: components of an object and their
 // properties. Properties are addressed by a path inside their component, like
