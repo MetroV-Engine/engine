@@ -42,6 +42,8 @@ public:
     static constexpr int Version = 1;
 
     static std::string write(const HierarchyModel &hierarchy, const PropertyModel &properties);
+    // A level without objects.
+    static std::string empty();
     // Replaces every object of the scene by the level's. Throws
     // std::runtime_error, leaving the scene untouched, if text is not a valid
     // level; returns what the scene refused (an unknown component...).

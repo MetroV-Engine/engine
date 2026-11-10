@@ -14,10 +14,12 @@
 #include "LevelFile.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
 #include <stdexcept>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -83,7 +85,7 @@ public:
 
     std::string write()
     {
-        _out = std::string(Header) + " " + std::to_string(LevelFile::Version) + "\n";
+        _out = LevelFile::empty();
         for (ObjectId root : _hierarchy.roots())
             writeObject(root, -1);
         return std::move(_out);
@@ -191,11 +193,13 @@ std::vector<std::string> words(const std::string &line, int number)
 
 int toInt(const std::string &text, int line)
 {
-    char *end = nullptr;
-    const long value = std::strtol(text.c_str(), &end, 10);
-    if (text.empty() || *end != '\0')
+    // Out of range is refused, not cut down to an int (4294967296 is not 0).
+    int value = 0;
+    const char *end = text.data() + text.size();
+    const auto [stop, failure] = std::from_chars(text.data(), end, value);
+    if (text.empty() || failure != std::errc() || stop != end)
         throw error(line, "\"" + text + "\" is not an integer");
-    return static_cast<int>(value);
+    return value;
 }
 
 float toFloat(const std::string &text, int line)
@@ -297,6 +301,11 @@ bool hasComponent(const PropertyModel &properties, ObjectId id, const std::strin
 std::string LevelFile::write(const HierarchyModel &hierarchy, const PropertyModel &properties)
 {
     return Writer(hierarchy, properties).write();
+}
+
+std::string LevelFile::empty()
+{
+    return std::string(Header) + " " + std::to_string(Version) + "\n";
 }
 
 std::vector<std::string> LevelFile::read(const std::string &text, HierarchyModel &hierarchy, PropertyModel &properties)
