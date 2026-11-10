@@ -82,4 +82,14 @@ void run_asset_tests()
         library.scan();
         expect(paths(library) == std::vector<std::string>{"a.png", "b.png"});
     };
+
+    "each scan starts a new generation of asset indices"_test = [] {
+        FreshWorkingDirectory directory;
+        AssetLibrary library;
+        const std::size_t before = library.generation();
+        library.scan();
+        expect(library.generation() == before + 1);
+        library.scan();
+        expect(library.generation() == before + 2);
+    };
 }

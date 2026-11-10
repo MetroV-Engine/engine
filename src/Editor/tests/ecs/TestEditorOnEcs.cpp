@@ -157,6 +157,8 @@ namespace {
                 } else if (action.starts_with("focus ")) {
                     // Selects the panel's tab, so it is drawn.
                     ImGui::SetWindowFocus(action.substr(std::string_view("focus ").size()).c_str());
+                } else if (action.starts_with("remove file ")) {
+                    std::filesystem::remove(action.substr(std::string_view("remove file ").size()));
                 } else if (action.starts_with("create file ")) {
                     const std::filesystem::path file = action.substr(std::string_view("create file ").size());
                     if (file.has_parent_path())
@@ -475,5 +477,23 @@ void run_editor_on_ecs_tests()
 
         expect(logged(LogLevel::Info, "2 assets in")) << "the files of assets/ and its subfolders only";
         expect(loggedErrors() == 0_ul) << "the Asset Browser drew them";
+    };
+
+    "the Asset Browser follows a scan made by the assets command"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+
+        // The panel shows two files; the command reads the folder again
+        // with one, between two of the panel's own scans.
+        Logger::instance().clear();
+        runEditor(world, systems,
+            {
+                {3, {"create file assets/a.png", "create file assets/b.png", "focus Assets"}},
+                {6, {"remove file assets/b.png", "assets"}},
+                {10, {"quit"}},
+            });
+
+        expect(logged(LogLevel::Info, "1 assets in"));
+        expect(loggedErrors() == 0_ul);
     };
 }
