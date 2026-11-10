@@ -31,7 +31,7 @@ public:
 
     Renderer renderer(const Selection &selection) override
     {
-        return [renderer = DemoSceneRenderer(_scene, selection)](ImDrawList *drawList, ImVec2 min, ImVec2 max) {
+        return [renderer = DemoSceneRenderer(_scene, selection)](ImDrawList *drawList, ImVec2 min, ImVec2 max) mutable {
             return renderer.draw(drawList, min, max);
         };
     }
