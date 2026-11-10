@@ -48,11 +48,13 @@ private:
     AssetLibrary &_library;
     TextInput _search;
     Folder _root;
+    // The library's generation the tree was built from.
+    std::size_t _treeGeneration = 0;
     // Path of the selected file: it stays selected across scans.
     std::string _selected;
     double _nextScan = 0.0;
 
-    void scan();
+    void buildTree();
     void drawFolder(const Folder &folder);
     void drawAsset(std::size_t index, const std::string &label);
     void drawDetails() const;

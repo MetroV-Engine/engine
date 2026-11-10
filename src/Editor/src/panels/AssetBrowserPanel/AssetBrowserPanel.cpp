@@ -57,8 +57,14 @@ AssetBrowserPanel::AssetBrowserPanel(AssetLibrary &library)
 
 void AssetBrowserPanel::drawContent()
 {
-    if (ImGui::GetTime() >= _nextScan)
-        scan();
+    if (ImGui::GetTime() >= _nextScan) {
+        _library.scan();
+        _nextScan = ImGui::GetTime() + ScanSeconds;
+    }
+    // The tree holds indices into the assets: built again after every scan,
+    // this panel's or another's (the assets console command).
+    if (_treeGeneration != _library.generation())
+        buildTree();
 
     const std::filesystem::path &folder = _library.folder();
     std::error_code error;
@@ -66,7 +72,7 @@ void AssetBrowserPanel::drawContent()
         ImGui::TextWrapped("No assets folder yet. Images, sounds and fonts go in %s.", folder.string().c_str());
         if (Button("Create the folder").render()) {
             std::filesystem::create_directories(folder, error);
-            scan();
+            _nextScan = 0.0;
         }
         return;
     }
@@ -95,9 +101,9 @@ void AssetBrowserPanel::drawContent()
     drawDetails();
 }
 
-void AssetBrowserPanel::scan()
+void AssetBrowserPanel::buildTree()
 {
-    _library.scan();
+    _treeGeneration = _library.generation();
     _root = {};
     const std::vector<AssetLibrary::Asset> &assets = _library.assets();
     for (std::size_t i = 0; i < assets.size(); i++) {
@@ -109,7 +115,6 @@ void AssetBrowserPanel::scan()
         }
         folder->files.push_back(i);
     }
-    _nextScan = ImGui::GetTime() + ScanSeconds;
 }
 
 void AssetBrowserPanel::drawFolder(const Folder &folder)

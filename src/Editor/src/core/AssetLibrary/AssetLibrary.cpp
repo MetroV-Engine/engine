@@ -22,6 +22,7 @@ AssetLibrary::AssetLibrary(const std::filesystem::path &folder) : _folder(std::f
 
 void AssetLibrary::scan()
 {
+    ++_generation;
     _assets.clear();
     _truncated = false;
     using Iterator = std::filesystem::recursive_directory_iterator;

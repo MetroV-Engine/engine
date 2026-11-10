@@ -57,6 +57,8 @@ public:
     const std::vector<Asset> &assets() const { return _assets; }
     // True if the last scan stopped at MaxAssets.
     bool truncated() const { return _truncated; }
+    // Counts the scans: an index into assets() only holds for one generation.
+    std::size_t generation() const { return _generation; }
 
     static Type typeOf(const std::filesystem::path &file);
     static const char *typeName(Type type);
@@ -65,4 +67,5 @@ private:
     std::filesystem::path _folder;
     std::vector<Asset> _assets;
     bool _truncated = false;
+    std::size_t _generation = 0;
 };
