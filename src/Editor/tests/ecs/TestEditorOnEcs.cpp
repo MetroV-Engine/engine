@@ -70,6 +70,13 @@ namespace {
     // Frame number -> what to do on that frame (commands typed in the console).
     using Script = std::map<int, std::vector<std::string>>;
 
+    // How far the Hierarchy's tree is scrolled, out of how far it can be.
+    struct TreeScroll
+    {
+        float position = 0.0f;
+        float max = 0.0f;
+    };
+
     // Where a panel is on screen ("measure panels" in a script).
     struct PanelPlace
     {
@@ -118,7 +125,7 @@ namespace {
         HierarchyModel::ObjectId selected = HierarchyModel::InvalidId;
         std::map<std::string, PanelPlace> panels;
         std::vector<std::size_t> objectCounts;
-        float hierarchyScroll = 0.0f;
+        std::vector<TreeScroll> hierarchyScrolls;
         std::vector<ControlsWidth> controls;
 
     private:
@@ -140,6 +147,12 @@ namespace {
                     // Like the Viewport does: from outside the Hierarchy.
                     selected = hierarchy().roots().back();
                     selection.set(selected);
+                } else if (action == "focus hierarchy search") {
+                    ImGui::ActivateItemByID(ImGui::FindWindowByName("Hierarchy")->GetID("##HierarchySearch"));
+                } else if (action.starts_with("type ")) {
+                    ImGui::GetIO().AddInputCharactersUTF8(action.substr(std::string_view("type ").size()).c_str());
+                } else if (action == "leave text field") {
+                    ImGui::ClearActiveID();
                 } else if (action == "press F9" || action == "release F9") {
                     ImGui::GetIO().AddKeyEvent(ImGuiKey_F9, action == "press F9");
                 } else if (action == "count objects") {
@@ -147,7 +160,7 @@ namespace {
                 } else if (action == "measure hierarchy scroll") {
                     for (const ImGuiWindow *window : ImGui::GetCurrentContext()->Windows)
                         if (std::string_view(window->Name).starts_with("Hierarchy/##HierarchyTree"))
-                            hierarchyScroll = window->Scroll.y;
+                            hierarchyScrolls.push_back({window->Scroll.y, window->ScrollMax.y});
                 } else if (action == "measure controls") {
                     if (const ImGuiWindow *window = ImGui::FindWindowByName("Game Controls"))
                         controls.push_back({window->ContentSize.x, window->ContentRegionRect.GetWidth()});
@@ -170,7 +183,7 @@ namespace {
         HierarchyModel::ObjectId selected = HierarchyModel::InvalidId;
         std::map<std::string, PanelPlace> panels;
         std::vector<std::size_t> objectCounts;
-        float hierarchyScroll = 0.0f;
+        std::vector<TreeScroll> hierarchyScrolls;
         std::vector<ControlsWidth> controls;
         // The imgui.ini file the editor saved when it closed.
         std::string savedIni;
@@ -201,7 +214,7 @@ namespace {
             run.selected = scripted.selected;
             run.panels = scripted.panels;
             run.objectCounts = scripted.objectCounts;
-            run.hierarchyScroll = scripted.hierarchyScroll;
+            run.hierarchyScrolls = scripted.hierarchyScrolls;
             run.controls = scripted.controls;
         }
         std::ifstream saved("imgui.ini");
@@ -339,7 +352,34 @@ void run_editor_on_ecs_tests()
 
         const Run run = runEditor(world, systems, {{3, {"select last"}}, {10, {"measure hierarchy scroll"}}, {12, {"quit"}}});
 
-        expect(run.hierarchyScroll > 0.0f) << "the last of 300 rows is far below the first ones";
+        expect(run.hierarchyScrolls.size() == 1 && run.hierarchyScrolls[0].position > 0.0f)
+            << "the last of 300 rows is far below the first ones";
+    };
+
+    "an object hidden by the Hierarchy's search is shown when selected elsewhere"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        for (int i = 0; i < 300; i++)
+            world.spawnEntity("Entity " + std::to_string(i));
+
+        // "Entity 1" lists Entity 1, 10 to 19 and 100 to 199, not Entity 299.
+        const Run run = runEditor(world, systems,
+            {
+                {3, {"focus hierarchy search"}},
+                {5, {"type Entity 1"}},
+                {7, {"leave text field"}},
+                {9, {"measure hierarchy scroll", "select last"}},
+                {14, {"measure hierarchy scroll"}},
+                {16, {"quit"}},
+            });
+
+        expect(run.hierarchyScrolls.size() == 2_ul);
+        if (run.hierarchyScrolls.size() != 2)
+            return;
+        const TreeScroll filtered = run.hierarchyScrolls[0];
+        const TreeScroll shown = run.hierarchyScrolls[1];
+        expect(filtered.max > 0.0f && shown.max > filtered.max) << "the search hid rows, then was cleared";
+        expect(shown.position > 0.0f) << "scrolled to the selected object";
     };
 
     "the game controls do not move when the game plays or pauses"_test = [] {

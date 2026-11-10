@@ -178,8 +178,16 @@ void HierarchyPanel::drawContent()
         _selection.clear();
     if (_selection.get() != _shownSelection) {
         _shownSelection = _selection.get();
-        if (_selection.has())
+        if (_selection.has()) {
+            // A search that hides it is cleared, as showObject() does.
+            const std::string filter = toLower(_search.getValue());
+            if (!filter.empty()) {
+                const std::vector<Row> rows = buildRows(filter);
+                if (std::ranges::find(rows, _shownSelection, &Row::id) == rows.end())
+                    _search.setValue("");
+            }
             reveal(_shownSelection);
+        }
     }
 
     const float buttonWidth = ImGui::GetFrameHeight();

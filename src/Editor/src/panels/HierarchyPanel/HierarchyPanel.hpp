@@ -36,7 +36,8 @@ class EntityDropTarget;
 //  - drag an object onto another to make it its child, or onto the empty area
 //    to move it to the root (unless the model is flat, see supportsParenting);
 //  - drop an entity template anywhere on the tree to create an object;
-//  - an object selected elsewhere (in the Viewport) is revealed and scrolled to.
+//  - an object selected elsewhere (in the Viewport) is revealed and scrolled
+//    to, clearing a search that hides it.
 // Objects can only be created while the game is stopped, like with the Entity
 // Palette: created during play, they would vanish on Stop.
 // Changes are applied after the tree has been drawn, never while iterating it.
