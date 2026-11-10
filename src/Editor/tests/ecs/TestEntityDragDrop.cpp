@@ -62,6 +62,8 @@ namespace {
         ImVec2 toOffset{};
         // If set, snapping to a grid of this size is on, as if saved in the workspace.
         int snapGrid = 0;
+        // World x at the Viewport's left edge.
+        float worldOffset = 0.0f;
     };
 
     struct DragResult
@@ -150,7 +152,7 @@ namespace {
         Renderer renderer(const Selection &selection) override
         {
             return [this, &selection](ImDrawList *, ImVec2 min, ImVec2) {
-                _view = ViewportView{min, ViewScale};
+                _view = ViewportView{ImVec2(min.x - _scenario.worldOffset * ViewScale, min.y), ViewScale};
                 step(selection);
                 return _view;
             };
@@ -423,6 +425,15 @@ void run_entity_drag_drop_tests()
 
         const Transform &transform = world.getComponent<Transform>(box);
         expect(same(Vec2{transform.scale.x, transform.scale.y}, Vec2{1.8f, 1}));
+    };
+
+    "the grid is drawn far from the world's origin"_test = [] {
+        ECS::Registry world;
+
+        // Around one billion, adding a grid step to a float leaves it unchanged.
+        const DragResult result = runDrag(world, {.target = "Inspector", .snapGrid = 16, .worldOffset = 1.0e9f});
+
+        expect(result.frames >= 36_i) << "every frame was drawn";
     };
 
     "snapping settings are saved with the workspace"_test = [] {

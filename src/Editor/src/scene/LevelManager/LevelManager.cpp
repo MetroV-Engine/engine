@@ -56,9 +56,12 @@ bool LevelManager::hasUnsavedChanges() const
 void LevelManager::create(const std::string &name)
 {
     checkNew(name);
+    // Written before the scene is emptied: if it cannot be, the scene stays.
+    store(name, LevelFile::empty());
     for (HierarchyModel::ObjectId root : _hierarchy.roots())
         _hierarchy.destroy(root);
-    write(name);
+    _current = name;
+    _savedText = LevelFile::empty();
 }
 
 std::vector<std::string> LevelManager::open(const std::string &name)
@@ -145,14 +148,29 @@ void LevelManager::checkExists(const std::string &name) const
 
 void LevelManager::write(const std::string &name)
 {
-    std::error_code ignored;
-    std::filesystem::create_directories(_folder, ignored);
     const std::string text = LevelFile::write(_hierarchy, _properties);
-    std::ofstream file(pathOf(name), std::ios::binary | std::ios::trunc);
-    file << text;
-    file.close();
-    if (!file)
-        throw std::runtime_error("Cannot write " + pathOf(name).string());
+    store(name, text);
     _current = name;
     _savedText = text;
+}
+
+void LevelManager::store(const std::string &name, const std::string &text) const
+{
+    std::error_code ignored;
+    std::filesystem::create_directories(_folder, ignored);
+    // Written beside the level, then moved over it: a write that fails (a
+    // full disk) leaves the previous file whole.
+    const std::filesystem::path path = pathOf(name);
+    std::filesystem::path written = path;
+    written += ".tmp";
+    std::ofstream file(written, std::ios::binary | std::ios::trunc);
+    file << text;
+    file.close();
+    std::error_code error;
+    if (file)
+        std::filesystem::rename(written, path, error);
+    if (!file || error) {
+        std::filesystem::remove(written, ignored);
+        throw std::runtime_error("Cannot write " + path.string() + (error ? ": " + error.message() : std::string()));
+    }
 }

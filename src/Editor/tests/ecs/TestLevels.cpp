@@ -6,9 +6,15 @@
 #include <algorithm>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#if !defined(_WIN32)
+#include <csignal>
+#include <sys/resource.h>
+#endif
 
 #include "ECS/ECS.hpp"
 #include "ECS/Reflection/Reflection.hpp"
@@ -136,6 +142,7 @@ void run_level_tests()
             "metrov-level 1\nobject 0 - \"A\"\ncomponent \"LevelThing\"\nproperty \"visible\" bool maybe\n",
             "metrov-level 1\nobject 1 - \"A\"\n",
             "metrov-level 1\nobject 0 - \"A\n",
+            "metrov-level 1\nobject 4294967296 - \"A\"\n",
         };
         for (const std::string &text : invalid) {
             bool thrown = false;
@@ -229,4 +236,49 @@ void run_level_tests()
         expect(levels.current() == std::string("kept"));
         expect(levels.list() == std::vector<std::string>{"broken", "kept"});
     };
+
+    "a level that cannot be created leaves the scene as it was"_test = [] {
+        FreshWorkingDirectory directory;
+        ECS::Registry world;
+        world.spawnEntity("Unsaved");
+        EcsScene scene(world);
+        std::ofstream("levels") << "a file where the folder should be";
+        LevelManager levels(scene, scene);
+
+        expect(refused([&] { levels.create("new"); }));
+
+        expect(rootNames(scene) == std::vector<std::string>{"Unsaved"});
+        expect(levels.current().empty());
+    };
+
+#if !defined(_WIN32)
+    "a save that fails halfway keeps the previous level file whole"_test = [] {
+        FreshWorkingDirectory directory;
+        DemoScene scene;
+        scene.create(HierarchyModel::InvalidId, "Saved");
+        LevelManager levels(scene, scene);
+        levels.saveAs("first");
+        const auto read = [] {
+            std::ifstream file("levels/first.level", std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        };
+        const std::string before = read();
+        scene.create(HierarchyModel::InvalidId, "Added");
+
+        // Writes past 32 bytes fail, as on a full disk.
+        rlimit previous{};
+        getrlimit(RLIMIT_FSIZE, &previous);
+        rlimit limited = previous;
+        limited.rlim_cur = 32;
+        const auto handler = std::signal(SIGXFSZ, SIG_IGN);
+        setrlimit(RLIMIT_FSIZE, &limited);
+        const bool failed = refused([&] { levels.save(); });
+        setrlimit(RLIMIT_FSIZE, &previous);
+        std::signal(SIGXFSZ, handler);
+
+        expect(failed);
+        expect(before.size() > 32_ul && read() == before) << "not cut at 32 bytes";
+        expect(levels.hasUnsavedChanges()) << "the change is still to save";
+    };
+#endif
 }

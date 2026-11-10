@@ -41,7 +41,7 @@ public:
     // current level, if it has objects.
     bool hasUnsavedChanges() const;
 
-    // Empties the scene and saves it as a new level, which becomes current.
+    // Saves an empty level, which becomes current, then empties the scene.
     void create(const std::string &name);
     // Replaces the scene by the level; returns what the scene refused.
     std::vector<std::string> open(const std::string &name);
@@ -70,4 +70,6 @@ private:
     void checkExists(const std::string &name) const;
     // Writes the scene in the level's file, which becomes current.
     void write(const std::string &name);
+    // Writes text as the level's file, replacing it only once fully written.
+    void store(const std::string &name, const std::string &text) const;
 };
