@@ -1,18 +1,22 @@
 // Levels: a scene written as a level file and read back (LevelFile), on an
-// ECS world and on the demo scene.
+// ECS world and on the demo scene, and the levels folder (LevelManager).
 
 #include <boost/ut.hpp>
 
 #include <algorithm>
+#include <fstream>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "ECS/ECS.hpp"
 #include "ECS/Reflection/Reflection.hpp"
+#include "Support/FreshWorkingDirectory.hpp"
 #include "ecs/EcsScene/EcsScene.hpp"
 #include "scene/DemoScene/DemoScene.hpp"
 #include "scene/LevelFile/LevelFile.hpp"
+#include "scene/LevelManager/LevelManager.hpp"
 
 using namespace boost::ut;
 
@@ -53,6 +57,16 @@ namespace {
     bool contains(const std::vector<std::string> &problems, const std::string &text)
     {
         return std::ranges::any_of(problems, [&](const std::string &p) { return p.find(text) != std::string::npos; });
+    }
+
+    bool refused(const std::function<void()> &change)
+    {
+        try {
+            change();
+        } catch (const std::runtime_error &) {
+            return true;
+        }
+        return false;
     }
 }
 
@@ -154,5 +168,65 @@ void run_level_tests()
         expect(contains(problems, "flat")) << "the ECS has no parents yet";
         expect(rootNames(scene) == std::vector<std::string>{"A", "Child"});
         expect(!world.getComponent<LevelThing>(entityNamed(scene, "A")).visible);
+    };
+
+    "levels are created, saved, opened, renamed and deleted"_test = [] {
+        FreshWorkingDirectory directory;
+        ECS::Registry world;
+        EcsScene scene(world);
+        LevelManager levels(scene, scene);
+        world.spawnEntity("Before");
+        expect(levels.hasUnsavedChanges()) << "a scene that is in no level";
+
+        levels.create("first");
+        expect(rootNames(scene).empty()) << "a new level is empty";
+        expect(levels.current() == std::string("first") && !levels.hasUnsavedChanges());
+        world.spawnEntity("Hero");
+        expect(levels.hasUnsavedChanges());
+        levels.save();
+        expect(!levels.hasUnsavedChanges());
+
+        world.spawnEntity("Box");
+        levels.saveAs("second");
+        expect(levels.list() == std::vector<std::string>{"first", "second"});
+        expect(levels.current() == std::string("second"));
+
+        expect(levels.open("first").empty());
+        expect(rootNames(scene) == std::vector<std::string>{"Hero"}) << "what was saved in first";
+        expect(levels.current() == std::string("first") && !levels.hasUnsavedChanges());
+
+        levels.rename("first", "renamed");
+        expect(levels.list() == std::vector<std::string>{"renamed", "second"});
+        expect(levels.current() == std::string("renamed")) << "the open level follows its file";
+
+        levels.remove("second");
+        levels.remove("renamed");
+        expect(levels.list().empty());
+        expect(levels.current().empty() && levels.hasUnsavedChanges()) << "the scene stays, in no level";
+        expect(rootNames(scene) == std::vector<std::string>{"Hero"});
+    };
+
+    "refused level changes leave the levels and the scene as they were"_test = [] {
+        FreshWorkingDirectory directory;
+        ECS::Registry world;
+        EcsScene scene(world);
+        LevelManager levels(scene, scene);
+
+        expect(refused([&] { levels.save(); })) << "no level open";
+        for (const std::string &name : {"", "two words", "../outside", "dot.ted"})
+            expect(refused([&] { levels.create(name); })) << name;
+        levels.create("kept");
+        world.spawnEntity("Unsaved");
+        expect(refused([&] { levels.create("kept"); })) << "already exists";
+        expect(refused([&] { levels.saveAs("kept"); })) << "already exists";
+        expect(refused([&] { levels.open("missing"); }));
+        expect(refused([&] { levels.rename("missing", "other"); }));
+        expect(refused([&] { levels.remove("missing"); }));
+        std::ofstream("levels/broken.level") << "not a level\n";
+        expect(refused([&] { levels.open("broken"); }));
+
+        expect(rootNames(scene) == std::vector<std::string>{"Unsaved"});
+        expect(levels.current() == std::string("kept"));
+        expect(levels.list() == std::vector<std::string>{"broken", "kept"});
     };
 }
