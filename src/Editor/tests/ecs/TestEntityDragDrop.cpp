@@ -1,6 +1,6 @@
 // The real Editor on an ECS world, without a window on screen: a simulated
-// mouse drags entity templates from the Entity Palette and moves objects in
-// the Viewport, one event every few frames. Run on macOS with:
+// mouse drags entity templates from the Entity Palette, and moves and scales
+// objects in the Viewport, one event every few frames. Run on macOS with:
 //   SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software ./build/src/Editor/tests_editor
 
 #include <boost/ut.hpp>
@@ -26,6 +26,7 @@
 #include "core/Editor/Editor.hpp"
 #include "core/GuiContext/GuiContext.hpp"
 #include "ecs/EcsBackend/EcsBackend.hpp"
+#include "panels/ViewportTransformTool/ViewportTransformTool.hpp"
 
 using namespace boost::ut;
 
@@ -33,11 +34,12 @@ using namespace boost::ut;
 namespace {
     struct DropHealth { int value = 10; };
     struct DropVector { float x = 0, y = 0; };
-    // The component and field the mouse writes: the name matters here.
-    struct Transform { DropVector position; };
+    // The component and fields the mouse writes: the names matter here.
+    struct Transform { DropVector position; DropVector scale{1, 1}; };
 
     // Pixels of the Viewport per world unit, in these tests.
     constexpr float ViewScale = 2.0f;
+    constexpr float HandleDistance = ViewportTransformTool::HandleDistancePixels;
 
     enum class PlayMoment { Never, BeforeDrag, DuringDrag, OnRelease };
 
@@ -51,6 +53,11 @@ namespace {
         // palette: from this world position to moveTo.
         std::optional<Vec2> moveFrom = std::nullopt;
         Vec2 moveTo{};
+        // Clicks moveFrom before the drag, to select the object there.
+        bool selectFirst = false;
+        // Added on screen to moveFrom and moveTo, in pixels: to grab a scale handle.
+        ImVec2 fromOffset{};
+        ImVec2 toOffset{};
     };
 
     struct DragResult
@@ -61,6 +68,8 @@ namespace {
         std::string selectedName;
         std::vector<std::string> selectedComponents;
         std::optional<Vec2> selectedPosition;
+        // Read while the editor runs: Stop restores the world when it closes.
+        std::optional<Vec2> selectedScale;
         // World position under the mouse where it was released.
         Vec2 releaseWorld{};
     };
@@ -70,6 +79,11 @@ namespace {
         // ImGui rounds the mouse position down to a pixel.
         const float tolerance = 1.0f / ViewScale + 0.01f;
         return std::abs(a.x - b.x) <= tolerance && std::abs(a.y - b.y) <= tolerance;
+    }
+
+    bool closeTo(Vec2 a, Vec2 b)
+    {
+        return std::abs(a.x - b.x) <= 0.05f && std::abs(a.y - b.y) <= 0.05f;
     }
 
     bool isDraggingTemplate()
@@ -133,21 +147,39 @@ namespace {
         ImVec2 _grab;
         ViewportView _view;
 
+        ImVec2 onScreen(Vec2 world, ImVec2 offset) const
+        {
+            const ImVec2 screen = _view.toScreen(world);
+            return ImVec2(screen.x + offset.x, screen.y + offset.y);
+        }
+
         ImVec2 mouseStart() const
         {
-            return _scenario.moveFrom ? _view.toScreen(*_scenario.moveFrom) : paletteItem(_scenario.templateIndex);
+            return _scenario.moveFrom ? onScreen(*_scenario.moveFrom, _scenario.fromOffset) : paletteItem(_scenario.templateIndex);
         }
 
         ImVec2 mouseEnd() const
         {
-            return _scenario.moveFrom ? _view.toScreen(_scenario.moveTo) : windowCenter(_scenario.target);
+            return _scenario.moveFrom ? onScreen(_scenario.moveTo, _scenario.toOffset) : windowCenter(_scenario.target);
         }
 
         void step(const Selection &selection)
         {
             const int frame = ++_result.frames;
             switch (frame) {
-            case 5:
+            case 4:
+                if (_scenario.selectFirst)
+                    moveMouse(_view.toScreen(*_scenario.moveFrom));
+                break;
+            case 6:
+                if (_scenario.selectFirst)
+                    setMouseDown(true);
+                break;
+            case 8:
+                if (_scenario.selectFirst)
+                    setMouseDown(false);
+                break;
+            case 9:
                 if (_scenario.play == PlayMoment::BeforeDrag)
                     _commands->execute("play");
                 break;
@@ -178,6 +210,7 @@ namespace {
                     for (const ComponentInfo &component : properties().components(selection.get()))
                         _result.selectedComponents.push_back(component.name);
                     _result.selectedPosition = properties().getAs<Vec2>(selection.get(), "Transform", "position");
+                    _result.selectedScale = properties().getAs<Vec2>(selection.get(), "Transform", "scale");
                 }
                 break;
             case 36: _gui.stop(); break;
@@ -213,7 +246,7 @@ namespace {
 
 E_REFLECT(DropHealth) E_FIELD(value, int) E_END
 E_REFLECT(DropVector) E_FIELD(x, float) E_FIELD(y, float) E_END
-E_REFLECT(Transform) E_FIELD(position, DropVector) E_END
+E_REFLECT(Transform) E_FIELD(position, DropVector) E_FIELD(scale, DropVector) E_END
 
 void run_entity_drag_drop_tests()
 {
@@ -259,6 +292,69 @@ void run_entity_drag_drop_tests()
 
         expect(result.selectedName.empty()) << "the click did not grab it";
         expect(world.getComponent<Transform>(still).position.x == 100.0f);
+    };
+
+    "dragging the X handle scales the selected object horizontally"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity box = world.spawnEntity("Box");
+        world.addComponent(box, Transform{{100, 80}});
+
+        runDrag(world, {.moveFrom = Vec2{100, 80}, .moveTo = Vec2{100, 80}, .selectFirst = true,
+                           .fromOffset = {HandleDistance, 0}, .toOffset = {2 * HandleDistance, 0}});
+
+        const Transform &transform = world.getComponent<Transform>(box);
+        expect(closeTo(Vec2{transform.scale.x, transform.scale.y}, Vec2{2, 1}));
+        expect(transform.position.x == 100.0f && transform.position.y == 80.0f) << "scaling does not move it";
+    };
+
+    "dragging the Y handle scales the selected object vertically"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity box = world.spawnEntity("Box");
+        world.addComponent(box, Transform{{100, 80}});
+
+        runDrag(world, {.moveFrom = Vec2{100, 80}, .moveTo = Vec2{100, 80}, .selectFirst = true,
+                           .fromOffset = {0, -HandleDistance}, .toOffset = {0, -HandleDistance / 2}});
+
+        const Transform &transform = world.getComponent<Transform>(box);
+        expect(closeTo(Vec2{transform.scale.x, transform.scale.y}, Vec2{1, 0.5f}));
+    };
+
+    "dragging the corner handle scales both axes"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity box = world.spawnEntity("Box");
+        world.addComponent(box, Transform{{100, 80}, {2, 1}});
+
+        runDrag(world, {.moveFrom = Vec2{100, 80}, .moveTo = Vec2{100, 80}, .selectFirst = true,
+                           .fromOffset = {HandleDistance, -HandleDistance}, .toOffset = {1.5f * HandleDistance, -1.5f * HandleDistance}});
+
+        const Transform &transform = world.getComponent<Transform>(box);
+        expect(closeTo(Vec2{transform.scale.x, transform.scale.y}, Vec2{3, 1.5f})) << "both axes keep their ratio";
+    };
+
+    "only the selected object has scale handles"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity box = world.spawnEntity("Box");
+        world.addComponent(box, Transform{{100, 80}});
+
+        const DragResult result = runDrag(world, {.moveFrom = Vec2{100, 80}, .moveTo = Vec2{100, 80},
+                                                     .fromOffset = {HandleDistance, 0}, .toOffset = {2 * HandleDistance, 0}});
+
+        const Transform &transform = world.getComponent<Transform>(box);
+        expect(result.selectedName.empty());
+        expect(closeTo(Vec2{transform.scale.x, transform.scale.y}, Vec2{1, 1}));
+        expect(transform.position.x == 100.0f);
+    };
+
+    "objects cannot be scaled during Play"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity box = world.spawnEntity("Box");
+        world.addComponent(box, Transform{{100, 80}});
+
+        const DragResult result = runDrag(world, {.play = PlayMoment::BeforeDrag, .moveFrom = Vec2{100, 80}, .moveTo = Vec2{100, 80},
+                                                     .selectFirst = true, .fromOffset = {HandleDistance, 0}, .toOffset = {2 * HandleDistance, 0}});
+
+        expect(result.selectedName == std::string("Box")) << "selected before Play";
+        expect(result.selectedScale && closeTo(*result.selectedScale, Vec2{1, 1})) << "unchanged during Play";
     };
 
     "dropping a template on the Hierarchy creates its entity and selects it"_test = [] {
