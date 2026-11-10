@@ -371,4 +371,44 @@ void run_editor_on_ecs_tests()
         expect(run.controls.size() == 1 && run.controls[0].content <= run.controls[0].room + 0.5f)
             << "nothing cut off on the right";
     };
+
+    "levels are saved, created, opened and renamed from the console"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        world.spawnEntity("A");
+
+        Logger::instance().clear();
+        const Run run = runEditor(world, systems,
+            {
+                {3, {"level save first", "level new second", "count objects"}},
+                {5, {"level open first", "count objects", "level rename first renamed", "level list"}},
+                {7, {"quit"}},
+            });
+
+        expect(loggedErrors() == 0_ul);
+        expect(run.objectCounts == std::vector<std::size_t>{0, 1}) << "the new level is empty, the first one has A";
+        expect(logged(LogLevel::Info, "Levels: renamed, second"));
+    };
+
+    "levels do not change during Play, nor over unsaved changes"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        world.spawnEntity("A");
+
+        Logger::instance().clear();
+        const Run run = runEditor(world, systems,
+            {
+                {3, {"level new second"}},
+                {4, {"level save first", "play"}},
+                {6, {"level new third"}},
+                {8, {"stop", "count objects", "level list"}},
+                {10, {"quit"}},
+            });
+
+        expect(logged(LogLevel::Error, "unsaved changes")) << "A is in no level yet";
+        expect(logged(LogLevel::Error, "stop the game first"));
+        expect(loggedErrors() == 2_ul);
+        expect(run.objectCounts == std::vector<std::size_t>{1});
+        expect(logged(LogLevel::Info, "Levels: first")) << "only the level saved before Play";
+    };
 }
