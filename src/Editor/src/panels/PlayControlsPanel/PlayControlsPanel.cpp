@@ -118,6 +118,25 @@ bool PlayControlsPanel::controlButton(const char *actionId, Icon icon, const ImV
     return clicked && enabled;
 }
 
+std::string PlayControlsPanel::statusText(PlayState state, double time)
+{
+    if (state == PlayState::Stopped)
+        return "Editing";
+    const int minutes = static_cast<int>(time / 60.0);
+    char text[64];
+    std::snprintf(text, sizeof(text), "%s  %02d:%05.2f", PlayController::stateName(state), minutes, time - minutes * 60.0);
+    return text;
+}
+
+float PlayControlsPanel::statusWidth()
+{
+    // Measured with the timer at zero: digits are equally wide.
+    float width = 0.0f;
+    for (const PlayState state : {PlayState::Stopped, PlayState::Playing, PlayState::Paused})
+        width = std::max(width, ImGui::CalcTextSize(statusText(state, 0.0).c_str()).x);
+    return width;
+}
+
 ImVec2 PlayControlsPanel::minimumSize() const
 {
     const ImGuiStyle &style = ImGui::GetStyle();
@@ -136,13 +155,8 @@ void PlayControlsPanel::drawContent()
     const ImVec4 &stateColor = state == PlayState::Playing ? theme.colors.success
         : state == PlayState::Paused                       ? theme.colors.warning
                                                            : theme.colors.textMuted;
-    char status[64];
-    const double time = _play.getPlayTime();
-    const int minutes = static_cast<int>(time / 60.0);
-    if (state == PlayState::Stopped)
-        std::snprintf(status, sizeof(status), "Editing");
-    else
-        std::snprintf(status, sizeof(status), "%s  %02d:%05.2f", PlayController::stateName(state), minutes, time - minutes * 60.0);
+    const std::string status = statusText(state, _play.getPlayTime());
+    const float statusRoom = statusWidth();
 
     // Center the row: buttons, then status and speed on the right of them.
     const char *actions[] = {"game.play", "game.pause", "game.stop", "game.step"};
@@ -150,9 +164,9 @@ void PlayControlsPanel::drawContent()
     for (const char *id : actions)
         if (const Action *action = _actions.get(id))
             buttonsWidth += buttonWidth(action->label.c_str(), height) + style.ItemSpacing.x;
-    const float statusWidth = ImGui::GetFontSize() + ImGui::CalcTextSize(status).x + style.ItemSpacing.x * 3.0f
-        + ImGui::CalcTextSize("Speed").x + ImGui::GetFontSize() * 5.0f;
-    const float total = buttonsWidth + statusWidth;
+    const float rightWidth = ImGui::GetFontSize() + statusRoom + style.ItemSpacing.x * 3.0f + ImGui::CalcTextSize("Speed").x
+        + ImGui::GetFontSize() * 5.0f;
+    const float total = buttonsWidth + rightWidth;
     const float rowTop = std::max(ImGui::GetCursorPosY(), (ImGui::GetWindowHeight() - height) * 0.5f);
 
     // Handle on the left, to move the bar (it has no tab to drag).
@@ -194,10 +208,11 @@ void PlayControlsPanel::drawContent()
     ImGui::Dummy(ImVec2(radius * 2.0f, ImGui::GetFrameHeight()));
     ImGui::SameLine();
     centerNext();
-    ImGui::TextColored(stateColor, "%s", status);
+    const float statusX = ImGui::GetCursorPosX();
+    ImGui::TextColored(stateColor, "%s", status.c_str());
 
-    // Speed selector.
-    ImGui::SameLine(0.0f, style.ItemSpacing.x * 3.0f);
+    // Speed selector, after the room of the widest status.
+    ImGui::SameLine(statusX + statusRoom + style.ItemSpacing.x * 3.0f);
     centerNext();
     ImGui::TextDisabled("Speed");
     ImGui::SameLine();

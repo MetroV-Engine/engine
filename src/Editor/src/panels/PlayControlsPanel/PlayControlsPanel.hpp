@@ -17,6 +17,8 @@
 #include "navigation/ActionRegistry/ActionRegistry.hpp"
 #include "scene/PlayController/PlayController.hpp"
 
+#include <string>
+
 // Bar of large colored buttons to run the game: Play (green), Pause
 // (orange), Stop (red) and Step, with the play state, a timer and the speed.
 // Docked above the console by default, without a tab. The buttons run the
@@ -47,4 +49,8 @@ private:
     bool controlButton(const char *actionId, Icon icon, const ImVec4 &color, float height) const;
     static float buttonWidth(const char *label, float height);
     static void drawIcon(ImDrawList *drawList, Icon icon, ImVec2 center, float size, ImU32 color);
+    // "Editing", or the state and the timer.
+    static std::string statusText(PlayState state, double time);
+    // The widest status, so the row never moves when the state or the timer changes.
+    static float statusWidth();
 };
