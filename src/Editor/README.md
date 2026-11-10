@@ -116,13 +116,17 @@ What the editor then does with the world:
   create its entity and select it. An ECS world starts with `Empty Entity`;
   `addEntityTemplate` adds more. A component that cannot be added gives a
   warning and the entity is created without it. A layout saved before this
-  panel existed shows it floating until View > Reset Layout.
+  panel existed gets it docked below the Hierarchy, like any panel a saved
+  layout does not know is docked in its default area.
 - **Viewport**: a template dropped there lands under the mouse. Clicking near
-  an object selects it and dragging moves it; the handles of the selected
-  object scale it (see
+  an object selects it (the Hierarchy scrolls to it) and dragging moves it;
+  the handles of the selected object scale it (see
   [Editing objects with the mouse](#editing-objects-with-the-mouse)).
-- **During Play**: the palette is disabled, a drag in progress is cancelled
-  and objects cannot be moved or scaled with the mouse.
+  Clicking empty space clears the selection.
+- **During Play**: nothing can be created (Entity Palette, Hierarchy `+` and
+  menus, Edit > Create Object), a drag in progress is cancelled and objects
+  cannot be moved or scaled with the mouse: created during play, objects
+  would vanish on Stop.
 - **Play / Stop**: Play runs `SystemManager::update(world, dt)` every frame.
   Stop restores the world as it was on Play: entities spawned during play are
   killed, the others get their saved components back (added ones are removed,
@@ -193,8 +197,8 @@ ctest --test-dir build --output-on-failure
 | `tests/ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
 | `tests/ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
 | `tests/ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
-| `tests/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged |
-| `tests/ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved, and scaled with the handles of the selected one; with snapping on, moves, drops and scales land on the grid, and the settings are saved; nothing is created, moved or scaled during Play, even when Play is pressed during the drag or at the drop |
+| `tests/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged. A panel missing from a saved layout is docked in its area; Create Object does nothing during Play, even from a shortcut; an object selected outside the Hierarchy is scrolled to there |
+| `tests/ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved, and scaled with the handles of the selected one, and clicking empty space clears the selection; with snapping on, moves, drops and scales land on the grid, and the settings are saved; nothing is created, moved or scaled during Play, even when Play is pressed during the drag or at the drop |
 
 On macOS SDL's `offscreen` driver cannot start, so the tests opening the real
 Editor fail under plain `ctest`. Run them with
