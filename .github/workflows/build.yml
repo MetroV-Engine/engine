@@ -10,6 +10,8 @@ jobs:
   compile:
     name: Compile on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
     strategy:
       fail-fast: true
       matrix:
@@ -30,22 +32,33 @@ jobs:
           cmakeVersion: 3.31.6
           ninjaVersion: 1.12.1
 
+      - name: Create vcpkg cache directory
+        shell: bash
+        run: mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+
       - name: Init vcpkg submodule
         run: git submodule update --init --depth 1 vcpkg
 
-      - name: Install vcpkg bootstrap deps (Ubuntu)
+      - name: Install SDL3 build dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip unzip
+          sudo apt-get install -y zip unzip pkg-config autoconf autoconf-archive automake libtool \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev \
+            wayland-protocols libdecor-0-dev libegl1-mesa-dev libgl1-mesa-dev \
+            libudev-dev
 
-      - name: Cache vcpkg packages
+      - name: Cache vcpkg binary packages
         uses: actions/cache@v4
         with:
-          path: vcpkg_installed
+          path: ${{ github.workspace }}/.vcpkg-cache
           key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', '.github/workflows/build.yml') }}
           restore-keys: |
             vcpkg-${{ runner.os }}-
 
-      - name: Compile project and tests
-        run: python project_scripts/build.py --compile-tests
+      - name: Compile everything (executables, editor, tests)
+        run: python project_scripts/build.py --preset tests
+
+      - name: Run all tests
+        run: ctest --preset tests

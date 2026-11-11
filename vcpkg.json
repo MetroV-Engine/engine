@@ -11,7 +11,15 @@
     "gui": {
       "description": "Editor GUI (src/Editor): SDL3 and Dear ImGui with docking",
       "dependencies": [
-        "sdl3",
+        {
+          "name": "sdl3",
+          "features": [
+            {
+              "name": "dbus",
+              "platform": "linux"
+            }
+          ]
+        },
         {
           "name": "imgui",
           "features": [

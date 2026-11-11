@@ -17,22 +17,16 @@ yet). Enable it with `ENGINE_BUILD_GUI`; vcpkg (the `vcpkg` submodule:
 manifest:
 
 ```sh
-cmake -B build -S . -DENGINE_BUILD_GUI=ON
-cmake --build build
-./build/gui               # editor of an empty ECS world
-./build/gui --demo        # built-in demo level (no ECS) and widget demo panels
-./build/gui_ecs_example   # a small game opening the editor on its own world
+cmake --preset all                       # configure (executables and editor), from the engine root
+cmake --build --preset all --target editor gui_ecs_example
+./build/all/editor                    # editor of an empty ECS world
+./build/all/editor --demo             # built-in demo level (no ECS) and widget demo panels
+./build/all/gui_ecs_example        # a small game opening the editor on its own world
 ```
 
-When working only on the editor, it can also be built from its own folder
-(it adds the ECS itself and uses the same manifest):
-
-```sh
-cd src/Editor
-cmake -S . -B build
-cmake --build build
-./build/gui --demo
-```
+The configuration always starts from the engine root (`CMakePresets.json`);
+`--target` builds only what you need. The executables are in `apps/editor`
+and `apps/examples`.
 
 The editor writes its layout and preferences (`imgui.ini`, `imgui-demo.ini`),
 custom shortcuts (`shortcuts.ini`) and log (`logs/editor.log`) in the working
@@ -57,12 +51,10 @@ automatically.
 | `src/ecs/` | The editor on an ECS world: `EcsScene` (entities and reflected components), `EcsSimulation` (systems, world restored on Stop), `EcsBackend` |
 | `src/navigation/` | Actions, menu bar, toolbar, command palette, shortcuts |
 | `src/layout/` | Dockspace layout, status bar, saved workspace |
-| `examples/` | `EcsExample.cpp`: a game using the editor (`gui_ecs_example`) |
-| `tests/` | `tests_editor`: the editor on an ECS world (see [Tests](#tests)) |
 
 ## Using the editor from the ECS
 
-The editor is the `engine_editor` library (the `gui` executable is a small
+The editor is the `engine_editor` library (the `editor` executable is a small
 `main` around it). A program that has an ECS world, the engine or a game,
 links it and gives it its world and systems:
 
@@ -128,30 +120,26 @@ Limits:
 
 ## Tests
 
-`tests_editor` checks that the editor works on an ECS world, with the
-engine's test framework (boost-ext ut). It is built when the editor is built
-from its own folder, or from the engine root with the engine's tests:
+`tests_editor` (in `tests/Editor/`, mirroring `src/Editor/`) checks that the
+editor works on an ECS world, with the engine's test framework (boost-ext
+ut). It is built with the `tests` preset:
 
 ```sh
-cd src/Editor && cmake -S . -B build && cmake --build build
-ctest --test-dir build --output-on-failure
-
-# or from the engine root, with tests_ecs
-cmake -B build -S . -DENGINE_BUILD_GUI=ON -DENGINE_BUILD_TESTS=ON
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake --preset tests
+cmake --build --preset tests --target tests_editor
+ctest --preset tests -R tests_editor
 ```
 
 | File | What it checks |
 | --- | --- |
-| `tests/ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
-| `tests/ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
-| `tests/ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
-| `tests/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged |
+| `tests/Editor/ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
+| `tests/Editor/ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
+| `tests/Editor/ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
+| `tests/Editor/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged |
 
 The reflection registry is shared by the whole test program: each file
 prefixes its test components (`SceneMover`, `SimPosition`...) so their names
-never collide. `SDL_VIDEO_DRIVER=x11 ./build/tests_editor` (or `wayland`)
+never collide. `SDL_VIDEO_DRIVER=x11 ./build/tests/tests_editor` (or `wayland`)
 shows the editor window during the end-to-end test.
 
 The editor is not built in CI yet (SDL3 and Dear ImGui), so these tests run
