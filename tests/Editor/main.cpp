@@ -1,4 +1,4 @@
-// Tests of the editor on an ECS world: ctest -R tests_editor (see README.md).
+// Tests of the editor on an ECS world: ctest -R tests_editor (see src/Editor/README.md).
 
 #include "core/Logger/Logger.hpp"
 

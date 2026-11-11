@@ -1,7 +1,7 @@
 // The real Editor on an ECS world, without a window on screen: a simulated
 // mouse drags entity templates from the Entity Palette and moves objects in
 // the Viewport, one event every few frames. Run on macOS with:
-//   SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software ./build/src/Editor/tests_editor
+//   SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software ./build/tests/tests_editor
 
 #include <boost/ut.hpp>
 
