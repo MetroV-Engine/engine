@@ -53,6 +53,15 @@ public:
     // bar. Such a panel should draw a drawMoveGrip() to drag it out; once
     // floating it has a normal title bar, to dock it somewhere else.
     void setHideTabBar(bool hide) { _hideTabBar = hide; }
+    // Keeps the panel where the default layout docks it: it cannot be
+    // undocked, closed, or have other panels docked over it as tabs. It can
+    // still be resized with the dock splitters.
+    void setLocked(bool locked)
+    {
+        _locked = locked;
+        if (locked)
+            _closable = false;
+    }
     // Called by the grip's "Reset Position" (e.g. to restore the default layout).
     void setOnResetPosition(std::function<void()> callback) { _onResetPosition = std::move(callback); }
     // Overrides the theme's window padding, e.g. 0 for a panel showing an image edge to edge.
@@ -80,6 +89,7 @@ private:
     bool _closable = true;
     bool _focusRequested = false;
     bool _hideTabBar = false;
+    bool _locked = false;
     std::function<void()> _onResetPosition;
 };
 

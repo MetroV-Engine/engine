@@ -86,10 +86,17 @@ void Panel::draw()
         node->LocalFlags &= ~ImGuiDockNodeFlags_NoTabBar;
         node->UpdateMergedFlags();
     }
-    // Set every frame: ImGui keeps the last window class otherwise.
-    if (_hideTabBar) {
+    // Set every frame: ImGui keeps the last window class otherwise. One class
+    // carries both the hidden tab bar and the lock: only the last one set counts.
+    if (_hideTabBar || _locked) {
         ImGuiWindowClass windowClass;
-        windowClass.DockNodeFlagsOverrideSet = hideTab ? static_cast<ImGuiDockNodeFlags>(ImGuiDockNodeFlags_NoTabBar) : 0;
+        ImGuiDockNodeFlags dockFlags = ImGuiDockNodeFlags_None;
+        if (hideTab)
+            dockFlags |= ImGuiDockNodeFlags_NoTabBar;
+        if (_locked)
+            dockFlags |= ImGuiDockNodeFlags_NoUndocking | ImGuiDockNodeFlags_NoDockingOverMe
+                | ImGuiDockNodeFlags_NoWindowMenuButton;
+        windowClass.DockNodeFlagsOverrideSet = dockFlags;
         ImGui::SetNextWindowClass(&windowClass);
     }
     const ImVec2 minimum = minimumSize();

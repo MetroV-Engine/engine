@@ -115,7 +115,8 @@ void Editor::registerPanels()
     _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs, _entityDropTarget);
     _layout.setDefaultArea("Hierarchy", Area::Left);
 
-    _panels.registerPanel<EntityPalettePanel>(_entityTemplates, _play);
+    // Locked: closed or undocked, nothing would be left to drag from.
+    _panels.registerPanel<EntityPalettePanel>(_entityTemplates, _play).setLocked(true);
     // In its own area: as a tab of the Hierarchy, it would hide the drop target.
     _layout.setDefaultArea("Entity Palette", Area::LeftBottom);
 
