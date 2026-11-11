@@ -80,6 +80,49 @@ void test_velocity_after_kinetic_friction() {
         expect(Physic::velocityAfterKineticFriction(V(2, 0), 0.5, Normal, 0, 1.0) == V(2, 0));
     };
 }
+
+void test_friction_force_for_step() {
+    // 10 kg, muStatic 0.5 (holds up to 49.05 N), muKinetic 0.3 (29.43 N), steps of 0.1 s.
+    constexpr double Mass = 10.0;
+    constexpr double Dt = 0.1;
+    const auto forStep = [](V velocity, V applied) {
+        return Physic::frictionForceForStep(velocity, applied, 0.5, 0.3, Normal, Mass, Dt);
+    };
+    // Velocity after integrating the step with the friction force added.
+    const auto integrated = [](V velocity, V applied, V friction) { return velocity + (applied + friction) * (Dt / Mass); };
+
+    "a resting body held by static friction gets exactly the opposite of the push"_test = [=] {
+        const V friction = forStep(V::zero(), V(30, 0));
+
+        expect(near(friction, V(-30, 0), 1e-9));
+        expect(near(integrated(V::zero(), V(30, 0), friction), V::zero(), 1e-12));
+    };
+
+    "a resting body pushed above muStatic * N slides against muKinetic * N"_test = [=] {
+        const V friction = forStep(V::zero(), V(60, 0));
+
+        expect(near(friction, V(-29.43, 0), 1e-9));
+        // (60 - 29.43) / 10 * 0.1
+        expect(near(integrated(V::zero(), V(60, 0), friction), V(0.3057, 0), 1e-9));
+    };
+
+    "a sliding body gets kinetic friction against its velocity"_test = [=] {
+        expect(near(forStep(V(0, 2), V::zero()), V(0, -29.43), 1e-9));
+    };
+
+    "a body that friction can stop within the step stops exactly, and does not reverse"_test = [=] {
+        const V friction = forStep(V(0.1, 0), V::zero());
+
+        // Kinetic friction could remove 0.2943 m/s this step: only the 0.1 left are removed.
+        expect(near(friction, V(-10, 0), 1e-9));
+        expect(near(integrated(V(0.1, 0), V::zero(), friction), V::zero(), 1e-12));
+    };
+
+    "a static body or a step of length 0 gets no friction"_test = [] {
+        expect(Physic::frictionForceForStep(V(2, 0), V(5, 0), 0.5, 0.3, Normal, 0.0, Dt) == V::zero());
+        expect(Physic::frictionForceForStep(V(2, 0), V(5, 0), 0.5, 0.3, Normal, Mass, 0.0) == V::zero());
+    };
+}
 }
 
 void run_friction_tests() {
@@ -88,4 +131,5 @@ void run_friction_tests() {
     test_static_friction();
     test_friction_force();
     test_velocity_after_kinetic_friction();
+    test_friction_force_for_step();
 }

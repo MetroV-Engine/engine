@@ -20,9 +20,10 @@ namespace Engine::System {
      *
      * a = force / mass, then semi-implicit Euler: velocity first, then
      * position (see Physic::integrate). Register it after every force
-     * system (GravitySystem, ...), so that it sees all of the step's
-     * forces, and call SystemManager::update with a fixed dt: with a
-     * variable one, jump heights change with the frame rate.
+     * system (GravitySystem, SpringSystem, ..., then FrictionSystem), so
+     * that it sees all of the step's forces, and call SystemManager::update
+     * with a fixed dt: with a variable one, jump heights change with the
+     * frame rate.
      */
     class IntegrationSystem : public ECS::ISystem {
         public:

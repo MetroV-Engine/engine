@@ -8,6 +8,8 @@ void run_surface_tests();
 void run_spring_tests();
 void run_radial_tests();
 void run_gravity_system_tests();
+void run_friction_system_tests();
+void run_spring_system_tests();
 void run_integration_system_tests();
 
 int main()
@@ -22,5 +24,7 @@ int main()
     run_spring_tests();
     run_radial_tests();
     run_gravity_system_tests();
+    run_friction_system_tests();
+    run_spring_system_tests();
     run_integration_system_tests();
 }
