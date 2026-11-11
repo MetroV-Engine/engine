@@ -46,6 +46,7 @@ set(ENGINE_TEST_FILES
 	Engine/Common/Physic/Forces/TestRadial.cpp
 	Engine/System/Gravity/TestGravitySystem.cpp
 	Engine/System/Friction/TestFrictionSystem.cpp
+	Engine/System/Spring/TestSpringSystem.cpp
 	Engine/System/Integration/TestIntegrationSystem.cpp
 	Engine/main.cpp
 )

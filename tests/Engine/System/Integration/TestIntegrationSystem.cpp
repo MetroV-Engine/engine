@@ -5,21 +5,25 @@
 
 #include "ECS/ECS.hpp"
 #include "Engine/Common/Physic/Forces/Surface.hpp"
+#include "Engine/Common/Physic/Forces/Spring.hpp"
 #include "Engine/Common/Physic/Kinematics.hpp"
 #include "Engine/System/Friction/FrictionSystem.hpp"
 #include "Engine/System/Gravity/GravitySystem.hpp"
 #include "Engine/System/Integration/IntegrationSystem.hpp"
+#include "Engine/System/Spring/SpringSystem.hpp"
 #include "../../Support/Approx.hpp"
 
 using namespace boost::ut;
 using namespace Engine;
 using Component::RigidBody;
+using Component::Spring;
 using Component::SurfaceContact;
 using Component::Transform;
 using System::FrictionSystem;
 using System::GravitySettings;
 using System::GravitySystem;
 using System::IntegrationSystem;
+using System::SpringSystem;
 using TestSupport::near;
 using V = Math::Vector2f;
 
@@ -221,6 +225,117 @@ void test_friction_then_integration() {
     };
 }
 
+// Gravity, springs, integration, in that order, at 60 Hz.
+struct SpringScene {
+    ECS::Registry world;
+    ECS::SystemManager systems;
+
+    explicit SpringScene(V gravity = V::zero()) {
+        world.setResource<GravitySettings>(GravitySettings{gravity, 1.f});
+        systems.addSystem<GravitySystem>(world);
+        systems.addSystem<SpringSystem>(world);
+        systems.addSystem<IntegrationSystem>(world);
+    }
+
+    ECS::Entity body(V position, float mass, V velocity = V::zero()) {
+        const ECS::Entity entity = world.spawnEntity();
+        world.addComponent(entity, Transform{position});
+        world.addComponent(entity, makeBody(mass, 1.f, velocity));
+        return entity;
+    }
+
+    void link(ECS::Entity body, ECS::Entity other, V anchor, float restLength, float stiffness, float damping) {
+        Spring spring;
+        spring.body = body;
+        spring.other = other;
+        spring.anchor = anchor;
+        spring.restLength = restLength;
+        spring.stiffness = stiffness;
+        spring.damping = damping;
+        world.addComponent(world.spawnEntity("spring"), spring);
+    }
+
+    void step() { systems.update(world, 1.0 / 60.0); }
+    V position(ECS::Entity entity) { return world.getComponent<Transform>(entity).position; }
+    V velocity(ECS::Entity entity) { return world.getComponent<RigidBody>(entity).velocity; }
+};
+
+void test_springs_then_integration() {
+    "an undamped spring oscillates with period 2 pi sqrt(m / k), keeping its amplitude"_test = [] {
+        // k = 4 pi^2 with m = 1: one oscillation per second, 0.5 m around the rest length.
+        const float stiffness = 4.f * 3.14159265f * 3.14159265f;
+        SpringScene scene;
+        const ECS::Entity body = scene.body(V(1.5f, 0.f), 1.f);
+        scene.link(body, {}, V::zero(), 1.f, stiffness, 0.f);
+
+        for (int step = 0; step < 60; ++step) {
+            scene.step();
+        }
+        expect(near(scene.position(body).x, 1.5f, 0.01f));
+
+        // Semi-implicit Euler neither gains nor loses energy: after 10 s the
+        // amplitude is still 0.5 (an explicit Euler would have grown it).
+        float highest = 0.f;
+        float lowest = 0.f;
+        for (int step = 60; step < 600; ++step) {
+            scene.step();
+            if (step >= 540) {
+                highest = std::max(highest, scene.position(body).x - 1.f);
+                lowest = std::min(lowest, scene.position(body).x - 1.f);
+            }
+        }
+        expect(near(highest, 0.5f, 0.005f));
+        expect(near(lowest, -0.5f, 0.005f));
+    };
+
+    "a critically damped spring settles without overshooting"_test = [] {
+        SpringScene scene;
+        const ECS::Entity body = scene.body(V(1.5f, 0.f), 1.f);
+        scene.link(body, {}, V::zero(), 1.f, 100.f, Physic::criticalDamping(100.f, 1.f));
+
+        bool overshot = false;
+        for (int step = 0; step < 60; ++step) {
+            scene.step();
+            overshot = overshot || scene.position(body).x < 1.f;
+        }
+
+        // 0.5 * (1 + 10 t) * e^(-10 t) = 0.25 mm left after 1 s.
+        expect(!overshot);
+        expect(near(scene.position(body).x, 1.f, 1e-3f));
+    };
+
+    "a weight hanging from a spring settles m g / k below the rest length"_test = [] {
+        SpringScene scene(V(0.f, -10.f));
+        const ECS::Entity weight = scene.body(V(0.f, -1.f), 2.f);
+        scene.link(weight, {}, V::zero(), 1.f, 100.f, Physic::criticalDamping(100.f, 2.f));
+
+        for (int step = 0; step < 300; ++step) {
+            scene.step();
+        }
+
+        // 2 * 10 / 100 = 0.2 m of stretch.
+        expect(near(scene.position(weight), V(0.f, -1.2f), 1e-3f));
+    };
+
+    "two bodies linked by a spring keep their total momentum"_test = [] {
+        SpringScene scene;
+        const ECS::Entity light = scene.body(V(0.f, 0.f), 1.f, V(3.f, 0.f));
+        const ECS::Entity heavy = scene.body(V(1.f, 0.f), 2.f);
+        scene.link(light, heavy, V::zero(), 1.f, 50.f, 2.f);
+
+        for (int step = 0; step < 120; ++step) {
+            scene.step();
+        }
+
+        // Opposite forces: the momentum stays 1 * 3 = 3, and the center of
+        // mass, at 2/3 m, moves on at 3 / 3 = 1 m/s for 2 s.
+        const V momentum = scene.velocity(light) * 1.f + scene.velocity(heavy) * 2.f;
+        const V center = (scene.position(light) * 1.f + scene.position(heavy) * 2.f) / 3.f;
+        expect(near(momentum, V(3.f, 0.f), 1e-4f));
+        expect(near(center, V(2.f / 3.f + 2.f, 0.f), 1e-3f));
+    };
+}
+
 // A planet of mass 500 at the origin with G = 1, and one satellite of mass 1
 // launched perpendicular to its radius at speedFactor times the circular speed.
 struct Orbit {
@@ -321,5 +436,6 @@ void run_integration_system_tests() {
     test_integration_step();
     test_gravity_then_integration();
     test_friction_then_integration();
+    test_springs_then_integration();
     test_orbit_fates();
 }
