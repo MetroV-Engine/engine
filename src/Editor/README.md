@@ -120,27 +120,14 @@ Limits:
 
 ## Tests
 
-`tests_editor` (in `tests/Editor/`, mirroring `src/Editor/`) checks that the
-editor works on an ECS world, with the engine's test framework (boost-ext
-ut). It is built with the `tests` preset:
+None for now: `tests/Editor/` only holds a commented-out CMake target
+(`tests_editor`), like `tests/Engine` and `tests/Rendering`. The editor is not
+built in CI yet (SDL3 and Dear ImGui).
 
-```sh
-cmake --preset tests
-cmake --build --preset tests --target tests_editor
-ctest --preset tests -R tests_editor
-```
+When they come back, note two SDL traps seen in CI:
 
-| File | What it checks |
-| --- | --- |
-| `tests/Editor/ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
-| `tests/Editor/ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
-| `tests/Editor/ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
-| `tests/Editor/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged |
-
-The reflection registry is shared by the whole test program: each file
-prefixes its test components (`SceneMover`, `SimPosition`...) so their names
-never collide. `SDL_VIDEO_DRIVER=x11 ./build/tests/tests_editor` (or `wayland`)
-shows the editor window during the end-to-end test.
-
-The editor is not built in CI yet (SDL3 and Dear ImGui), so these tests run
-locally only.
+- `SDL_Quit` (called by `~GuiContext`) clears every hint: set
+  `SDL_HINT_VIDEO_DRIVER` / `SDL_HINT_RENDER_DRIVER` before each `GuiContext`.
+- For a headless run use the `dummy` video driver with the `software`
+  renderer. `offscreen` fails on macOS: SDL asks every window for OpenGL and
+  the driver's EGL does not exist there.
