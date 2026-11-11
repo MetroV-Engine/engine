@@ -64,6 +64,7 @@ set(EDITOR_TEST_FILES
 	Editor/ecs/TestEditorOnEcs.cpp
 	Editor/ecs/TestEntityDragDrop.cpp
 	Editor/scene/TestDemoSceneRenderer.cpp
+	Editor/scene/TestLevels.cpp
 	Editor/main.cpp
 )
 

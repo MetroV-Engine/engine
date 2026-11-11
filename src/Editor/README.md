@@ -37,7 +37,8 @@ cmake --build build
 
 The editor writes its layout and preferences (`imgui.ini`, `imgui-demo.ini`),
 custom shortcuts (`shortcuts.ini`) and log (`logs/editor.log`) in the working
-directory. They are ignored by git.
+directory. They are ignored by git. Levels are saved there too, in `levels/`
+(see [Levels](#levels)): they are not ignored.
 
 ## Layout
 
@@ -53,8 +54,8 @@ automatically.
 | --- | --- |
 | `src/core/` | `Editor` (assembles everything), `GuiContext` (SDL3 + ImGui, frame loop), `PanelManager`, `EventManager`, `FrameTimer`, `Logger` (central log, thread-safe), `CommandRegistry` (console commands) |
 | `src/ui/` | Reusable widgets (buttons, inputs, performance overlay...), dialogs and notifications, themes |
-| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Settings, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportTransformTool` selects, moves and scales objects with the mouse |
-| `src/scene/` | What the editor edits and runs: `HierarchyModel` and `PropertyModel` (what the Hierarchy and Inspector display), `Selection`, `SceneBackend`, `EntityTemplate` (an entry of the Entity Palette), `ViewportView` (Viewport pixels to world positions), `ViewportGrid` (snapping of the mouse edits), `Simulation` and `PlayController` (Play / Pause / Stop / Step). `DemoScene` / `DemoBackend`: the built-in demo |
+| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Settings, Levels, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportTransformTool` selects, moves and scales objects with the mouse |
+| `src/scene/` | What the editor edits and runs: `HierarchyModel` and `PropertyModel` (what the Hierarchy and Inspector display), `Selection`, `SceneBackend`, `EntityTemplate` (an entry of the Entity Palette), `ViewportView` (Viewport pixels to world positions), `ViewportGrid` (snapping of the mouse edits), `LevelFile` and `LevelManager` (levels saved as files), `Simulation` and `PlayController` (Play / Pause / Stop / Step). `DemoScene` / `DemoBackend`: the built-in demo |
 | `src/ecs/` | The editor on an ECS world: `EcsScene` (entities and reflected components), `EcsSimulation` (systems, world restored on Stop), `EcsBackend` |
 | `src/navigation/` | Actions, menu bar, toolbar, command palette, shortcuts |
 | `src/layout/` | Dockspace layout, status bar, saved workspace |
@@ -176,6 +177,37 @@ Without a view (`ViewportView{}`, or no renderer as in `./build/gui`) the mouse
 cannot select or move anything in the Viewport. A template dropped there, or
 on the Hierarchy, keeps its default position.
 
+### Levels
+
+A level is the scene saved in `levels/<name>.level`, in the working
+directory. The Levels panel (next to the Inspector) shows the open level, with
+Save, Save As and New, and the levels folder: double click opens a level,
+right click renames or deletes it. Names use letters, digits, `-` and `_`.
+File > Save Level (Ctrl+S) saves the open level, or asks for a name. The
+`level` console command does the same: `level list`, `level new <name>`,
+`level open <name>`, `level save [new name]`, `level rename <old> <new>`,
+`level delete <name>`.
+
+Unsaved changes are only discarded after a confirmation (the console command
+refuses instead), and levels cannot change during Play.
+
+The file is text, written by `LevelFile` through the `HierarchyModel` and
+`PropertyModel`, so the demo scene and an ECS world both use it: each object
+with its name, parent and components, with their editable properties.
+
+```
+metrov-level 1
+object 0 - "Player"
+component "Transform"
+property "position" vec2 64 160
+```
+
+Not saved: read-only fields (`vector`, `map`...), unreflected components,
+resources and the systems' own state. On an ECS world, an unnamed entity is
+saved under the name the Hierarchy shows (`Entity <index>`), and parents are
+ignored (the hierarchy is flat). This format belongs to the editor until the
+engine has its own scene format.
+
 ## Tests
 
 `tests_editor` checks that the editor works on an ECS world, with the
@@ -196,7 +228,8 @@ ctest --test-dir build --output-on-failure
 | `ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
 | `ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
 | `ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
-| `ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged. A panel missing from a saved layout is docked in its area; Create Object does nothing during Play, even from a shortcut; an object selected outside the Hierarchy is scrolled to there; the Game Controls keep their place in every play state and fit the smallest window |
+| `ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged. A panel missing from a saved layout is docked in its area; Create Object does nothing during Play, even from a shortcut; an object selected outside the Hierarchy is scrolled to there; the Game Controls keep their place in every play state and fit the smallest window; levels are saved, created, opened and renamed from the console, never during Play nor over unsaved changes |
+| `scene/TestLevels.cpp` | A level written and read back gives the same ECS world and the same demo scene (order, parents, every value type, escaped strings); an invalid file leaves the scene untouched; what the scene refuses is reported; the levels folder: create, save, save as, open, rename, delete, unsaved changes, refused names and files |
 | `ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved, and scaled with the handles of the selected one, and clicking empty space clears the selection; with snapping on, moves, drops and scales land on the grid, and the settings are saved; nothing is created, moved or scaled during Play, even when Play is pressed during the drag or at the drop |
 | `scene/TestDemoSceneRenderer.cpp` | The demo's Viewport: an object moved with the mouse stays drawn under it; an object moved far away is brought back into view |
 
