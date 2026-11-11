@@ -559,6 +559,20 @@ bool pathFindsIntegerKey(Key key, std::string_view text) {
     return found.valid() && found.template as<int>() == 42;
 }
 
+void test_same_width_integer_containers_alias() {
+    "containers of same-width integer types (long / long long) share one TypeInfo"_test = [] {
+        const TypeInfo& a = registry().get<std::map<unsigned long, int>>();
+        const TypeInfo& b = registry().get<std::map<unsigned long long, int>>();
+        expect(&a == &b);
+        expect(&registry().get<std::vector<long>>() == &registry().get<std::vector<long long>>());
+        expect(&registry().get<std::optional<unsigned long>>() ==
+               &registry().get<std::optional<unsigned long long>>());
+    };
+    "containers with different element types still get distinct infos"_test = [] {
+        expect(&registry().get<std::vector<int>>() != &registry().get<std::vector<long>>());
+    };
+}
+
 void test_path_integer_key_types() {
     "path parses map keys of every integer type"_test = [] {
         expect(pathFindsIntegerKey<std::int8_t>(-8, "-8"));
@@ -715,6 +729,7 @@ void run_containers_tests() {
     test_ref_with_type_but_no_data_is_invalid();
     test_kind_queries_on_the_wrong_kind();
     test_map_insert_without_default_value();
+    test_same_width_integer_containers_alias();
     test_path_integer_key_types();
     test_path_key_parse_failures();
     test_vector_bool_stays_opaque();
