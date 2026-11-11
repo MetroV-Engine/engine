@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -559,17 +560,24 @@ bool pathFindsIntegerKey(Key key, std::string_view text) {
     return found.valid() && found.template as<int>() == 42;
 }
 
+// Two distinct C++ integer types of the same width, whatever the data model:
+// long / long long where both are 64-bit (LP64: Linux, macOS), int / long where
+// both are 32-bit (LLP64: Windows).
+constexpr bool longIsLongLong = sizeof(long) == sizeof(long long);
+using WidthA = std::conditional_t<longIsLongLong, long, int>;
+using WidthB = std::conditional_t<longIsLongLong, long long, long>;
+using UWidthA = std::make_unsigned_t<WidthA>;
+using UWidthB = std::make_unsigned_t<WidthB>;
+static_assert(!std::is_same_v<WidthA, WidthB> && sizeof(WidthA) == sizeof(WidthB));
+
 void test_same_width_integer_containers_alias() {
-    "containers of same-width integer types (long / long long) share one TypeInfo"_test = [] {
-        const TypeInfo& a = registry().get<std::map<unsigned long, int>>();
-        const TypeInfo& b = registry().get<std::map<unsigned long long, int>>();
-        expect(&a == &b);
-        expect(&registry().get<std::vector<long>>() == &registry().get<std::vector<long long>>());
-        expect(&registry().get<std::optional<unsigned long>>() ==
-               &registry().get<std::optional<unsigned long long>>());
+    "containers of same-width integer types share one TypeInfo"_test = [] {
+        expect(&registry().get<std::map<UWidthA, int>>() == &registry().get<std::map<UWidthB, int>>());
+        expect(&registry().get<std::vector<WidthA>>() == &registry().get<std::vector<WidthB>>());
+        expect(&registry().get<std::optional<UWidthA>>() == &registry().get<std::optional<UWidthB>>());
     };
-    "containers with different element types still get distinct infos"_test = [] {
-        expect(&registry().get<std::vector<int>>() != &registry().get<std::vector<long>>());
+    "containers with different element widths still get distinct infos"_test = [] {
+        expect(&registry().get<std::vector<int>>() != &registry().get<std::vector<long long>>());
     };
 }
 
