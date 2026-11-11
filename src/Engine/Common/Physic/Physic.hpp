@@ -11,6 +11,7 @@
  * - Forces/Friction.hpp: static and kinetic friction between surfaces.
  * - Forces/Spring.hpp: damped spring (Hooke's law).
  * - Forces/Radial.hpp: radial push (explosions, shockwaves).
+ * - Impact.hpp: bounce (restitution) and separation of two bodies that hit.
  */
 
 #include "Forces/Dynamics.hpp"
@@ -19,4 +20,5 @@
 #include "Forces/Radial.hpp"
 #include "Forces/Spring.hpp"
 #include "Forces/Surface.hpp"
+#include "Impact.hpp"
 #include "Kinematics.hpp"

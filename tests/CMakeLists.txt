@@ -38,6 +38,7 @@ set(ENGINE_TEST_FILES
 	Engine/Common/Math/TestScalar.cpp
 	Engine/Common/Math/TestVector.cpp
 	Engine/Common/Physic/TestKinematics.cpp
+	Engine/Common/Physic/TestImpact.cpp
 	Engine/Common/Physic/Forces/TestDynamics.cpp
 	Engine/Common/Physic/Forces/TestGravity.cpp
 	Engine/Common/Physic/Forces/TestFriction.cpp
