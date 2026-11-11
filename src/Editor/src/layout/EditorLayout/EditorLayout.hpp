@@ -28,9 +28,9 @@
 //   |           |                           |             |
 //   |   Left    |          Center           |    Right    |
 //   |           |                           |             |
-//   |           +---------------------------+             |
-//   |           |         Controls          |             |
-//   |           |          Bottom           |             |
+//   +-----------+---------------------------+             |
+//   |   Left    |         Controls          |             |
+//   |  Bottom   |          Bottom           |             |
 //   +-----------+---------------------------+-------------+
 class EditorLayout
 {
@@ -38,6 +38,9 @@ public:
     enum class Area
     {
         Left,
+        // Below Left (e.g. a palette to drag from, which must stay visible
+        // next to the Hierarchy).
+        LeftBottom,
         Center,
         Right,
         Bottom,

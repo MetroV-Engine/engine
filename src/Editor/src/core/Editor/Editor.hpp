@@ -26,6 +26,7 @@
 #include "navigation/CommandPalette/CommandPalette.hpp"
 #include "navigation/MenuBar/MenuBar.hpp"
 #include "navigation/Toolbar/Toolbar.hpp"
+#include "panels/EntityDropTarget/EntityDropTarget.hpp"
 #include "scene/PlayController/PlayController.hpp"
 #include "scene/SceneBackend.hpp"
 #include "scene/Selection.hpp"
@@ -56,8 +57,9 @@ class ViewportPanel;
 //   +-----------+-----------------------+---------------+
 //   | Hierarchy |       Viewport        | Inspector     |
 //   |           |                       | Settings      |
-//   |           +-----------------------+               |
-//   |           | Console | Buttons ... |               |
+//   +-----------+-----------------------+               |
+//   | Entity    | Console | Buttons ... |               |
+//   | Palette   |                       |               |
 //   +-----------+-----------------------+---------------+
 //   | Status bar                                        |
 //   +---------------------------------------------------+
@@ -93,8 +95,12 @@ public:
     Editor &operator=(const Editor &) = delete;
 
     // Draws the game in the Viewport, replacing the scene's own renderer
-    // (until the engine renders into it, e.g. a game's debug drawing).
+    // (until the engine renders into it, e.g. a game's debug drawing). The
+    // view it returns lets the mouse place objects there.
     void setViewportRenderer(SceneBackend::Renderer renderer);
+
+    // Adds a template to the Entity Palette, after those of the scene.
+    void addEntityTemplate(EntityTemplate entityTemplate);
 
     // Runs until the user quits.
     void run();
@@ -109,6 +115,9 @@ private:
     std::unique_ptr<SceneBackend> _scene;
     Selection _selection;
     PlayController _play;
+    // Only ever appended to: drag and drop payloads are indices into it.
+    std::vector<EntityTemplate> _entityTemplates;
+    EntityDropTarget _entityDropTarget;
     CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;

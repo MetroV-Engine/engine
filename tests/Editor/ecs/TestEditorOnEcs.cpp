@@ -6,9 +6,7 @@
 
 #include <SDL3/SDL.h>
 
-#include <chrono>
 #include <cstdint>
-#include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
@@ -18,6 +16,7 @@
 
 #include "ECS/ECS.hpp"
 #include "ECS/Reflection/Reflection.hpp"
+#include "Support/FreshWorkingDirectory.hpp"
 #include "Support/Logs.hpp"
 #include "core/CommandRegistry/CommandRegistry.hpp"
 #include "core/Editor/Editor.hpp"
@@ -87,7 +86,10 @@ namespace {
             // The Editor owns a non-const Selection: the script selects like
             // the Hierarchy panel does.
             Selection &editable = const_cast<Selection &>(selection);
-            return [this, &editable](ImDrawList *, ImVec2, ImVec2) { step(editable); };
+            return [this, &editable](ImDrawList *, ImVec2, ImVec2) {
+                step(editable);
+                return ViewportView{};
+            };
         }
 
         int frames = 0;
@@ -115,33 +117,6 @@ namespace {
                 }
             }
         }
-    };
-
-    // The editor saves its layout and shortcuts in the working directory:
-    // each run gets a fresh one, removed afterwards.
-    class FreshWorkingDirectory
-    {
-    public:
-        FreshWorkingDirectory()
-            : _previous(std::filesystem::current_path()),
-              _path(std::filesystem::temp_directory_path()
-                    / ("metrov-editor-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())))
-        {
-            std::filesystem::create_directories(_path);
-            std::filesystem::current_path(_path);
-        }
-        ~FreshWorkingDirectory()
-        {
-            std::filesystem::current_path(_previous);
-            std::error_code ignored;
-            std::filesystem::remove_all(_path, ignored);
-        }
-        FreshWorkingDirectory(const FreshWorkingDirectory &) = delete;
-        FreshWorkingDirectory &operator=(const FreshWorkingDirectory &) = delete;
-
-    private:
-        std::filesystem::path _previous;
-        std::filesystem::path _path;
     };
 
     struct Run

@@ -15,6 +15,7 @@
 #include "ecs/EcsBackend/EcsBackend.hpp"
 #include "panels/ButtonsPanel/ButtonsPanel.hpp"
 #include "panels/ConsolePanel/ConsolePanel.hpp"
+#include "panels/EntityPalettePanel/EntityPalettePanel.hpp"
 #include "panels/HierarchyPanel/HierarchyPanel.hpp"
 #include "panels/ImGuiDemoPanel.hpp"
 #include "panels/InputsPanel/InputsPanel.hpp"
@@ -52,6 +53,9 @@ Editor::Editor(GuiContext &gui, std::unique_ptr<SceneBackend> scene, Options opt
       _performanceOverlay(gui.timer()),
       _scene(scene ? std::move(scene) : throw std::invalid_argument("Editor: no scene to edit")),
       _play(_scene->simulation()),
+      _entityTemplates(_scene->entityTemplates()),
+      _entityDropTarget(_entityTemplates, _scene->hierarchy(), _scene->properties(), _notifications, _play,
+          [this](HierarchyModel::ObjectId id) { _hierarchy->showObject(id); }),
       _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
@@ -99,14 +103,25 @@ void Editor::setViewportRenderer(SceneBackend::Renderer renderer)
     _viewport->setRenderer(std::move(renderer));
 }
 
+void Editor::addEntityTemplate(EntityTemplate entityTemplate)
+{
+    _entityTemplates.push_back(std::move(entityTemplate));
+}
+
 void Editor::registerPanels()
 {
     using Area = EditorLayout::Area;
 
-    _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs);
+    _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs, _entityDropTarget);
     _layout.setDefaultArea("Hierarchy", Area::Left);
 
-    _viewport = &_panels.registerPanel<ViewportPanel>(_performanceOverlay, _play);
+    // Locked: closed or undocked, nothing would be left to drag from.
+    _panels.registerPanel<EntityPalettePanel>(_entityTemplates, _play).setLocked(true);
+    // In its own area: as a tab of the Hierarchy, it would hide the drop target.
+    _layout.setDefaultArea("Entity Palette", Area::LeftBottom);
+
+    _viewport = &_panels.registerPanel<ViewportPanel>(
+        _performanceOverlay, _play, _entityDropTarget, _scene->hierarchy(), _scene->properties(), _selection);
     _viewport->setRenderer(_scene->renderer(_selection));
     _layout.setDefaultArea("Viewport", Area::Center);
 
@@ -125,7 +140,7 @@ void Editor::registerPanels()
     _console = &_panels.registerPanel<ConsolePanel>(_commands);
     _layout.setDefaultArea("Console", Area::Bottom);
     // Widget demos, next to the console.
-    _layoutPanels = {"Hierarchy", "Viewport", "Inspector", "Game Controls", "Console", "Settings"};
+    _layoutPanels = {"Hierarchy", "Entity Palette", "Viewport", "Inspector", "Game Controls", "Console", "Settings"};
 
     if (_options.demo) {
         _panels.registerPanel<ButtonsPanel>(_notifications, _dialogs, [this] { requestQuit(); });

@@ -15,6 +15,7 @@
 
 #include "scene/HierarchyModel.hpp"
 
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -80,6 +81,10 @@ struct ComponentInfo
     bool removable = true;
 };
 
+// The property the mouse writes in the Viewport; objects without it cannot be placed.
+inline constexpr const char *PositionComponent = "Transform";
+inline constexpr const char *PositionProperty = "position";
+
 // The data shown by the Inspector: components of an object and their
 // properties. Properties are addressed by a path inside their component, like
 // the engine's Ref::path(): "speed", or "movement.speed" inside a Group.
@@ -94,6 +99,14 @@ public:
     virtual std::vector<ComponentInfo> components(ObjectId id) const = 0;
     // std::monostate if the object, component or property does not exist.
     virtual PropertyValue get(ObjectId id, const std::string &component, const std::string &path) const = 0;
+    // The property's value, if it exists and has this type.
+    template <typename T>
+    std::optional<T> getAs(ObjectId id, const std::string &component, const std::string &path) const
+    {
+        const PropertyValue value = get(id, component, path);
+        const T *typed = std::get_if<T>(&value);
+        return typed ? std::optional<T>(*typed) : std::nullopt;
+    }
     // Returns false if refused (unknown property, read-only, wrong type).
     virtual bool set(ObjectId id, const std::string &component, const std::string &path, const PropertyValue &value) = 0;
 

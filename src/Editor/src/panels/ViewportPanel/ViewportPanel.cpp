@@ -12,12 +12,19 @@
 */
 
 #include "ViewportPanel.hpp"
+#include "panels/EntityDropTarget/EntityDropTarget.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
 #include <cstdio>
+#include <optional>
 
-ViewportPanel::ViewportPanel(PerformanceOverlay &overlay, const PlayController &play)
-    : Panel("Viewport"), _overlay(overlay), _play(play)
+ViewportPanel::ViewportPanel(PerformanceOverlay &overlay, const PlayController &play, const EntityDropTarget &entityDropTarget,
+    const HierarchyModel &model, PropertyModel &properties, Selection &selection)
+    : Panel("Viewport"),
+      _overlay(overlay),
+      _play(play),
+      _entityDropTarget(entityDropTarget),
+      _objectMover(model, properties, selection, play)
 {
     // The game image goes edge to edge.
     setWindowPadding(ImVec2(0.0f, 0.0f));
@@ -35,9 +42,10 @@ void ViewportPanel::drawContent()
     drawList->AddRectFilled(min, max, ImGui::GetColorU32(theme.colors.background));
 
     // Will become ImGui::Image(gameTexture, size) once the engine renders.
+    ViewportView view;
     if (_renderer) {
         drawList->PushClipRect(min, max, true);
-        _renderer(drawList, min, max);
+        view = _renderer(drawList, min, max);
         drawList->PopClipRect();
     } else {
         const char *title = "Game viewport";
@@ -65,6 +73,9 @@ void ViewportPanel::drawContent()
         drawList->AddText(ImVec2(badgeMin.x + padding.x, badgeMin.y + padding.y), ImGui::GetColorU32(theme.colors.textOnAccent), badge);
     }
 
-    ImGui::Dummy(size);
+    // A button rather than a Dummy: it captures the mouse for the object mover.
+    ImGui::InvisibleButton("##ViewportArea", size);
+    _objectMover.update(view, drawList);
+    _entityDropTarget.accept(view.valid() ? std::optional<Vec2>(view.toWorld(ImGui::GetMousePos())) : std::nullopt);
     _overlay.setAnchor(ImVec2(max.x, min.y));
 }

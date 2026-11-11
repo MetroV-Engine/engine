@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -31,35 +32,22 @@ struct Box
     bool hasCollider;
 };
 
-} // namespace
-
-void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
+std::vector<Box> collectBoxes(const DemoScene &scene)
 {
-    const Theme &theme = ThemeManager::active();
-
     std::vector<Box> boxes;
-    std::vector<ObjectId> stack = _scene.roots();
-    while (!stack.empty()) {
-        const ObjectId id = stack.back();
-        stack.pop_back();
-        for (ObjectId child : _scene.children(id))
-            stack.push_back(child);
-        const PropertyValue position = _scene.get(id, "Transform", "position");
-        if (!std::holds_alternative<Vec2>(position))
+    for (ObjectId id : scene.allObjects()) {
+        const std::optional<Vec2> position = scene.getAs<Vec2>(id, PositionComponent, PositionProperty);
+        if (!position)
             continue;
-        const PropertyValue size = _scene.get(id, "BoxCollider", "size");
-        const bool hasCollider = std::holds_alternative<Vec2>(size);
-        boxes.push_back({id, std::get<Vec2>(position), hasCollider ? std::get<Vec2>(size) : Vec2{6, 6}, hasCollider});
+        const std::optional<Vec2> size = scene.getAs<Vec2>(id, "BoxCollider", "size");
+        boxes.push_back({id, *position, size.value_or(Vec2{6, 6}), size.has_value()});
     }
-    if (boxes.empty()) {
-        const char *text = "The scene is empty: create an object in the Hierarchy (Ctrl+N).";
-        const ImVec2 size = ImGui::CalcTextSize(text);
-        drawList->AddText(ImVec2((min.x + max.x - size.x) * 0.5f, (min.y + max.y - size.y) * 0.5f),
-            ImGui::GetColorU32(theme.colors.textMuted), text);
-        return;
-    }
+    return boxes;
+}
 
-    // Fit the world (objects + ground) in the view, keeping proportions.
+// Fits the world (objects + ground) in the view, keeping proportions.
+ViewportView fitBoxes(const std::vector<Box> &boxes, ImVec2 min, ImVec2 max)
+{
     float left = FLT_MAX, top = FLT_MAX, right = -FLT_MAX, bottom = DemoSimulation::GroundY;
     for (const Box &box : boxes) {
         left = std::min(left, box.center.x - box.size.x * 0.5f);
@@ -75,11 +63,46 @@ void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
     const float scale = std::min((max.x - min.x) / std::max(right - left, 1.0f), (max.y - min.y) / std::max(bottom - top, 1.0f));
     const ImVec2 origin(min.x + ((max.x - min.x) - (right - left) * scale) * 0.5f - left * scale,
         min.y + ((max.y - min.y) - (bottom - top) * scale) * 0.5f - top * scale);
-    const auto toScreen = [&](float x, float y) { return ImVec2(origin.x + x * scale, origin.y + y * scale); };
+    return {origin, scale};
+}
 
-    // Ground line.
+bool contains(ImVec2 min, ImVec2 max, ImVec2 point)
+{
+    return point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y;
+}
+
+} // namespace
+
+ViewportView DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max)
+{
+    const Theme &theme = ThemeManager::active();
+
+    const std::vector<Box> boxes = collectBoxes(_scene);
+    if (boxes.empty()) {
+        const char *text = "The scene is empty: create an object in the Hierarchy (Ctrl+N).";
+        const ImVec2 size = ImGui::CalcTextSize(text);
+        drawList->AddText(ImVec2((min.x + max.x - size.x) * 0.5f, (min.y + max.y - size.y) * 0.5f),
+            ImGui::GetColorU32(theme.colors.textMuted), text);
+        _view = {};
+        return {};
+    }
+
+    // Fitted again only when needed: fitting at every frame would move the
+    // view under an object dragged with the mouse.
+    const bool resized = min.x != _fittedMin.x || min.y != _fittedMin.y || max.x != _fittedMax.x || max.y != _fittedMax.y;
+    if (!_view.valid() || resized || boxes.size() != _fittedObjects
+        || std::ranges::any_of(boxes, [&](const Box &box) { return !contains(min, max, _view.toScreen(box.center)); })) {
+        _view = fitBoxes(boxes, min, max);
+        _fittedMin = min;
+        _fittedMax = max;
+        _fittedObjects = boxes.size();
+    }
+    const auto toScreen = [&](float x, float y) { return _view.toScreen(Vec2{x, y}); };
+
+    // Ground line, across the Viewport.
     const ImU32 muted = ImGui::GetColorU32(theme.colors.textMuted);
-    drawList->AddLine(toScreen(left, DemoSimulation::GroundY), toScreen(right, DemoSimulation::GroundY), muted, 2.0f);
+    const float groundY = toScreen(0.0f, DemoSimulation::GroundY).y;
+    drawList->AddLine(ImVec2(min.x, groundY), ImVec2(max.x, groundY), muted, 2.0f);
 
     for (const Box &box : boxes) {
         const ImVec2 a = toScreen(box.center.x - box.size.x * 0.5f, box.center.y - box.size.y * 0.5f);
@@ -92,4 +115,5 @@ void DemoSceneRenderer::draw(ImDrawList *drawList, ImVec2 min, ImVec2 max) const
         drawList->AddRectFilled(a, b, ImGui::GetColorU32(ImVec4(color.x, color.y, color.z, box.hasCollider ? 0.35f : 0.8f)));
         drawList->AddRect(a, b, ImGui::GetColorU32(color), 0.0f, 0, selected ? 2.0f : 1.0f);
     }
+    return _view;
 }

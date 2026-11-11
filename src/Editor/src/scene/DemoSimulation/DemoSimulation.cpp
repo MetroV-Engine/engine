@@ -14,25 +14,10 @@
 #include "DemoSimulation.hpp"
 
 #include <cmath>
-#include <vector>
 
 namespace {
 
 using ObjectId = HierarchyModel::ObjectId;
-
-std::vector<ObjectId> allObjects(const DemoScene &scene)
-{
-    std::vector<ObjectId> result;
-    std::vector<ObjectId> stack = scene.roots();
-    while (!stack.empty()) {
-        const ObjectId id = stack.back();
-        stack.pop_back();
-        result.push_back(id);
-        for (ObjectId child : scene.children(id))
-            stack.push_back(child);
-    }
-    return result;
-}
 
 template <typename T>
 bool read(const DemoScene &scene, ObjectId id, const char *component, const char *path, T &out)
@@ -53,9 +38,9 @@ void DemoSimulation::begin()
     _time = 0.0;
     _velocities.clear();
     _startPositions.clear();
-    for (ObjectId id : allObjects(_scene)) {
+    for (ObjectId id : _scene.allObjects()) {
         Vec2 position;
-        if (read(_scene, id, "Transform", "position", position))
+        if (read(_scene, id, PositionComponent, PositionProperty, position))
             _startPositions[id] = position;
     }
 }
@@ -65,9 +50,9 @@ void DemoSimulation::update(double dt)
     _time += dt;
     const float step = static_cast<float>(dt);
 
-    for (ObjectId id : allObjects(_scene)) {
+    for (ObjectId id : _scene.allObjects()) {
         Vec2 position;
-        if (!read(_scene, id, "Transform", "position", position))
+        if (!read(_scene, id, PositionComponent, PositionProperty, position))
             continue;
         const Vec2 start = _startPositions.contains(id) ? _startPositions[id] : position;
 
@@ -100,7 +85,7 @@ void DemoSimulation::update(double dt)
         if (read(_scene, id, "Collectible", "kind", kind))
             position.y = start.y + std::sin(static_cast<float>(_time) * 3.0f + static_cast<float>(id) * 0.7f) * 4.0f;
 
-        _scene.set(id, "Transform", "position", position);
+        _scene.set(id, PositionComponent, PositionProperty, position);
     }
 }
 
