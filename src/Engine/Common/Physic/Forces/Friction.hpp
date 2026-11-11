@@ -13,7 +13,8 @@
  * Units are SI (kilograms, meters, seconds, newtons). Applied over a time
  * step, kinetic friction can overshoot and reverse a slow velocity instead
  * of stopping the body: velocityAfterKineticFriction() applies it without
- * overshooting.
+ * overshooting, and frictionForceForStep() turns that into the force to add
+ * before integrating the step.
  */
 
 #include <cmath>
@@ -129,5 +130,52 @@ namespace Engine::Physic {
             return {};
         }
         return velocity * ((speed - speedLoss) / speed);
+    }
+
+    /**
+     * @brief Friction force to add for one step, so that integrating the
+     *        step gives exactly Coulomb's friction, without overshooting.
+     *
+     * Semi-implicit Euler first moves the velocity by the other forces:
+     * predicted = velocity + appliedForce / m * dt. Friction then acts on
+     * that predicted velocity:
+     * - resting (speed at most Math::Epsilon) and held by static friction
+     *   (staticFrictionHolds()): the body stays still, velocity 0;
+     * - otherwise kinetic friction, which stops the body rather than
+     *   reversing it (velocityAfterKineticFriction()).
+     * The returned force is m * (velocity wanted - predicted) / dt: added to
+     * the other forces and integrated over the same dt, it gives exactly
+     * that velocity. Integrating kineticFriction() instead would make a slow
+     * body jitter back and forth.
+     *
+     * @param velocity Velocity of the body along the surface, relative to
+     *        the surface, at the start of the step, in m/s.
+     * @param appliedForce Sum of the other forces along the surface, in N.
+     * @param staticCoefficient Static coefficient muStatic, >= 0.
+     * @param kineticCoefficient Kinetic coefficient muKinetic, >= 0,
+     *        usually lower than muStatic.
+     * @param normalForce Force pressing the body against the surface, in N, >= 0.
+     * @param mass Mass of the body, in kg.
+     * @param deltaTime Length of the step, in s: the one integration will use.
+     * @return The friction force, in N, or the zero vector for a static
+     *         body or a step of length 0.
+     */
+    template <std::floating_point T>
+    [[nodiscard]] Math::Vector2<T> frictionForceForStep(
+        const Math::Vector2<T>& velocity, const Math::Vector2<T>& appliedForce,
+        std::type_identity_t<T> staticCoefficient, std::type_identity_t<T> kineticCoefficient,
+        std::type_identity_t<T> normalForce, std::type_identity_t<T> mass,
+        std::type_identity_t<T> deltaTime) noexcept {
+        const T inverse = inverseMass(mass);
+        if (inverse == T{0} || deltaTime <= T{0}) {
+            return {};
+        }
+        const bool resting = velocity.lengthSquared() <= Math::Epsilon<T> * Math::Epsilon<T>;
+        const Math::Vector2<T> predicted = velocity + appliedForce * (inverse * deltaTime);
+        const Math::Vector2<T> wanted =
+            resting && staticFrictionHolds(appliedForce, staticCoefficient, normalForce)
+                ? Math::Vector2<T>{}
+                : velocityAfterKineticFriction(predicted, kineticCoefficient, normalForce, mass, deltaTime);
+        return (wanted - predicted) * (mass / deltaTime);
     }
 }
