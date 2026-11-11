@@ -13,7 +13,7 @@ namespace Engine::Component {
      * @brief Mass, velocity and the forces received during the current step.
      *
      * Needs a Transform on the same entity to move. Each step, force systems
-     * (GravitySystem, FrictionSystem, ...) add to `force`; IntegrationSystem
+     * (GravitySystem, SpringSystem, FrictionSystem, ...) add to `force`; IntegrationSystem
      * then turns it into motion and clears it.
      */
     struct RigidBody {

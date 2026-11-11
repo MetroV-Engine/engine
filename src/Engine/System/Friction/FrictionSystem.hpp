@@ -27,9 +27,9 @@ namespace Engine::System {
      *   slowed by kinetic friction and stops instead of reversing.
      *
      * Order matters: register it after every other force system
-     * (GravitySystem, ...), since N and static friction depend on all of
-     * the step's forces, and just before IntegrationSystem, since the force
-     * is computed for the same dt.
+     * (GravitySystem, SpringSystem, ...), since N and static friction
+     * depend on all of the step's forces, and just before
+     * IntegrationSystem, since the force is computed for the same dt.
      */
     class FrictionSystem : public ECS::ISystem {
         public:
