@@ -48,21 +48,5 @@ target_link_libraries(gui_ecs_example PRIVATE engine_editor)
 # Next to the other executables, at the root of the build directory: ./build/gui
 set_target_properties(gui gui_ecs_example PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# Tests of the editor on an ECS world, with the engine's test framework:
-#   ctest --test-dir build -R tests_editor --output-on-failure
-# Built with the engine's tests (-DENGINE_BUILD_TESTS=ON) or when building
-# this folder alone.
-if(ENGINE_BUILD_TESTS OR CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  find_package(ut CONFIG REQUIRED)
-  enable_testing()
-
-  file(GLOB_RECURSE EDITOR_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp)
-  add_executable(tests_editor ${EDITOR_TEST_SOURCES})
-  target_include_directories(tests_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
-  target_link_libraries(tests_editor PRIVATE engine_editor Boost::ut)
-
-  add_test(NAME tests_editor COMMAND tests_editor)
-  # One test runs the real editor (offscreen): fail rather than hang if it
-  # never quits.
-  set_tests_properties(tests_editor PROPERTIES TIMEOUT 120)
-endif()
+# The editor's tests are with the engine's, in tests/Editor (tests_editor in
+# tests/CMakeLists.txt): built from the engine root with -DENGINE_BUILD_TESTS=ON.

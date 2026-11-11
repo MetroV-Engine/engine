@@ -59,7 +59,7 @@ automatically.
 | `src/navigation/` | Actions, menu bar, toolbar, command palette, shortcuts |
 | `src/layout/` | Dockspace layout, status bar, saved workspace |
 | `examples/` | `EcsExample.cpp`: a game using the editor (`gui_ecs_example`) |
-| `tests/` | `tests_editor`: the editor on an ECS world (see [Tests](#tests)) |
+| `../../tests/Editor/` | `tests_editor`, with the engine's tests (see [Tests](#tests)) |
 
 ## Using the editor from the ECS
 
@@ -179,36 +179,35 @@ on the Hierarchy, keeps its default position.
 ## Tests
 
 `tests_editor` checks that the editor works on an ECS world, with the
-engine's test framework (boost-ext ut). It is built when the editor is built
-from its own folder, or from the engine root with the engine's tests:
+engine's test framework (boost-ext ut). Like the engine's tests, its files are
+in the root `tests/` folder, in `tests/Editor/`, and listed in
+`tests/CMakeLists.txt`: a new test file goes in that list, and its
+`run_..._tests()` is called from `tests/Editor/main.cpp`. It is built from the
+engine root with the engine's tests, when the editor is built:
 
 ```sh
-cd src/Editor && cmake -S . -B build && cmake --build build
-ctest --test-dir build --output-on-failure
-
-# or from the engine root, with tests_ecs
 cmake -B build -S . -DENGINE_BUILD_GUI=ON -DENGINE_BUILD_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-| File | What it checks |
+| File (in `tests/Editor/`) | What it checks |
 | --- | --- |
-| `tests/ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
-| `tests/ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
-| `tests/ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
-| `tests/ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged. A panel missing from a saved layout is docked in its area; Create Object does nothing during Play, even from a shortcut; an object selected outside the Hierarchy is scrolled to there; the Game Controls keep their place in every play state and fit the smallest window |
-| `tests/ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved, and scaled with the handles of the selected one, and clicking empty space clears the selection; with snapping on, moves, drops and scales land on the grid, and the settings are saved; nothing is created, moved or scaled during Play, even when Play is pressed during the drag or at the drop |
+| `ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
+| `ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
+| `ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
+| `ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged. A panel missing from a saved layout is docked in its area; Create Object does nothing during Play, even from a shortcut; an object selected outside the Hierarchy is scrolled to there; the Game Controls keep their place in every play state and fit the smallest window |
+| `ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved, and scaled with the handles of the selected one, and clicking empty space clears the selection; with snapping on, moves, drops and scales land on the grid, and the settings are saved; nothing is created, moved or scaled during Play, even when Play is pressed during the drag or at the drop |
+| `scene/TestDemoSceneRenderer.cpp` | The demo's Viewport: an object moved with the mouse stays drawn under it; an object moved far away is brought back into view |
 
 On macOS SDL's `offscreen` driver cannot start, so the tests opening the real
 Editor fail under plain `ctest`. Run them with
-`SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software ./build/tests_editor`
-(`./build/src/Editor/tests_editor` from the engine root).
+`SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software ./build/tests/tests_editor`.
 
 The reflection registry is shared by the whole test program: each file
 prefixes its test components (`SceneMover`, `SimPosition`...) so their names
-never collide. `SDL_VIDEO_DRIVER=x11 ./build/tests_editor` (or `wayland`)
-shows the editor window during the end-to-end test.
+never collide. `SDL_VIDEO_DRIVER=x11 ./build/tests/tests_editor` (or
+`wayland`) shows the editor window during the end-to-end test.
 
-The editor is not built in CI yet (SDL3 and Dear ImGui), so these tests run
-locally only.
+The editor is not built in CI yet (SDL3 and Dear ImGui): `project_scripts/build.py`
+and `test_coverage.py` do not build it, so these tests run locally only.
