@@ -12,6 +12,7 @@
 */
 
 #include "InspectorPanel.hpp"
+#include "panels/AssetPayload.hpp"
 #include "ui/Button/Button.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
@@ -180,6 +181,10 @@ void InspectorPanel::drawProperties(
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (drawValue(info, value))
             _properties.set(id, component, path, value);
+        // A text field also takes the path of an asset dragged from the Asset Browser.
+        if (info.type == PropertyType::String && !info.readOnly)
+            if (const std::optional<std::string> asset = droppedAsset())
+                _properties.set(id, component, path, *asset);
         ImGui::EndDisabled();
         if (info.readOnly && !info.tooltip.empty())
             ImGui::SetItemTooltip("%s", info.tooltip.c_str());

@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iterator>
@@ -153,6 +154,16 @@ namespace {
                     ImGui::GetIO().AddInputCharactersUTF8(action.substr(std::string_view("type ").size()).c_str());
                 } else if (action == "leave text field") {
                     ImGui::ClearActiveID();
+                } else if (action.starts_with("focus ")) {
+                    // Selects the panel's tab, so it is drawn.
+                    ImGui::SetWindowFocus(action.substr(std::string_view("focus ").size()).c_str());
+                } else if (action.starts_with("remove file ")) {
+                    std::filesystem::remove(action.substr(std::string_view("remove file ").size()));
+                } else if (action.starts_with("create file ")) {
+                    const std::filesystem::path file = action.substr(std::string_view("create file ").size());
+                    if (file.has_parent_path())
+                        std::filesystem::create_directories(file.parent_path());
+                    std::ofstream(file) << "test";
                 } else if (action == "press F9" || action == "release F9") {
                     ImGui::GetIO().AddKeyEvent(ImGuiKey_F9, action == "press F9");
                 } else if (action == "count objects") {
@@ -450,5 +461,39 @@ void run_editor_on_ecs_tests()
         expect(loggedErrors() == 2_ul);
         expect(run.objectCounts == std::vector<std::size_t>{1});
         expect(logged(LogLevel::Info, "Levels: first")) << "only the level saved before Play";
+    };
+
+    "the running editor reads the assets folder"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+
+        Logger::instance().clear();
+        runEditor(world, systems,
+            {
+                {3, {"create file assets/sprites/hero.png", "create file assets/jump.wav", "create file outside.png", "focus Assets"}},
+                {6, {"assets"}},
+                {8, {"quit"}},
+            });
+
+        expect(logged(LogLevel::Info, "2 assets in")) << "the files of assets/ and its subfolders only";
+        expect(loggedErrors() == 0_ul) << "the Asset Browser drew them";
+    };
+
+    "the Asset Browser follows a scan made by the assets command"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+
+        // The panel shows two files; the command reads the folder again
+        // with one, between two of the panel's own scans.
+        Logger::instance().clear();
+        runEditor(world, systems,
+            {
+                {3, {"create file assets/a.png", "create file assets/b.png", "focus Assets"}},
+                {6, {"remove file assets/b.png", "assets"}},
+                {10, {"quit"}},
+            });
+
+        expect(logged(LogLevel::Info, "1 assets in"));
+        expect(loggedErrors() == 0_ul);
     };
 }

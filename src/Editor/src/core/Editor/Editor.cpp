@@ -13,6 +13,7 @@
 
 #include "Editor.hpp"
 #include "ecs/EcsBackend/EcsBackend.hpp"
+#include "panels/AssetBrowserPanel/AssetBrowserPanel.hpp"
 #include "panels/ButtonsPanel/ButtonsPanel.hpp"
 #include "panels/ConsolePanel/ConsolePanel.hpp"
 #include "panels/EntityPalettePanel/EntityPalettePanel.hpp"
@@ -143,8 +144,10 @@ void Editor::registerPanels()
     _layout.setDefaultArea("Game Controls", Area::Controls);
     _console = &_panels.registerPanel<ConsolePanel>(_commands);
     _layout.setDefaultArea("Console", Area::Bottom);
+    _panels.registerPanel<AssetBrowserPanel>(_assets);
+    _layout.setDefaultArea("Assets", Area::Bottom);
     // Widget demos, next to the console.
-    _layoutPanels = {"Hierarchy", "Entity Palette", "Viewport", "Inspector", "Game Controls", "Console", "Settings", "Levels"};
+    _layoutPanels = {"Hierarchy", "Entity Palette", "Viewport", "Inspector", "Game Controls", "Console", "Assets", "Settings", "Levels"};
 
     if (_options.demo) {
         _panels.registerPanel<ButtonsPanel>(_notifications, _dialogs, [this] { requestQuit(); });
@@ -478,6 +481,11 @@ void Editor::registerCommands()
         for (HierarchyModel::ObjectId root : scene.roots())
             count += 1 + scene.countDescendants(root);
         Logger::instance().info("Console", std::to_string(count) + " objects in the scene");
+    });
+    _commands.add("assets", "assets", "Count the files of the assets folder", [this](const auto &) {
+        _assets.scan();
+        Logger::instance().info("Console", std::to_string(_assets.assets().size()) + " assets in " + _assets.folder().string()
+                + (_assets.truncated() ? " (stopped at the limit)" : ""));
     });
     _commands.add("level", "level <list|new|open|save|rename|delete> [names]",
         "Manage the levels: list, new <name>, open <name>, save [new name], rename <old> <new>, delete <name>",
