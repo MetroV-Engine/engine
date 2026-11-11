@@ -1,16 +1,24 @@
 // The real Editor on an ECS world, in an offscreen window: a script selects
 // an entity (the Inspector then draws its components), plays, pauses, steps,
-// stops and quits through the console commands, one action per frame.
+// stops and quits through the console commands, one action per frame. The
+// panels are measured on screen and the saved layout read back.
 
 #include <boost/ut.hpp>
 
 #include <SDL3/SDL.h>
 
+#include <imgui.h>
+#include <imgui_internal.h>
+
+#include <cmath>
 #include <cstdint>
+#include <fstream>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -62,6 +70,20 @@ namespace {
     // Frame number -> what to do on that frame (commands typed in the console).
     using Script = std::map<int, std::vector<std::string>>;
 
+    // How far the Hierarchy's tree is scrolled, out of how far it can be.
+    struct TreeScroll
+    {
+        float position = 0.0f;
+        float max = 0.0f;
+    };
+
+    // Where a panel is on screen ("measure panels" in a script).
+    struct PanelPlace
+    {
+        bool docked = false;
+        ImVec2 pos;
+    };
+
     // EcsBackend whose Viewport renderer, called once per frame, plays the
     // script: the test drives the editor like a user would.
     class ScriptedBackend : public SceneBackend
@@ -94,6 +116,9 @@ namespace {
 
         int frames = 0;
         HierarchyModel::ObjectId selected = HierarchyModel::InvalidId;
+        std::map<std::string, PanelPlace> panels;
+        std::vector<std::size_t> objectCounts;
+        std::vector<TreeScroll> hierarchyScrolls;
 
     private:
         EcsBackend _inner;
@@ -110,6 +135,28 @@ namespace {
                 if (action == "select first") {
                     selected = hierarchy().roots().front();
                     selection.set(selected);
+                } else if (action == "select last") {
+                    // Like the Viewport does: from outside the Hierarchy.
+                    selected = hierarchy().roots().back();
+                    selection.set(selected);
+                } else if (action == "focus hierarchy search") {
+                    ImGui::ActivateItemByID(ImGui::FindWindowByName("Hierarchy")->GetID("##HierarchySearch"));
+                } else if (action.starts_with("type ")) {
+                    ImGui::GetIO().AddInputCharactersUTF8(action.substr(std::string_view("type ").size()).c_str());
+                } else if (action == "leave text field") {
+                    ImGui::ClearActiveID();
+                } else if (action == "press F9" || action == "release F9") {
+                    ImGui::GetIO().AddKeyEvent(ImGuiKey_F9, action == "press F9");
+                } else if (action == "count objects") {
+                    objectCounts.push_back(hierarchy().allObjects().size());
+                } else if (action == "measure hierarchy scroll") {
+                    for (const ImGuiWindow *window : ImGui::GetCurrentContext()->Windows)
+                        if (std::string_view(window->Name).starts_with("Hierarchy/##HierarchyTree"))
+                            hierarchyScrolls.push_back({window->Scroll.y, window->ScrollMax.y});
+                } else if (action == "measure panels") {
+                    for (const char *name : {"Hierarchy", "Entity Palette"})
+                        if (const ImGuiWindow *window = ImGui::FindWindowByName(name))
+                            panels[name] = {window->DockIsActive, window->Pos};
                 } else if (action == "quit") {
                     _gui.stop();
                 } else {
@@ -123,12 +170,20 @@ namespace {
     {
         int frames = 0;
         HierarchyModel::ObjectId selected = HierarchyModel::InvalidId;
+        std::map<std::string, PanelPlace> panels;
+        std::vector<std::size_t> objectCounts;
+        std::vector<TreeScroll> hierarchyScrolls;
+        // The imgui.ini file the editor saved when it closed.
+        std::string savedIni;
     };
 
-    // Opens the editor on world and runs script until it quits.
-    Run runEditor(ECS::Registry &world, ECS::SystemManager &systems, Script script)
+    // Opens the editor on world, with savedIni as its imgui.ini file if any,
+    // and runs script until it quits.
+    Run runEditor(ECS::Registry &world, ECS::SystemManager &systems, Script script, const std::string &savedIni = {})
     {
         FreshWorkingDirectory directory;
+        if (!savedIni.empty())
+            std::ofstream("imgui.ini") << savedIni;
         GuiContext gui("tests_editor", 1280, 720);
         auto backend = std::make_unique<ScriptedBackend>(gui, world, systems, std::move(script));
         ScriptedBackend &scripted = *backend;
@@ -138,8 +193,23 @@ namespace {
             editor.run();
             run.frames = scripted.frames;
             run.selected = scripted.selected;
+            run.panels = scripted.panels;
+            run.objectCounts = scripted.objectCounts;
+            run.hierarchyScrolls = scripted.hierarchyScrolls;
         }
+        std::ifstream saved("imgui.ini");
+        run.savedIni.assign(std::istreambuf_iterator<char>(saved), std::istreambuf_iterator<char>());
         return run;
+    }
+
+    // The ini file without a window's section: as saved before it existed.
+    std::string withoutWindow(const std::string &ini, const std::string &name)
+    {
+        const std::size_t start = ini.find("[Window][" + name + "]\n");
+        if (start == std::string::npos)
+            return ini;
+        const std::size_t end = ini.find("\n\n", start);
+        return ini.substr(0, start) + (end == std::string::npos ? std::string() : ini.substr(end + 2));
     }
 }
 
@@ -211,5 +281,84 @@ void run_editor_on_ecs_tests()
         expect(world.entityCount() == 1_ul);
         expect(world.getComponent<LiveThing>(a).position.x == 10.0f);
         expect(loggedErrors() == 0_ul);
+    };
+
+    "a panel missing from a saved layout is docked in its area"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        const Script script{{10, {"measure panels"}}, {12, {"quit"}}};
+        const Run first = runEditor(world, systems, script);
+        const std::string beforePalette = withoutWindow(first.savedIni, "Entity Palette");
+        expect(beforePalette.size() < first.savedIni.size()) << "the first run saved the palette";
+
+        Run second = runEditor(world, systems, script, beforePalette);
+
+        expect(second.panels.contains("Entity Palette") && second.panels.contains("Hierarchy"));
+        const PanelPlace palette = second.panels["Entity Palette"];
+        const PanelPlace hierarchy = second.panels["Hierarchy"];
+        expect(palette.docked) << "not floating";
+        expect(std::abs(palette.pos.x - hierarchy.pos.x) < 1.0f && palette.pos.y > hierarchy.pos.y) << "below the Hierarchy";
+    };
+
+    "objects cannot be created during Play, even with the shortcut"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        world.spawnEntity("A");
+
+        Logger::instance().clear();
+        const Run run = runEditor(world, systems,
+            {
+                {3, {"bind edit.create F9", "play"}},
+                {5, {"press F9"}},
+                {6, {"release F9"}},
+                {9, {"count objects", "stop"}},
+                {11, {"press F9"}},
+                {12, {"release F9"}},
+                {15, {"count objects"}},
+                {17, {"quit"}},
+            });
+
+        expect(loggedErrors() == 0_ul) << "the shortcut was bound";
+        expect(run.objectCounts.size() == 2_ul);
+        expect(run.objectCounts.size() == 2 && run.objectCounts[0] == 1) << "nothing created during Play";
+        expect(run.objectCounts.size() == 2 && run.objectCounts[1] == 2) << "the shortcut creates once stopped";
+    };
+
+    "an object selected outside the Hierarchy is scrolled to there"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        for (int i = 0; i < 300; i++)
+            world.spawnEntity("Entity " + std::to_string(i));
+
+        const Run run = runEditor(world, systems, {{3, {"select last"}}, {10, {"measure hierarchy scroll"}}, {12, {"quit"}}});
+
+        expect(run.hierarchyScrolls.size() == 1 && run.hierarchyScrolls[0].position > 0.0f)
+            << "the last of 300 rows is far below the first ones";
+    };
+
+    "an object hidden by the Hierarchy's search is shown when selected elsewhere"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        for (int i = 0; i < 300; i++)
+            world.spawnEntity("Entity " + std::to_string(i));
+
+        // "Entity 1" lists Entity 1, 10 to 19 and 100 to 199, not Entity 299.
+        const Run run = runEditor(world, systems,
+            {
+                {3, {"focus hierarchy search"}},
+                {5, {"type Entity 1"}},
+                {7, {"leave text field"}},
+                {9, {"measure hierarchy scroll", "select last"}},
+                {14, {"measure hierarchy scroll"}},
+                {16, {"quit"}},
+            });
+
+        expect(run.hierarchyScrolls.size() == 2_ul);
+        if (run.hierarchyScrolls.size() != 2)
+            return;
+        const TreeScroll filtered = run.hierarchyScrolls[0];
+        const TreeScroll shown = run.hierarchyScrolls[1];
+        expect(filtered.max > 0.0f && shown.max > filtered.max) << "the search hid rows, then was cleared";
+        expect(shown.position > 0.0f) << "scrolled to the selected object";
     };
 }

@@ -59,7 +59,10 @@ void EditorLayout::draw()
     if (_resetRequested || !ImGui::DockBuilderGetNode(dockspaceId)) {
         buildDefaultLayout(dockspaceId, viewport->WorkSize);
         _resetRequested = false;
+    } else if (!_newPanelsDocked) {
+        dockNewPanels(dockspaceId);
     }
+    _newPanelsDocked = true;
     if (_selectFirstTabsIn > 0 && --_selectFirstTabsIn == 0)
         selectFirstTabs();
     // Covers the viewport's work area, which excludes the menu bar, the
@@ -103,6 +106,39 @@ void EditorLayout::buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size)
     }
     ImGui::DockBuilderFinish(dockspaceId);
     _selectFirstTabsIn = 2;
+}
+
+void EditorLayout::dockNewPanels(ImGuiID dockspaceId)
+{
+    bool docked = false;
+    for (const auto &[name, area] : _defaultAreas) {
+        // Saved panels stay wherever the user put them.
+        if (ImGui::FindWindowSettingsByID(ImHashStr(name.c_str())))
+            continue;
+        ImGuiID node = savedNode(area);
+        if (!node && area == Area::LeftBottom)
+            if (const ImGuiID left = savedNode(Area::Left))
+                node = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, LeftBottomRatio, nullptr, nullptr);
+        if (node) {
+            // Also creates the panel's settings: the next panel of its area joins it.
+            ImGui::DockBuilderDockWindow(name.c_str(), node);
+            docked = true;
+        }
+    }
+    if (docked)
+        ImGui::DockBuilderFinish(dockspaceId);
+}
+
+ImGuiID EditorLayout::savedNode(Area area) const
+{
+    for (const auto &[name, panelArea] : _defaultAreas) {
+        if (panelArea != area)
+            continue;
+        const ImGuiWindowSettings *settings = ImGui::FindWindowSettingsByID(ImHashStr(name.c_str()));
+        if (settings && settings->DockId && ImGui::DockBuilderGetNode(settings->DockId))
+            return settings->DockId;
+    }
+    return 0;
 }
 
 void EditorLayout::selectFirstTabs() const

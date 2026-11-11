@@ -119,8 +119,10 @@ void ViewportTransformTool::startDrag(const ViewportView &view)
             pickedPosition = *position;
         }
     }
-    if (picked == HierarchyModel::InvalidId)
+    if (picked == HierarchyModel::InvalidId) {
+        _selection.clear();
         return;
+    }
 
     _selection.set(picked);
     _dragged = picked;

@@ -112,7 +112,8 @@ void Editor::registerPanels()
 {
     using Area = EditorLayout::Area;
 
-    _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs, _entityDropTarget);
+    _hierarchy = &_panels.registerPanel<HierarchyPanel>(
+        _scene->hierarchy(), _selection, _notifications, _dialogs, _entityDropTarget, _play);
     _layout.setDefaultArea("Hierarchy", Area::Left);
 
     _panels.registerPanel<EntityPalettePanel>(_entityTemplates, _play);
@@ -173,7 +174,8 @@ void Editor::registerActions()
     }
     _actions.add({.id = "edit.create", .label = "Create Object",
         .callback = [this] { _hierarchy->createObject(HierarchyModel::InvalidId); },
-        .shortcut = ImGuiMod_Ctrl | ImGuiKey_N, .tooltip = "Create an object at the root of the scene"});
+        .shortcut = ImGuiMod_Ctrl | ImGuiKey_N, .tooltip = "Create an object at the root of the scene",
+        .isEnabled = [this] { return _play.isStopped(); }});
     // F2 and Delete are handled by the Hierarchy when it has focus (so typing
     // elsewhere never deletes an object); the menu shows them as hints.
     _actions.add({.id = "edit.rename", .label = "Rename", .callback = [this] { _hierarchy->startRename(_selection.get()); },
