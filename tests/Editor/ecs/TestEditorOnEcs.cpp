@@ -154,6 +154,11 @@ namespace {
     Run runEditor(ECS::Registry &world, ECS::SystemManager &systems, Script script)
     {
         FreshWorkingDirectory directory;
+        // SDL_Quit (in ~GuiContext) clears every hint: set them before each run.
+        // No window on screen; SDL_VIDEO_DRIVER=x11 (or wayland...) shows it.
+        SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
+        // CI runners have no OpenGL/GLES: render in software.
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
         GuiContext gui("tests_editor", 1280, 720);
         auto backend = std::make_unique<ScriptedBackend>(gui, world, systems, std::move(script));
         ScriptedBackend &scripted = *backend;
@@ -182,11 +187,6 @@ E_END
 
 void run_editor_on_ecs_tests()
 {
-    // No window on screen; SDL_VIDEO_DRIVER=x11 (or wayland...) shows it.
-    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
-    // CI runners (macOS) have no OpenGL/GLES: render in software.
-    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
-
     "the editor edits, plays and stops an ECS world, without error"_test = [] {
         ECS::Registry world;
         ECS::SystemManager systems;
