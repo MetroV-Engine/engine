@@ -84,6 +84,13 @@ namespace {
         ImVec2 pos;
     };
 
+    // Width of the Game Controls' row and the room it has ("measure controls").
+    struct ControlsWidth
+    {
+        float content = 0.0f;
+        float room = 0.0f;
+    };
+
     // EcsBackend whose Viewport renderer, called once per frame, plays the
     // script: the test drives the editor like a user would.
     class ScriptedBackend : public SceneBackend
@@ -119,6 +126,7 @@ namespace {
         std::map<std::string, PanelPlace> panels;
         std::vector<std::size_t> objectCounts;
         std::vector<TreeScroll> hierarchyScrolls;
+        std::vector<ControlsWidth> controls;
 
     private:
         EcsBackend _inner;
@@ -153,6 +161,9 @@ namespace {
                     for (const ImGuiWindow *window : ImGui::GetCurrentContext()->Windows)
                         if (std::string_view(window->Name).starts_with("Hierarchy/##HierarchyTree"))
                             hierarchyScrolls.push_back({window->Scroll.y, window->ScrollMax.y});
+                } else if (action == "measure controls") {
+                    if (const ImGuiWindow *window = ImGui::FindWindowByName("Game Controls"))
+                        controls.push_back({window->ContentSize.x, window->ContentRegionRect.GetWidth()});
                 } else if (action == "measure panels") {
                     for (const char *name : {"Hierarchy", "Entity Palette"})
                         if (const ImGuiWindow *window = ImGui::FindWindowByName(name))
@@ -173,18 +184,26 @@ namespace {
         std::map<std::string, PanelPlace> panels;
         std::vector<std::size_t> objectCounts;
         std::vector<TreeScroll> hierarchyScrolls;
+        std::vector<ControlsWidth> controls;
         // The imgui.ini file the editor saved when it closed.
         std::string savedIni;
     };
 
-    // Opens the editor on world, with savedIni as its imgui.ini file if any,
-    // and runs script until it quits.
-    Run runEditor(ECS::Registry &world, ECS::SystemManager &systems, Script script, const std::string &savedIni = {})
+    struct RunOptions
+    {
+        // Written as the imgui.ini file before the editor opens, if set.
+        std::string savedIni;
+        int width = 1280;
+        int height = 720;
+    };
+
+    // Opens the editor on world and runs script until it quits.
+    Run runEditor(ECS::Registry &world, ECS::SystemManager &systems, Script script, const RunOptions &options = {})
     {
         FreshWorkingDirectory directory;
-        if (!savedIni.empty())
-            std::ofstream("imgui.ini") << savedIni;
-        GuiContext gui("tests_editor", 1280, 720);
+        if (!options.savedIni.empty())
+            std::ofstream("imgui.ini") << options.savedIni;
+        GuiContext gui("tests_editor", options.width, options.height);
         auto backend = std::make_unique<ScriptedBackend>(gui, world, systems, std::move(script));
         ScriptedBackend &scripted = *backend;
         Run run;
@@ -196,6 +215,7 @@ namespace {
             run.panels = scripted.panels;
             run.objectCounts = scripted.objectCounts;
             run.hierarchyScrolls = scripted.hierarchyScrolls;
+            run.controls = scripted.controls;
         }
         std::ifstream saved("imgui.ini");
         run.savedIni.assign(std::istreambuf_iterator<char>(saved), std::istreambuf_iterator<char>());
@@ -291,7 +311,7 @@ void run_editor_on_ecs_tests()
         const std::string beforePalette = withoutWindow(first.savedIni, "Entity Palette");
         expect(beforePalette.size() < first.savedIni.size()) << "the first run saved the palette";
 
-        Run second = runEditor(world, systems, script, beforePalette);
+        Run second = runEditor(world, systems, script, {.savedIni = beforePalette});
 
         expect(second.panels.contains("Entity Palette") && second.panels.contains("Hierarchy"));
         const PanelPlace palette = second.panels["Entity Palette"];
@@ -360,5 +380,35 @@ void run_editor_on_ecs_tests()
         const TreeScroll shown = run.hierarchyScrolls[1];
         expect(filtered.max > 0.0f && shown.max > filtered.max) << "the search hid rows, then was cleared";
         expect(shown.position > 0.0f) << "scrolled to the selected object";
+    };
+
+    "the game controls do not move when the game plays or pauses"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+
+        const Run run = runEditor(world, systems,
+            {
+                {8, {"measure controls", "play"}},
+                {12, {"measure controls", "pause"}},
+                {16, {"measure controls"}},
+                {18, {"quit"}},
+            });
+
+        expect(run.controls.size() == 3_ul);
+        for (const ControlsWidth &measure : run.controls)
+            expect(std::abs(measure.content - run.controls.front().content) < 0.5f) << "same row in every state";
+    };
+
+    "the game controls fit in the smallest window"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+
+        // The window's minimum size (see GuiContext).
+        const Run run = runEditor(
+            world, systems, {{8, {"play"}}, {12, {"measure controls"}}, {14, {"quit"}}}, {.width = 640, .height = 400});
+
+        expect(run.controls.size() == 1_ul);
+        expect(run.controls.size() == 1 && run.controls[0].content <= run.controls[0].room + 0.5f)
+            << "nothing cut off on the right";
     };
 }
