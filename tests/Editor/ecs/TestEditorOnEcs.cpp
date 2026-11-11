@@ -184,6 +184,8 @@ void run_editor_on_ecs_tests()
 {
     // No window on screen; SDL_VIDEO_DRIVER=x11 (or wayland...) shows it.
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
+    // CI runners (macOS) have no OpenGL/GLES: render in software.
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 
     "the editor edits, plays and stops an ECS world, without error"_test = [] {
         ECS::Registry world;
