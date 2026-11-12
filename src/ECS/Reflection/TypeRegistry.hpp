@@ -200,7 +200,13 @@ namespace ECS::reflect {
                     if (const TypeInfo* existing = find<T>()) {
                         return *existing;
                     }
-                    TypeInfo& info = insert<T>(Traits::name(element.name), TypeKind::Sequence);
+                    std::string name = Traits::name(element.name);
+                    if (const TypeInfo* same = findEquivalent<T>(name, TypeKind::Sequence)) {
+                        if (same->sequenceOps && same->sequenceOps->element == &element) {
+                            return alias<T>(*same);
+                        }
+                    }
+                    TypeInfo& info = insert<T>(std::move(name), TypeKind::Sequence);
                     SequenceOps ops;
                     ops.element = &element;
                     ops.size = [](const void* c) noexcept {
@@ -228,7 +234,13 @@ namespace ECS::reflect {
                     if (const TypeInfo* existing = find<T>()) {
                         return *existing;
                     }
-                    TypeInfo& info = insert<T>(Traits::name(key.name, value.name), TypeKind::Map);
+                    std::string name = Traits::name(key.name, value.name);
+                    if (const TypeInfo* same = findEquivalent<T>(name, TypeKind::Map)) {
+                        if (same->mapOps && same->mapOps->key == &key && same->mapOps->value == &value) {
+                            return alias<T>(*same);
+                        }
+                    }
+                    TypeInfo& info = insert<T>(std::move(name), TypeKind::Map);
                     MapOps ops;
                     ops.key = &key;
                     ops.value = &value;
@@ -259,7 +271,13 @@ namespace ECS::reflect {
                     if (const TypeInfo* existing = find<T>()) {
                         return *existing;
                     }
-                    TypeInfo& info = insert<T>(Traits::name(value.name), TypeKind::Optional);
+                    std::string name = Traits::name(value.name);
+                    if (const TypeInfo* same = findEquivalent<T>(name, TypeKind::Optional)) {
+                        if (same->optionalOps && same->optionalOps->value == &value) {
+                            return alias<T>(*same);
+                        }
+                    }
+                    TypeInfo& info = insert<T>(std::move(name), TypeKind::Optional);
                     OptionalOps ops;
                     ops.value = &value;
                     ops.hasValue = [](const void* o) noexcept {
@@ -319,6 +337,27 @@ namespace ECS::reflect {
                     return;
                 }
                 registerScalar<T>(std::move(name));
+            }
+
+            // A container already registered under `name` with the same kind,
+            // size and alignment as T. Distinct C++ types can share a name when
+            // their elements alias one TypeInfo (map<unsigned long, int> and
+            // map<unsigned long long, int> are both "map<uint64,int32>"); the
+            // caller still checks that the element TypeInfos are identical.
+            template<typename T>
+            const TypeInfo* findEquivalent(const std::string& name, TypeKind kind) const noexcept {
+                const TypeInfo* same = find(typeId(name));
+                if (same && same->kind == kind && same->size == sizeof(T) &&
+                    same->align == alignof(T)) {
+                    return same;
+                }
+                return nullptr;
+            }
+
+            template<typename T>
+            const TypeInfo& alias(const TypeInfo& target) {
+                _byType.emplace(std::type_index(typeid(T)), &target);
+                return target;
             }
 
             template<typename T>
