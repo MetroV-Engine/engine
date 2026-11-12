@@ -120,14 +120,40 @@ Limits:
 
 ## Tests
 
-None for now: `tests/Editor/` only holds a commented-out CMake target
-(`tests_editor`), like `tests/Engine` and `tests/Rendering`. The editor is not
-built in CI yet (SDL3 and Dear ImGui).
+`tests/Editor/` (`tests_editor`, built with `ENGINE_BUILD_GUI`), one folder per
+module of `src/`. They run the real editor, headless, in an empty temporary
+working directory:
 
-When they come back, note two SDL traps seen in CI:
+```sh
+python project_scripts/test_coverage.py --minimum 90   # build, test, check coverage (Linux)
+ctest --preset tests                                    # or only run them
+```
+
+`tests/Editor/Support/Headless.hpp` drives the UI the way a user would:
+
+- `Gui`: a real `GuiContext` on SDL's `dummy` video driver and `software`
+  renderer, whose frames the test runs one by one (`frame()`).
+- Input goes to ImGui directly: `press(ImGuiMod_Ctrl | ImGuiKey_N)`,
+  `typeText("help")`, `click(position)`. ImGui sees it on the next frame.
+- A widget is clicked by its ImGui id: `activate(itemId(window("Settings"),
+  {"VSync"}))`, the activation keyboard navigation uses. `itemId` hashes the
+  window and the labels the way ImGui does (a `PushID` scope is one more
+  element: `{"Quality", 2, "High"}`); `openPopup(id)` opens a context menu.
+- The whole `Editor` runs a `Script`: one step per frame, from the Viewport's
+  renderer (`TestEditor.cpp`).
+- `LogWatch` checks what was logged since it was created.
+
+Traps met on the way:
 
 - `SDL_Quit` (called by `~GuiContext`) clears every hint: set
   `SDL_HINT_VIDEO_DRIVER` / `SDL_HINT_RENDER_DRIVER` before each `GuiContext`.
-- For a headless run use the `dummy` video driver with the `software`
-  renderer. `offscreen` fails on macOS: SDL asks every window for OpenGL and
-  the driver's EGL does not exist there.
+- Use the `dummy` video driver with the `software` renderer. `offscreen`
+  fails on macOS: SDL asks every window for OpenGL and the driver's EGL does
+  not exist there. The dummy display is 1024x768.
+- One `GuiContext` at a time: ImGui has one current context.
+- The software renderer fills every pixel: a frame of the whole editor takes
+  ~300 ms in a debug build. The tests render it at 1/20 of its size
+  (`renderSmall()`, through `DisplayFramebufferScale`), ~10 ms; layout and
+  input are unchanged.
+- A popup must be drawn in the frame it is opened, and focusing another
+  window closes it.

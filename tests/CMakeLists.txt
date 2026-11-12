@@ -4,4 +4,6 @@ find_package(ut CONFIG REQUIRED)
 add_subdirectory(ECS)
 # add_subdirectory(Rendering) # with src/Rendering
 # add_subdirectory(Engine)    # with src/Engine
-# add_subdirectory(Editor)    # with ENGINE_BUILD_GUI
+if(ENGINE_BUILD_GUI)
+  add_subdirectory(Editor)
+endif()
