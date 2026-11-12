@@ -105,14 +105,22 @@ inline void press(ImGuiKeyChord chord)
     ImGuiIO &io = ImGui::GetIO();
     const ImGuiKey key = static_cast<ImGuiKey>(chord & ~ImGuiMod_Mask_);
     const ImGuiKey mods[] = {ImGuiMod_Ctrl, ImGuiMod_Shift, ImGuiMod_Alt, ImGuiMod_Super};
+    // On macOS (ConfigMacOSXBehaviors, on by default there), a chord's Ctrl
+    // is the Cmd key: AddKeyEvent swaps Ctrl and Super. The physical key is
+    // sent, so that ImGui sees the chord as written.
+    const auto physical = [&io](ImGuiKey mod) {
+        if (!io.ConfigMacOSXBehaviors)
+            return mod;
+        return mod == ImGuiMod_Ctrl ? ImGuiMod_Super : mod == ImGuiMod_Super ? ImGuiMod_Ctrl : mod;
+    };
     for (const ImGuiKey mod : mods)
         if (chord & mod)
-            io.AddKeyEvent(mod, true);
+            io.AddKeyEvent(physical(mod), true);
     io.AddKeyEvent(key, true);
     io.AddKeyEvent(key, false);
     for (const ImGuiKey mod : mods)
         if (chord & mod)
-            io.AddKeyEvent(mod, false);
+            io.AddKeyEvent(physical(mod), false);
 }
 
 // Types text into the focused field (on the next frame).

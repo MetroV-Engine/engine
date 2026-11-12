@@ -236,6 +236,20 @@ void run_action_registry_tests()
         expect(function == 1_i);
         expect(palette == 2_i);
     };
+    // macOS swaps Ctrl and Cmd (ConfigMacOSXBehaviors): the chords and the
+    // test input must still agree, on every platform.
+    "processShortcuts: Ctrl shortcuts with the other platform's key behavior"_test = [] {
+        Gui gui;
+        ImGui::GetIO().ConfigMacOSXBehaviors = !ImGui::GetIO().ConfigMacOSXBehaviors;
+        ActionRegistry actions;
+        int palette = 0;
+        actions.add({.id = "view.palette", .callback = [&] { palette++; }, .shortcut = ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_P});
+        const auto ui = [&] { actions.processShortcuts(); };
+        gui.frame(ui);
+        press(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_P);
+        gui.frames(2, ui);
+        expect(palette == 1_i);
+    };
 }
 
 void run_command_palette_tests()
