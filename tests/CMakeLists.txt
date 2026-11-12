@@ -59,6 +59,7 @@ set(ENGINE_TEST_FILES
 	Engine/System/Radial/TestRadialFieldSystem.cpp
 	Engine/System/Drag/TestDragSystem.cpp
 	Engine/System/Buoyancy/TestBuoyancySystem.cpp
+	Engine/System/Collision/TestCollisionSystem.cpp
 	Engine/main.cpp
 )
 
