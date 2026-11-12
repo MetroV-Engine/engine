@@ -51,6 +51,7 @@ set(ENGINE_TEST_FILES
 	Engine/Common/Collision/TestCollide.cpp
 	Engine/Common/Collision/TestRaycast.cpp
 	Engine/Common/Collision/TestSweep.cpp
+	Engine/Component/TestCollider.cpp
 	Engine/System/Gravity/TestGravitySystem.cpp
 	Engine/System/Friction/TestFrictionSystem.cpp
 	Engine/System/Spring/TestSpringSystem.cpp

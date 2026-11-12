@@ -14,6 +14,7 @@ void run_collision_overlap_tests();
 void run_collision_collide_tests();
 void run_collision_raycast_tests();
 void run_collision_sweep_tests();
+void run_collider_tests();
 void run_gravity_system_tests();
 void run_friction_system_tests();
 void run_spring_system_tests();
@@ -40,6 +41,7 @@ int main()
     run_collision_collide_tests();
     run_collision_raycast_tests();
     run_collision_sweep_tests();
+    run_collider_tests();
     run_gravity_system_tests();
     run_friction_system_tests();
     run_spring_system_tests();
