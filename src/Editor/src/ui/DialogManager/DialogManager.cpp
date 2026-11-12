@@ -75,10 +75,14 @@ void DialogManager::draw()
         ImGui::Separator();
         ImGui::Spacing();
 
+        // The key press that opened the dialog (Enter on "quit" in the
+        // console or the command palette) must not answer it at once.
+        const bool keysAnswer = !ImGui::IsWindowAppearing();
         const ImVec2 buttonSize(fontSize * ButtonWidthInFontSizes, 0.0f);
         const Button confirmButton(options.confirmLabel, {},
             options.destructive ? Button::Variant::Danger : Button::Variant::Primary, buttonSize);
-        if (confirmButton.render() || ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))
+        if (confirmButton.render()
+            || (keysAnswer && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))))
             result = Result::Confirmed;
         if (!dialog.isAlert) {
             ImGui::SameLine();
@@ -86,7 +90,7 @@ void DialogManager::draw()
             if (cancelButton.render())
                 result = Result::Cancelled;
         }
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+        if (keysAnswer && ImGui::IsKeyPressed(ImGuiKey_Escape))
             result = Result::Cancelled;
 
         if (result != Result::None)
