@@ -18,6 +18,9 @@ void run_gravity_system_tests();
 void run_friction_system_tests();
 void run_spring_system_tests();
 void run_integration_system_tests();
+void run_radial_field_system_tests();
+void run_drag_system_tests();
+void run_buoyancy_system_tests();
 
 int main()
 {
@@ -41,4 +44,7 @@ int main()
     run_friction_system_tests();
     run_spring_system_tests();
     run_integration_system_tests();
+    run_radial_field_system_tests();
+    run_drag_system_tests();
+    run_buoyancy_system_tests();
 }

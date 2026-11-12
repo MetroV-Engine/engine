@@ -55,6 +55,9 @@ set(ENGINE_TEST_FILES
 	Engine/System/Friction/TestFrictionSystem.cpp
 	Engine/System/Spring/TestSpringSystem.cpp
 	Engine/System/Integration/TestIntegrationSystem.cpp
+	Engine/System/Radial/TestRadialFieldSystem.cpp
+	Engine/System/Drag/TestDragSystem.cpp
+	Engine/System/Buoyancy/TestBuoyancySystem.cpp
 	Engine/main.cpp
 )
 
