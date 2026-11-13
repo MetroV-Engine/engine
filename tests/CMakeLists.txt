@@ -43,3 +43,11 @@ add_executable(tests_logger_disabled
 target_include_directories(tests_logger_disabled PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(tests_logger_disabled PRIVATE Boost::ut)
 add_test(NAME tests_logger_disabled COMMAND tests_logger_disabled)
+
+# Links the real engine_logger, so it sees the definition every engine target gets.
+add_executable(tests_logger_switch
+	LoggerSwitch/TestSwitch.cpp
+)
+target_link_libraries(tests_logger_switch PRIVATE engine_logger Boost::ut)
+target_compile_definitions(tests_logger_switch PRIVATE ENGINE_EXPECT_LOG_ENABLED=$<IF:$<CONFIG:Debug>,1,0>)
+add_test(NAME tests_logger_switch COMMAND tests_logger_switch)
