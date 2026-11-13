@@ -1,11 +1,30 @@
 #include "Core/Logger/Logger.hpp"
 
 #include <atomic>
+#include <iostream>
 #include <mutex>
 
 namespace Log {
     namespace {
         constexpr std::size_t kDefaultCapacity = 1024;
+
+        // Indexed by Level, in declaration order.
+        constexpr std::string_view kLevelNames[] = {"Debug", "Info", "Success", "Warning", "Error"};
+
+        // "[Level][Section] message\n", built whole so it can be written in one call.
+        std::string formatLine(Section section, Level level, std::string_view message) {
+            const std::string_view name = kLevelNames[static_cast<int>(level)];
+            std::string line;
+            line.reserve(name.size() + section.name.size() + message.size() + 5);
+            line += '[';
+            line += name;
+            line += "][";
+            line += section.name;
+            line += "] ";
+            line += message;
+            line += '\n';
+            return line;
+        }
 
         struct State {
             std::mutex mutex;
@@ -28,15 +47,20 @@ namespace Log {
             return;
         }
         State& s = state();
-        std::lock_guard lock(s.mutex);
-        if (s.count == s.ring.size()) {
-            ++s.dropped;
-        } else {
-            ++s.count;
+        {
+            std::lock_guard lock(s.mutex);
+            if (s.count == s.ring.size()) {
+                ++s.dropped;
+            } else {
+                ++s.count;
+            }
+            s.ring[s.head] = Entry{std::chrono::steady_clock::now() - s.start, level,
+                                   std::string(section.name), std::string(message)};
+            s.head = (s.head + 1) % s.ring.size();
         }
-        s.ring[s.head] = Entry{std::chrono::steady_clock::now() - s.start, level,
-                               std::string(section.name), std::string(message)};
-        s.head = (s.head + 1) % s.ring.size();
+
+        std::ostream& out = level >= Level::Warning ? std::cerr : std::cout;
+        out << formatLine(section, level, message);
     }
 
     bool Logger::isEnabled(Level level) {
