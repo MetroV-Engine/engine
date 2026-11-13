@@ -67,3 +67,14 @@ if(VALGRIND_EXECUTABLE)
 else()
 	message(STATUS "Valgrind not found: tests_logger_shutdown is built but not run")
 endif()
+
+# Compile-time check, logging off: the same call must build with a text message
+# and must fail to build with an int, exactly as in Debug.
+foreach(_logger_case valid invalid)
+	add_executable(logger_type_check_${_logger_case} EXCLUDE_FROM_ALL LoggerDisabled/TypeCheck.cpp)
+	target_include_directories(logger_type_check_${_logger_case} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+	add_test(NAME tests_logger_type_check_${_logger_case}
+		COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target logger_type_check_${_logger_case} --config $<CONFIG>)
+endforeach()
+target_compile_definitions(logger_type_check_valid PRIVATE LOGGER_VALID_ARGUMENT)
+set_tests_properties(tests_logger_type_check_invalid PROPERTIES WILL_FAIL TRUE)

@@ -65,13 +65,12 @@ namespace Log {
         }                                                                \
     } while (false)
 #else
-// Logging is compiled out. sizeof does not evaluate its operand: nothing runs,
-// but the arguments must still compile, and variables used only here are not
-// reported as unused.
-#define ENGINE_LOG(section, level, message)                              \
-    do {                                                                 \
-        static_cast<void>(sizeof(section));                              \
-        static_cast<void>(sizeof(level));                                \
-        static_cast<void>(sizeof(message));                              \
+// Logging is compiled out. sizeof does not evaluate its operand, so nothing
+// runs; but the call to send inside it is still type-checked, so wrong
+// arguments fail here exactly as in Debug, and variables used only in a log
+// call are not reported as unused.
+#define ENGINE_LOG(section, level, message)                                         \
+    do {                                                                            \
+        static_cast<void>(sizeof((::Log::Logger::send((section), (level), (message)), 0))); \
     } while (false)
 #endif

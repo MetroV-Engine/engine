@@ -108,8 +108,9 @@ const int id = next();
 ENGINE_LOG(ECS, Log::Level::Debug, std::to_string(id));
 ```
 
-The arguments still have to compile in Release, so a typo fails in every build.
-A variable used only in a log call does not trigger an "unused variable"
+The arguments are still type-checked in Release, exactly as in Debug, so a
+wrong argument (a typo, or an `int` where text is expected) fails in every
+build. A variable used only in a log call does not trigger an "unused variable"
 warning.
 
 `ENGINE_LOG` is the way to log. You can also call `Log::Logger::send` directly.
@@ -137,8 +138,8 @@ after `main` returns: the logger stays alive until the program ends.
 
 ## Testing the logger
 
-The logger has four test programs, because it behaves differently with logging
-on and off:
+The logger has four test programs and one compile-time check, because it
+behaves differently with logging on and off:
 
 | Target | Logging | What it checks |
 | --- | --- | --- |
@@ -146,6 +147,7 @@ on and off:
 | `tests_logger_disabled` | always off | `ENGINE_LOG` evaluates nothing; nothing is stored or printed |
 | `tests_logger_switch` | as the build type sets it | Linking `engine_logger` turns logging on in Debug and off otherwise |
 | `tests_logger_shutdown` | always on | Logging from a global destructor after `main`, checked by Valgrind |
+| `tests_logger_type_check_valid` / `_invalid` | always off | A correct call builds; a call with an `int` message fails to build, as in Debug |
 
 `tests_logger` and `tests_logger_disabled` compile `Logger.cpp` themselves, so
 they test the same thing in every build type.
@@ -160,7 +162,9 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-All five test programs, `tests_ecs` included, must report `Passed`. To run one
+All seven tests, `tests_ecs` included, must report `Passed`. The two
+`type_check` tests build a small program: `_invalid` passes when that build
+fails. To run one
 on its own, for example while you work on the logger:
 
 ```sh
