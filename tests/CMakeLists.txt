@@ -33,3 +33,13 @@ target_include_directories(tests_logger PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../s
 target_compile_definitions(tests_logger PRIVATE ENGINE_LOG_ENABLED)
 target_link_libraries(tests_logger PRIVATE Boost::ut Threads::Threads)
 add_test(NAME tests_logger COMMAND tests_logger)
+
+# The same Logger.cpp compiled without ENGINE_LOG_ENABLED: what a Release build gets.
+add_executable(tests_logger_disabled
+	LoggerDisabled/main.cpp
+	LoggerDisabled/TestDisabled.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../src/Core/Logger/Logger.cpp
+)
+target_include_directories(tests_logger_disabled PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(tests_logger_disabled PRIVATE Boost::ut)
+add_test(NAME tests_logger_disabled COMMAND tests_logger_disabled)

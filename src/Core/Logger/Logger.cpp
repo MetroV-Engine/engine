@@ -5,6 +5,7 @@
 #include <mutex>
 
 namespace Log {
+#ifdef ENGINE_LOG_ENABLED
     namespace {
         constexpr std::size_t kDefaultCapacity = 1024;
 
@@ -116,4 +117,11 @@ namespace Log {
         s.count = 0;
         s.dropped = 0;
     }
+#else
+    void Logger::setMinLevel(Level) {}
+    void Logger::setCapacity(std::size_t) {}
+    std::vector<Entry> Logger::snapshot() { return {}; }
+    std::size_t Logger::droppedCount() { return 0; }
+    void Logger::clear() {}
+#endif
 }

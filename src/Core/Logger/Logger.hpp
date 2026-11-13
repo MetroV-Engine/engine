@@ -27,10 +27,16 @@ namespace Log {
     /** @brief Static facade over the engine-wide logger. */
     class Logger {
     public:
+#ifdef ENGINE_LOG_ENABLED
         /** @brief Stores the message and prints it as `[Level][Section] message`. Never throws. */
         static void send(Section section, Level level, std::string_view message);
         /** @brief True when a message of this level would be kept. */
         static bool isEnabled(Level level);
+#else
+        // Logging is compiled out: the call does nothing (its arguments still run; ENGINE_LOG skips them).
+        static void send(Section, Level, std::string_view) {}
+        static bool isEnabled(Level) { return false; }
+#endif
         /** @brief Messages below this level are discarded. Default: Debug. */
         static void setMinLevel(Level level);
         /** @brief Empties the buffer and gives it room for this many entries (0 counts as 1). Default: 1024. */
@@ -44,6 +50,7 @@ namespace Log {
     };
 }
 
+#ifdef ENGINE_LOG_ENABLED
 /**
  * @brief Logs a message: `ENGINE_LOG(ECS, Log::Level::Info, "entity spawned");`
  *
@@ -57,3 +64,14 @@ namespace Log {
             ::Log::Logger::send((section), engineLogLevel_, (message));  \
         }                                                                \
     } while (false)
+#else
+// Logging is compiled out. sizeof does not evaluate its operand: nothing runs,
+// but the arguments must still compile, and variables used only here are not
+// reported as unused.
+#define ENGINE_LOG(section, level, message)                              \
+    do {                                                                 \
+        static_cast<void>(sizeof(section));                              \
+        static_cast<void>(sizeof(level));                                \
+        static_cast<void>(sizeof(message));                              \
+    } while (false)
+#endif
