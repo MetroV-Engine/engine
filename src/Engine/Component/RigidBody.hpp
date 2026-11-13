@@ -34,5 +34,23 @@ namespace Engine::Component {
 
         /** @brief Sum of the forces received this step, in N. Cleared after integration. */
         Math::Vector2f force;
+
+        /** @brief Angular velocity, in rad/s, counter-clockwise. A kinematic body (mass 0) keeps it: a turning platform. */
+        float angularVelocity = 0.f;
+
+        /** @brief Sum of the torques received this step, in N·m, counter-clockwise. Cleared after integration. */
+        float torque = 0.f;
+
+        /**
+         * @brief Never rotated by physics: torques and off-center impacts
+         *        leave its rotation and angular velocity alone, as if its
+         *        inertia were infinite. For characters, which must stay
+         *        upright (CharacterControllerSystem sets it).
+         *
+         * The moment of inertia otherwise comes from the entity's Collider
+         * and the mass (Collider::momentOfInertia()); a body without a
+         * Collider does not rotate either.
+         */
+        bool fixedRotation = false;
     };
 }

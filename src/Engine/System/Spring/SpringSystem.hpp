@@ -9,6 +9,7 @@
 
 #include "ECS/ECS.hpp"
 #include "Engine/Common/Physic/Forces/Spring.hpp"
+#include "Engine/Common/Physic/Rotation.hpp"
 #include "Engine/Component/RigidBody.hpp"
 #include "Engine/Component/Spring.hpp"
 #include "Engine/Component/Transform.hpp"
@@ -24,6 +25,13 @@ namespace Engine::System {
      * -F (Newton's third law), so a spring between two bodies moves their
      * center of mass by nothing.
      *
+     * Each end is held at Spring::bodyPoint / otherPoint, an offset that
+     * turns with its Transform. Off the center, the force also turns the
+     * body: its torque arm x F is added (IntegrationSystem then turns a
+     * body that has a Collider and no fixedRotation), and the stretch speed
+     * comes from the velocity of the held points, spin included. With both
+     * points at 0, no torque: the spring of a center.
+     *
      * It only adds forces: register it with the other force systems
      * (GravitySystem, ...), before FrictionSystem, which needs all of them,
      * and before IntegrationSystem.
@@ -37,20 +45,16 @@ namespace Engine::System {
                         (!toPoint && !world.hasComponents<Component::Transform>(spring.other))) {
                         continue;  // an end is gone (or has no position): the spring is broken
                     }
-                    const Math::Vector2f position = world.getComponent<Component::Transform>(spring.body).position;
-                    const Math::Vector2f anchor =
-                        toPoint ? spring.anchor : world.getComponent<Component::Transform>(spring.other).position;
-                    const Math::Vector2f relativeVelocity =
-                        velocityOf(world, spring.body) - (toPoint ? Math::Vector2f{} : velocityOf(world, spring.other));
+                    const End first = endOf(world, spring.body, spring.bodyPoint);
+                    const End second = toPoint ? End{spring.anchor, {}, {}} : endOf(world, spring.other, spring.otherPoint);
 
                     const Math::Vector2f force = Physic::dampedSpringForce(
-                        position, anchor, relativeVelocity, spring.restLength, spring.stiffness, spring.damping);
+                        first.point, second.point, first.velocity - second.velocity,
+                        spring.restLength, spring.stiffness, spring.damping);
 
-                    if (world.hasComponents<Component::RigidBody>(spring.body)) {
-                        world.getComponent<Component::RigidBody>(spring.body).force += force;
-                    }
-                    if (!toPoint && world.hasComponents<Component::RigidBody>(spring.other)) {
-                        world.getComponent<Component::RigidBody>(spring.other).force -= force;
+                    pull(world, spring.body, first.arm, force);
+                    if (!toPoint) {
+                        pull(world, spring.other, second.arm, -force);
                     }
                 }
             }
@@ -58,10 +62,37 @@ namespace Engine::System {
             const std::string name() const override { return "SpringSystem"; }
 
         private:
-            /** @brief Velocity of an end: its RigidBody's, or none for an end that does not move. */
-            static Math::Vector2f velocityOf(ECS::Registry& world, ECS::Entity end) {
-                return world.hasComponents<Component::RigidBody>(end) ? world.getComponent<Component::RigidBody>(end).velocity
-                                                                      : Math::Vector2f{};
+            /** @brief Where an end of a spring is, the arm from its body's position to it, and how fast it moves. */
+            struct End {
+                Math::Vector2f point;
+                Math::Vector2f arm;
+                Math::Vector2f velocity;
+            };
+
+            /**
+             * @brief The end held at `local` (in the entity's own space): turned
+             *        with the Transform, moving with the RigidBody's velocity and
+             *        spin, or still for an entity without one (a hook).
+             */
+            static End endOf(ECS::Registry& world, ECS::Entity entity, const Math::Vector2f& local) {
+                const Component::Transform& transform = world.getComponent<Component::Transform>(entity);
+                const Math::Vector2f arm = transform.rotation == 0.f ? local : local.rotated(transform.rotation);
+                Math::Vector2f velocity;
+                if (world.hasComponents<Component::RigidBody>(entity)) {
+                    const Component::RigidBody& body = world.getComponent<Component::RigidBody>(entity);
+                    velocity = Physic::velocityAtPoint(body.velocity, body.angularVelocity, arm);
+                }
+                return {transform.position + arm, arm, velocity};
+            }
+
+            /** @brief Applies the force at the end: to the body, and its torque about the body's position. */
+            static void pull(ECS::Registry& world, ECS::Entity entity, const Math::Vector2f& arm, const Math::Vector2f& force) {
+                if (!world.hasComponents<Component::RigidBody>(entity)) {
+                    return;
+                }
+                Component::RigidBody& body = world.getComponent<Component::RigidBody>(entity);
+                body.force += force;
+                body.torque += Physic::torque(arm, force);
             }
     };
 }

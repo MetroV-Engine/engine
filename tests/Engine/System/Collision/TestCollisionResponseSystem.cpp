@@ -6,6 +6,7 @@
 
 #include "ECS/ECS.hpp"
 #include "Engine/Common/Physic/Forces/Friction.hpp"
+#include "Engine/Common/Physic/Rotation.hpp"
 #include "Engine/Component/Collider.hpp"
 #include "Engine/Component/SurfaceContact.hpp"
 #include "Engine/System/Collision/CollisionResponseSystem.hpp"
@@ -91,12 +92,17 @@ void test_one_impact() {
         ECS::SystemManager systems;
         addCollision(world, systems);
         spawnGround(world);
-        // 2 cm into the ground, falling at 5 m/s and moving right at 1 m/s.
-        const ECS::Entity rubber = spawnBody(world, V(0.f, 0.48f), ball(0.5f, 0.8f), 1.f, V(1.f, -5.f));
+        // Just touching the ground (so its contact point is at its radius), falling at 5 m/s
+        // and moving right at 1 m/s.
+        const ECS::Entity rubber = spawnBody(world, V(0.f, 0.5f - 1e-5f), ball(0.5f, 0.8f), 1.f, V(1.f, -5.f));
 
         systems.update(world, Step);
 
-        expect(near(velocityOf(world, rubber), V(1.f, 4.f), 1e-5f));     // along the ground: untouched
+        // Along the normal: back at e = 0.8 of 5 m/s. Along the ground, friction during the
+        // impact grips the ball: it leaves rolling, at 2/3 of its speed for a disc
+        // (I = m r² / 2), spinning at -v / r.
+        expect(near(velocityOf(world, rubber), V(2.f / 3.f, 4.f), 1e-4f));
+        expect(near(world.getComponent<RigidBody>(rubber).angularVelocity, -4.f / 3.f, 1e-3f));
         expect(near(positionOf(world, rubber).y, 0.5f, 1e-6f));           // out of the ground, touching it
     };
 
@@ -256,6 +262,369 @@ void test_proportions() {
             expect(near(momentumAfter, momentumBefore, 1e-3f * (1.f + momentumBefore.length()))) << "test" << test;
             expect(energyAfter <= energyBefore * (1.f + 1e-5f) + 1e-4f) << "test" << test;
         }
+    };
+}
+
+void test_static_friction_at_impact() {
+    // A 100 kg crate resting on the ground (mu static 0.5): over one step its
+    // static friction holds a velocity change of 0.5 * 9.81 / 60 = 0.082 m/s.
+    const auto restingCrate = [](ECS::Registry& world, ECS::SystemManager& systems) {
+        addPhysics(world, systems);
+        spawnGround(world);
+        const ECS::Entity crate = spawnBody(world, V(0.f, 0.5f), box(V(0.5f, 0.5f), 0.f), 100.f);
+        systems.update(world, Step);    // settles, gets its SurfaceContact
+        return crate;
+    };
+
+    "a resting crate is not budged by an impact its static friction holds: the other body stops against it"_test = [&] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        const ECS::Entity crate = restingCrate(world, systems);
+        // 1 kg at 5 m/s, already touching: shared, the crate would get 5 / 101 = 0.05 m/s.
+        const ECS::Entity pebble = spawnBody(world, V(-0.7f, 0.5f), ball(0.2f, 0.f), 1.f, V(5.f, 0.f));
+
+        systems.update(world, Step);
+
+        expect(velocityOf(world, crate).x == 0.f);
+        expect(near(positionOf(world, crate).x, 0.f, 1e-6f));
+        expect(near(velocityOf(world, pebble).x, 0.f, 1e-5f)) << "stopped as against a wall";
+    };
+
+    "an impact stronger than its static friction moves the resting crate, sharing the momentum"_test = [&] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        const ECS::Entity crate = restingCrate(world, systems);
+        // 20 kg at 5 m/s: shared, the crate would get 100 / 120 = 0.83 m/s.
+        const ECS::Entity heavy = spawnBody(world, V(-0.9f, 0.5f), box(V(0.4f, 0.4f), 0.f), 20.f, V(5.f, 0.f));
+
+        systems.update(world, Step);
+
+        const float together = 20.f * 5.f / 120.f;
+        expect(near(velocityOf(world, crate).x, together, 0.06f));
+        expect(near(velocityOf(world, heavy).x, together, 0.06f));
+    };
+
+    "a crate already sliding is not held: kinetic friction is FrictionSystem's"_test = [&] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        const ECS::Entity crate = restingCrate(world, systems);
+        velocityOf(world, crate) = V(1.f, 0.f);
+        const ECS::Entity pebble = spawnBody(world, V(-0.7f, 0.5f), ball(0.2f, 0.f), 1.f, V(6.f, 0.f));
+
+        systems.update(world, Step);
+
+        // Friction leaves it 1 - 0.049 m/s; the pebble then adds 5 / 101 m/s.
+        // Held, it would stay at 0.951 and stop the pebble dead.
+        const float shared = (6.f + 100.f * (1.f - 0.3f * 9.81f / 60.f)) / 101.f;
+        expect(near(velocityOf(world, crate).x, shared, 1e-3f));
+        expect(near(velocityOf(world, pebble).x, shared, 1e-3f));
+    };
+
+    "an impact from below lifts the crate: static friction does not hold it down"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        addPhysics(world, systems);
+        // The crate rests on two tiles, over the gap between them.
+        spawnStatic(world, V(-1.f, -0.5f), box(V(0.7f, 0.5f)));
+        spawnStatic(world, V(1.f, -0.5f), box(V(0.7f, 0.5f)));
+        const ECS::Entity crate = spawnBody(world, V(0.f, 0.5f), box(V(0.5f, 0.5f), 0.f), 100.f);
+        systems.update(world, Step);
+        // A pebble shot up through the gap, at a slight angle, into the crate's underside.
+        const ECS::Entity pebble = spawnBody(world, V(0.f, -0.2f), ball(0.15f, 0.f), 1.f, V(0.2f, 6.f));
+        world.getComponent<RigidBody>(pebble).gravityScale = 0.f;
+
+        systems.update(world, Step);
+
+        expect(velocityOf(world, crate).y > 0.f);
+    };
+}
+
+/**
+ * @brief A slope rising to the right at angle degrees, 20 m wide, its
+ *        surface the line y = x tan(angle) through (0, 0); and a 1 m crate
+ *        resting on it at x = 0 (its lowest corner, bottom-right, on it).
+ */
+struct SlopeScene {
+    ECS::Registry world;
+    ECS::SystemManager systems;
+    ECS::Entity crate;
+    float angle;
+
+    /** @brief level: the crate set upright on its corner; otherwise lying flat on the slope. */
+    explicit SlopeScene(float degrees, bool level = false, const Collider& crateCollider = box(V(0.5f, 0.5f), 0.f))
+        : angle(degrees * 3.14159265f / 180.f) {
+        addPhysics(world, systems);
+        const float rise = std::tan(angle);
+        Collider slope;
+        slope.shape = Collider::Polygon::slope(V(10.f, 10.f * rise));
+        spawnStatic(world, V(0.f, 0.f), slope);
+        if (level) {
+            crate = spawnBody(world, V(0.f, rise * 0.5f + 0.5f), crateCollider, 10.f);
+        } else {
+            // Its bottom face on the surface: the center half a meter along the slope's normal.
+            const V normal(-std::sin(angle), std::cos(angle));
+            crate = spawnBody(world, normal * 0.5f, crateCollider, 10.f);
+            world.getComponent<Transform>(crate).rotation = angle;
+        }
+    }
+
+    /** @brief How far the crate went down the slope, along it. */
+    float slid(const V& start) {
+        const V moved = positionOf(world, crate) - start;
+        return -(moved.x * std::cos(angle) + moved.y * std::sin(angle));
+    }
+};
+
+void test_slopes() {
+    "a crate lying on a slope whose tangent is below its static friction stays (20°: 0.36 < 0.5)"_test = [] {
+        SlopeScene scene(20.f);
+        const V start = positionOf(scene.world, scene.crate);
+
+        for (int step = 0; step < 120; ++step) {
+            scene.systems.update(scene.world, Step);
+        }
+
+        expect(std::fabs(scene.slid(start)) < 1e-3f) << scene.slid(start);
+        expect(scene.world.hasComponents<SurfaceContact>(scene.crate));
+        const V normal = scene.world.getComponent<SurfaceContact>(scene.crate).normal;
+        expect(near(normal, V(-std::sin(scene.angle), std::cos(scene.angle)), 1e-5f)) << "the slope's normal";
+        expect(near(scene.world.getComponent<Transform>(scene.crate).rotation, scene.angle, 1e-4f)) << "still flat on it";
+    };
+
+    "a crate set upright on its corner tips over onto the slope and stays there, flat on it"_test = [] {
+        // Rubber: kinetic friction 0.8 above tan 20°, so the tipping cannot start a slide.
+        Collider rubber = box(V(0.5f, 0.5f), 0.f);
+        rubber.staticFriction = 1.f;
+        rubber.kineticFriction = 0.8f;
+        SlopeScene scene(20.f, true, rubber);
+
+        for (int step = 0; step < 180; ++step) {
+            scene.systems.update(scene.world, Step);
+        }
+
+        expect(near(scene.world.getComponent<Transform>(scene.crate).rotation, scene.angle, 1e-3f))
+            << scene.world.getComponent<Transform>(scene.crate).rotation;
+        expect(velocityOf(scene.world, scene.crate).length() < 1e-3f);
+        expect(std::fabs(scene.world.getComponent<RigidBody>(scene.crate).angularVelocity) < 1e-3f);
+    };
+
+    "on a steeper slope it slides down at g (sin - muKinetic cos): 4.86 m/s² at 45°"_test = [] {
+        SlopeScene scene(45.f);
+        const V start = positionOf(scene.world, scene.crate);
+
+        for (int step = 0; step < 60; ++step) {
+            scene.systems.update(scene.world, Step);
+        }
+
+        const float acceleration = Gravity * (std::sin(scene.angle) - 0.3f * std::cos(scene.angle));
+        expect(near(scene.slid(start), acceleration / 2.f, 0.05f * acceleration / 2.f)) << scene.slid(start);
+        expect(near(velocityOf(scene.world, scene.crate).length(), acceleration, 0.03f * acceleration));
+        // Sliding along the slope, not bouncing off it.
+        const V along(std::cos(scene.angle), std::sin(scene.angle));
+        expect(std::fabs(velocityOf(scene.world, scene.crate).cross(along)) < 1e-3f);
+    };
+
+    "a ball dropped on a slope bounces off along the slope's normal, not straight up"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        addCollision(world, systems);
+        Collider slope;
+        slope.shape = Collider::Polygon::slope(V(5.f, 5.f));    // 45°, surface y = x
+        spawnStatic(world, V(0.f, 0.f), slope);
+        // Falling at 4 m/s, just touching the slope.
+        const float diagonal = std::sqrt(0.5f);
+        const ECS::Entity rubber =
+            spawnBody(world, V(-0.25f * diagonal, 0.25f * diagonal - 1e-5f), ball(0.25f, 1.f), 1.f, V(0.f, -4.f));
+
+        systems.update(world, Step);
+
+        // e = 1: the part along the normal, -4 cos 45°, is turned around. Friction during
+        // the impact grips the ball: along the slope it keeps 2/3 of -4 sin 45° and spins.
+        const V normal(-diagonal, diagonal);
+        const V along(diagonal, diagonal);
+        const float fall = 4.f * diagonal;
+        expect(near(velocityOf(world, rubber), normal * fall - along * (fall * 2.f / 3.f), 1e-3f));
+        // Rolling: its contact point does not slide on the slope.
+        const RigidBody& body = world.getComponent<RigidBody>(rubber);
+        const V contactPoint = body.velocity + (normal * -0.25f).perpendicular() * body.angularVelocity;
+        expect(std::fabs(contactPoint.dot(along)) < 1e-3f);
+    };
+}
+
+void test_new_contact_friction() {
+    "a body landing gently is slowed by friction from its first contact, Response::Stop is not"_test = [] {
+        for (const bool stop : {false, true}) {
+            ECS::Registry world;
+            ECS::SystemManager systems;
+            addCollision(world, systems);
+            spawnGround(world);
+            Collider crate = box(V(0.5f, 0.5f), 0.f);
+            crate.response = stop ? Collider::Response::Stop : Collider::Response::Bounce;
+            // Sliding at 3 m/s, settling at 0.2 m/s: below restingSpeed, no bounce.
+            const ECS::Entity body = spawnBody(world, V(0.f, 0.49f), crate, 1.f, V(3.f, -0.2f));
+
+            systems.update(world, Step);
+
+            // Normal impulse 0.2 N·s; kinetic friction 0.3 of it, 0.06 m/s on 1 kg.
+            expect(near(velocityOf(world, body), V(stop ? 3.f : 2.94f, 0.f), 1e-5f)) << "Stop:" << stop;
+        }
+    };
+}
+
+void test_rotation() {
+    "an off-center hit spins a bar, a centered one does not; momentum and angular momentum are kept"_test = [] {
+        for (const float hitAt : {0.f, 0.8f}) {
+            ECS::Registry world;
+            ECS::SystemManager systems;
+            addCollision(world, systems);
+            const ECS::Entity bar = spawnBody(world, V(0.f, 0.f), box(V(1.f, 0.1f), 1.f), 1.f);
+            const ECS::Entity pebble = spawnBody(world, V(hitAt, -0.19f), ball(0.1f, 1.f), 0.5f, V(0.f, 3.f));
+            const auto momentum = [&] { return velocityOf(world, bar) + velocityOf(world, pebble) * 0.5f; };
+            // About the origin: I w + r x m v of each body.
+            const float barInertia = Physic::boxInertia(1.f, V(1.f, 0.1f));
+            // With the positions before the step: the impulses act there, the position
+            // correction then moves the bodies.
+            const V barAt = positionOf(world, bar);
+            const V pebbleAt = positionOf(world, pebble);
+            // The pebble spins too: friction where the bar's turning surface rubs it.
+            const float pebbleInertia = Physic::discInertia(0.5f, 0.1f);
+            const auto angular = [&] {
+                return barInertia * world.getComponent<RigidBody>(bar).angularVelocity
+                     + pebbleInertia * world.getComponent<RigidBody>(pebble).angularVelocity
+                     + barAt.cross(velocityOf(world, bar))
+                     + pebbleAt.cross(velocityOf(world, pebble) * 0.5f);
+            };
+            const V momentumBefore = momentum();
+            const float angularBefore = angular();
+
+            systems.update(world, Step);
+
+            const float spin = world.getComponent<RigidBody>(bar).angularVelocity;
+            expect(hitAt == 0.f ? std::fabs(spin) < 1e-5f : spin > 0.5f) << "hit at" << hitAt << "spin" << spin;
+            expect(near(momentum(), momentumBefore, 1e-4f));
+            expect(near(angular(), angularBefore, 1e-4f)) << angular() << angularBefore;
+        }
+    };
+
+    "a crate dropped on its corner falls over and comes to rest flat on the ground"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        addPhysics(world, systems);
+        spawnGround(world);
+        const ECS::Entity crate = spawnBody(world, V(0.f, 1.5f), box(V(0.5f, 0.5f)), 10.f);
+        world.getComponent<Transform>(crate).rotation = 0.5f;
+
+        for (int step = 0; step < 240; ++step) {
+            systems.update(world, Step);
+        }
+
+        const float rotation = world.getComponent<Transform>(crate).rotation;
+        const float quarter = 3.14159265f / 2.f;
+        const float offFlat = std::fabs(rotation - quarter * std::round(rotation / quarter));
+        expect(offFlat < 1e-3f) << "rotation" << rotation;
+        expect(near(positionOf(world, crate).y, 0.5f, 1e-3f));
+        expect(velocityOf(world, crate).length() < 1e-3f);
+        expect(std::fabs(world.getComponent<RigidBody>(crate).angularVelocity) < 1e-3f);
+    };
+
+    "a ball rolls down a slope at 2/3 g sin(angle), without slipping"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        addPhysics(world, systems);
+        const float angle = 30.f * 3.14159265f / 180.f;
+        Collider slope;
+        slope.shape = Collider::Polygon::slope(V(10.f, 10.f * std::tan(angle)));
+        spawnStatic(world, V(0.f, 0.f), slope);
+        const V normal(-std::sin(angle), std::cos(angle));
+        const ECS::Entity rubber = spawnBody(world, normal * 0.25f, ball(0.25f, 0.f), 1.f);
+
+        for (int step = 0; step < 60; ++step) {
+            systems.update(world, Step);
+        }
+
+        const RigidBody& body = world.getComponent<RigidBody>(rubber);
+        // A disc: a = g sin / (1 + I / (m r²)) = 2/3 g sin.
+        expect(near(body.velocity.length(), 2.f / 3.f * Gravity * std::sin(angle), 0.05f)) << body.velocity.length();
+        const V contactPoint = body.velocity + (normal * -0.25f).perpendicular() * body.angularVelocity;
+        expect(contactPoint.length() < 0.02f) << "slipping at" << contactPoint.length();
+    };
+
+    "a ball thrown sliding without spin ends up rolling at 2/3 of its speed"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        addPhysics(world, systems);
+        spawnGround(world);
+        const ECS::Entity rubber = spawnBody(world, V(0.f, 0.25f), ball(0.25f, 0.f), 1.f);
+        systems.update(world, Step);
+        velocityOf(world, rubber) = V(3.f, 0.f);
+
+        for (int step = 0; step < 120; ++step) {
+            systems.update(world, Step);
+        }
+
+        // Friction turns sliding into spin until the contact point stops: v = v0 / (1 + I / (m r²)).
+        expect(near(velocityOf(world, rubber).x, 2.f, 0.02f)) << velocityOf(world, rubber).x;
+        expect(near(world.getComponent<RigidBody>(rubber).angularVelocity, -2.f / 0.25f, 0.1f));
+    };
+
+    "random impacts of turned shapes: momentum and angular momentum are conserved, energy never grows"_test = [] {
+        std::mt19937 random(5);
+        const auto uniform = [&random](float low, float high) { return std::uniform_real_distribution<float>(low, high)(random); };
+        int failures = 0;
+        int spun = 0;
+        for (int test = 0; test < 500; ++test) {
+            ECS::Registry world;
+            ECS::SystemManager systems;
+            addCollision(world, systems);
+            Collider forms[3];
+            forms[0] = box(V(uniform(0.2f, 1.f), uniform(0.2f, 1.f)), uniform(0.f, 1.f));
+            forms[1] = ball(uniform(0.2f, 1.f), uniform(0.f, 1.f));
+            forms[2].shape = Collider::Polygon::slope(V(uniform(0.3f, 1.f), uniform(0.3f, 1.f)));
+            const Collider& formA = forms[test % 3];
+            const Collider& formB = forms[(test / 3) % 3];
+            const float massA = uniform(0.5f, 20.f);
+            const float massB = uniform(0.5f, 20.f);
+            const ECS::Entity a = spawnBody(world, V(0.f, 0.f), formA, massA, V(uniform(-5.f, 5.f), uniform(-5.f, 5.f)));
+            const ECS::Entity b = spawnBody(world, V(uniform(-0.6f, 0.6f), uniform(-0.6f, 0.6f)), formB, massB,
+                                            V(uniform(-5.f, 5.f), uniform(-5.f, 5.f)));
+            for (const ECS::Entity entity : {a, b}) {
+                world.getComponent<Transform>(entity).rotation = uniform(-3.f, 3.f);
+                world.getComponent<RigidBody>(entity).angularVelocity = uniform(-4.f, 4.f);
+            }
+            const float inertiaA = formA.momentOfInertia(massA);
+            const float inertiaB = formB.momentOfInertia(massB);
+            const auto momentum = [&] { return velocityOf(world, a) * massA + velocityOf(world, b) * massB; };
+            const auto angular = [&] {
+                return inertiaA * world.getComponent<RigidBody>(a).angularVelocity + positionOf(world, a).cross(velocityOf(world, a) * massA)
+                     + inertiaB * world.getComponent<RigidBody>(b).angularVelocity + positionOf(world, b).cross(velocityOf(world, b) * massB);
+            };
+            const auto energy = [&] {
+                const float spinA = world.getComponent<RigidBody>(a).angularVelocity;
+                const float spinB = world.getComponent<RigidBody>(b).angularVelocity;
+                return massA * velocityOf(world, a).lengthSquared() + inertiaA * spinA * spinA
+                     + massB * velocityOf(world, b).lengthSquared() + inertiaB * spinB * spinB;
+            };
+            const V momentumBefore = momentum();
+            const float energyBefore = energy();
+            // Angular momentum about a fixed point is kept by the impulses; the position
+            // correction moves the bodies, so measure it with the positions before.
+            const V positionA = positionOf(world, a);
+            const V positionB = positionOf(world, b);
+            const float angularBefore = angular();
+            const float spinBefore = world.getComponent<RigidBody>(a).angularVelocity;
+
+            systems.update(world, Step);
+
+            const float angularAfter = inertiaA * world.getComponent<RigidBody>(a).angularVelocity + positionA.cross(velocityOf(world, a) * massA)
+                                     + inertiaB * world.getComponent<RigidBody>(b).angularVelocity + positionB.cross(velocityOf(world, b) * massB);
+            const float scale = 1.f + momentumBefore.length() + std::fabs(angularBefore) + energyBefore;
+            const bool kept = near(momentum(), momentumBefore, 1e-3f * scale) && near(angularAfter, angularBefore, 1e-3f * scale)
+                && energy() <= energyBefore * (1.f + 1e-4f) + 1e-3f;
+            failures += kept ? 0 : 1;
+            spun += world.getComponent<RigidBody>(a).angularVelocity != spinBefore ? 1 : 0;
+        }
+        expect(failures == 0_i);
+        expect(spun > 100_i) << "the impacts must turn the bodies";
     };
 }
 
@@ -427,6 +796,42 @@ void test_surface_contact() {
         expect(velocityOf(world, platform) == V(2.f, 0.f));    // kinematic: never pushed
     };
 
+    "on a turning platform, the surface moves at the contact point's velocity, spin included"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        addCollision(world, systems);
+        // A kinematic bar turning at 2 rad/s around its center; a crate resting 1.5 m right of it.
+        const ECS::Entity bar = spawnBody(world, V(0.f, -0.25f), box(V(3.f, 0.25f)), 0.f);
+        world.getComponent<RigidBody>(bar).angularVelocity = 2.f;
+        const ECS::Entity crate = spawnBody(world, V(1.5f, 0.49f), box(V(0.5f, 0.5f)), 10.f);
+
+        systems.update(world, Step);
+
+        expect(world.hasComponents<SurfaceContact>(crate) >> fatal);
+        const SurfaceContact& contact = world.getComponent<SurfaceContact>(crate);
+        // v = w x r, r from the bar's center to the contact, about (1.5, 0.25): (-2 * 0.25, 2 * 1.5).
+        expect(near(contact.surfaceVelocity.y, 3.f, 0.05f)) << contact.surfaceVelocity.y;
+        expect(near(contact.surfaceVelocity.x, -0.5f, 0.05f)) << contact.surfaceVelocity.x;
+    };
+
+    "a crate slammed down while sliding on the ground loses speed to friction during the impact"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        addCollision(world, systems);
+        spawnGround(world);
+        const ECS::Entity crate = spawnBody(world, V(0.f, 0.49f), box(V(0.5f, 0.5f), 0.f), 10.f);
+        systems.update(world, Step);  // the contact exists: the next impact is not a new contact
+        velocityOf(world, crate) = V(3.f, -4.f);
+
+        systems.update(world, Step);
+
+        // The normal impulse is at least 4 m (more with the ground's restitution 0.3, and the crate
+        // tipping on its front corner): kinetic friction 0.3 takes at least 1.2 m/s of the slide.
+        // Without friction during impacts, the slide would be kept whole. It never reverses.
+        expect(velocityOf(world, crate).x <= 3.f - 0.3f * 4.f) << velocityOf(world, crate).x;
+        expect(velocityOf(world, crate).x >= 0.f) << velocityOf(world, crate).x;
+    };
+
     "a rising platform lifts the crate on it"_test = [] {
         ECS::Registry world;
         ECS::SystemManager systems;
@@ -481,6 +886,10 @@ void run_collision_response_system_tests() {
     test_one_impact();
     test_stop();
     test_proportions();
+    test_static_friction_at_impact();
+    test_slopes();
+    test_new_contact_friction();
+    test_rotation();
     test_resting();
     test_surface_contact();
     test_who_responds();

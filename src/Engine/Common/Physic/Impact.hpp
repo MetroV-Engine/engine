@@ -29,6 +29,7 @@
 
 #include "../Math/Vector.hpp"
 #include "Forces/Dynamics.hpp"
+#include "Rotation.hpp"
 
 namespace Engine::Physic {
     /**
@@ -139,5 +140,72 @@ namespace Engine::Physic {
         }
         // Shares as fractions: against a static body, inverseB / inverseB is exactly 1.
         return {normal * (-depth * (inverseA / inverseMasses)), normal * (depth * (inverseB / inverseMasses))};
+    }
+
+    /**
+     * @brief A body at a contact point, for impacts with rotation: its
+     *        motion, how it resists being pushed and spun, and the lever
+     *        arm from its center of mass to the point.
+     *
+     * Inverse mass and inverse inertia are 0 for what does not move or
+     * turn (static scenery, kinematic platforms, fixed rotation).
+     */
+    template <std::floating_point T>
+    struct BodyPoint {
+        Math::Vector2<T> velocity;
+        T angularVelocity = T{0};
+        T inverseMass = T{0};
+        T inverseInertia = T{0};
+        Math::Vector2<T> arm;
+
+        /** @brief Velocity of the contact point: v + ω x arm. */
+        [[nodiscard]] constexpr Math::Vector2<T> pointVelocity() const noexcept {
+            return velocityAtPoint(velocity, angularVelocity, arm);
+        }
+
+        /**
+         * @brief How much an impulse of 1 N·s along direction, applied at the
+         *        point, changes the point's velocity along it:
+         *        1/m + (arm x direction)² / I. Mass and inertia both resist.
+         */
+        [[nodiscard]] constexpr T inverseMassAlong(const Math::Vector2<T>& direction) const noexcept {
+            const T turn = arm.cross(direction);
+            return inverseMass + turn * turn * inverseInertia;
+        }
+    };
+
+    /**
+     * @brief Impulse on B at the contact point that makes A and B bounce,
+     *        with rotation: bounceImpulse() for bodies that also spin.
+     *
+     * The same law at the contact point: the points stop closing and leave
+     * at e times the speed they met at. The closing speed is that of the
+     * points (spinning counts), and both bodies' masses and inertias, seen
+     * from the point, share the impulse:
+     * J = (1 + e) s / (1/mA + 1/mB + (rA x n)² / IA + (rB x n)² / IB).
+     * Then vB += J / mB, ωB += (rB x J) / IB, and A the opposite. Linear
+     * and angular momentum are conserved, kinetic energy never grows.
+     * Hitting a bar at its center moves it; hitting it at an end also
+     * spins it, and moves it less.
+     *
+     * @param a A at the contact point.
+     * @param b B at the contact point.
+     * @param normal Unit normal from A towards B (Collision::Contact::normal).
+     * @param restitution Coefficient of restitution e, in [0, 1].
+     * @param restingSpeed Closing speed under which the bodies do not bounce, in m/s.
+     * @return The impulse on B, in N·s; A gets the opposite. Zero when the
+     *         points are not closing, or nothing can move.
+     */
+    template <std::floating_point T>
+    [[nodiscard]] constexpr Math::Vector2<T> bounceImpulse(
+        const BodyPoint<T>& a, const BodyPoint<T>& b, const Math::Vector2<T>& normal,
+        std::type_identity_t<T> restitution, std::type_identity_t<T> restingSpeed) noexcept {
+        const T closing = closingSpeed(a.pointVelocity(), b.pointVelocity(), normal);
+        const T resistance = a.inverseMassAlong(normal) + b.inverseMassAlong(normal);
+        if (closing <= T{0} || resistance == T{0}) {
+            return {};
+        }
+        const T e = closing < restingSpeed ? T{0} : restitution;
+        return normal * ((T{1} + e) * closing / resistance);
     }
 }

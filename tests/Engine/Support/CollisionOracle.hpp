@@ -23,8 +23,10 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "Engine/Common/Collision/Collision.hpp"
 #include "Engine/Common/Math/Vector.hpp"
@@ -33,6 +35,7 @@ namespace TestSupport {
     using Engine::Collision::Circle;
     using Engine::Collision::Contact;
     using Engine::Collision::Hit;
+    using Engine::Collision::Polygon;
     using Engine::Collision::Rectangle;
     using Engine::Math::Vector2d;
     using Engine::Math::Vector2f;
@@ -51,7 +54,19 @@ namespace TestSupport {
         double radius = 0.0;
     };
 
+    /** @brief A convex polygon in double, counter-clockwise, for the oracle. */
+    struct ExactPolygon {
+        std::vector<Vector2d> points;
+    };
+
     [[nodiscard]] inline Vector2d exact(const Vector2f& vector) { return Vector2d(vector); }
+    [[nodiscard]] inline ExactPolygon exact(const Polygon& polygon) {
+        ExactPolygon result;
+        for (std::size_t i = 0; i < polygon.count; ++i) {
+            result.points.push_back(Vector2d(polygon.vertices[i]));
+        }
+        return result;
+    }
     [[nodiscard]] inline ExactRectangle exact(const Rectangle& rectangle) { return {exact(rectangle.min), exact(rectangle.max)}; }
     [[nodiscard]] inline ExactCircle exact(const Circle& circle) { return {exact(circle.center), circle.radius}; }
 
@@ -60,6 +75,46 @@ namespace TestSupport {
     }
     [[nodiscard]] inline ExactCircle moved(const ExactCircle& circle, const Vector2d& offset) {
         return {circle.center + offset, circle.radius};
+    }
+    [[nodiscard]] inline ExactPolygon moved(const ExactPolygon& polygon, const Vector2d& offset) {
+        ExactPolygon result = polygon;
+        for (Vector2d& point : result.points) {
+            point += offset;
+        }
+        return result;
+    }
+
+    [[nodiscard]] inline ExactPolygon asPolygon(const ExactRectangle& rectangle) {
+        return {{rectangle.min, {rectangle.max.x, rectangle.min.y}, rectangle.max, {rectangle.min.x, rectangle.max.y}}};
+    }
+
+    /** @brief Convex hull of points, counter-clockwise (Andrew's monotone chain): no relation to the SAT under test. */
+    [[nodiscard]] inline ExactPolygon convexHull(std::vector<Vector2d> points) {
+        std::sort(points.begin(), points.end(), [](const Vector2d& a, const Vector2d& b) {
+            return a.x < b.x || (a.x == b.x && a.y < b.y);
+        });
+        if (points.size() < 3) {
+            return {points};
+        }
+        std::vector<Vector2d> hull(2 * points.size());
+        std::size_t k = 0;
+        const auto turnsLeft = [&hull, &k](const Vector2d& point) {
+            return (hull[k - 1] - hull[k - 2]).cross(point - hull[k - 2]) > 0.0;
+        };
+        for (const Vector2d& point : points) {  // lower hull
+            while (k >= 2 && !turnsLeft(point)) {
+                --k;
+            }
+            hull[k++] = point;
+        }
+        for (std::size_t i = points.size() - 1, lower = k + 1; i-- > 0;) {  // upper hull
+            while (k >= lower && !turnsLeft(points[i])) {
+                --k;
+            }
+            hull[k++] = points[i];
+        }
+        hull.resize(k - 1);
+        return {hull};
     }
 
     // ------------------------------------------------------------------ signed distances
@@ -76,6 +131,48 @@ namespace TestSupport {
     [[nodiscard]] inline double signedDistance(const Vector2d& point, const ExactCircle& circle) {
         return (point - circle.center).length() - circle.radius;
     }
+
+    /** @brief Distance from a point to a convex polygon; inside, minus the distance to the nearest edge. */
+    [[nodiscard]] inline double signedDistance(const Vector2d& point, const ExactPolygon& polygon) {
+        const std::size_t count = polygon.points.size();
+        double nearest = std::numeric_limits<double>::infinity();
+        bool inside = count >= 3;
+        for (std::size_t i = 0; i < count; ++i) {
+            const Vector2d& from = polygon.points[i];
+            const Vector2d along = polygon.points[(i + 1) % count] - from;
+            const double share = std::clamp((point - from).dot(along) / along.lengthSquared(), 0.0, 1.0);
+            nearest = std::min(nearest, (point - (from + along * share)).length());
+            inside = inside && along.cross(point - from) >= 0.0;
+        }
+        return inside ? -nearest : nearest;
+    }
+
+    /**
+     * @brief Distance between two convex polygons: the signed distance from
+     * the origin to their Minkowski difference {b - a}, the convex hull of
+     * every vertex of b minus every vertex of a. The polygons overlap
+     * exactly when it contains the origin, and the shortest push that
+     * separates them is the origin's distance to its boundary.
+     */
+    [[nodiscard]] inline double signedDistance(const ExactPolygon& a, const ExactPolygon& b) {
+        std::vector<Vector2d> differences;
+        for (const Vector2d& pointB : b.points) {
+            for (const Vector2d& pointA : a.points) {
+                differences.push_back(pointB - pointA);
+            }
+        }
+        return signedDistance(Vector2d::zero(), convexHull(differences));
+    }
+
+    [[nodiscard]] inline double signedDistance(const ExactPolygon& a, const ExactRectangle& b) { return signedDistance(a, asPolygon(b)); }
+    [[nodiscard]] inline double signedDistance(const ExactRectangle& a, const ExactPolygon& b) { return signedDistance(asPolygon(a), b); }
+
+    /** @brief Distance between a polygon and a circle: from the polygon to the center, minus the radius. */
+    [[nodiscard]] inline double signedDistance(const ExactPolygon& a, const ExactCircle& b) {
+        return signedDistance(b.center, a) - b.radius;
+    }
+
+    [[nodiscard]] inline double signedDistance(const ExactCircle& a, const ExactPolygon& b) { return signedDistance(b, a); }
 
     /** @brief Distance between two rectangles: from b's center to a grown by b's half size. */
     [[nodiscard]] inline double signedDistance(const ExactRectangle& a, const ExactRectangle& b) {
@@ -144,6 +241,47 @@ namespace TestSupport {
         [[nodiscard]] Rectangle rectangle(const Vector2f& center) { return Rectangle::fromCenter(center, {size(), size()}); }
 
         [[nodiscard]] Circle circle(const Vector2f& center) { return {center, size()}; }
+
+        /**
+         * @brief A convex polygon around center. On the grid, tile-like
+         * shapes: a box, a right triangle (a 45° or steeper slope) or a ramp,
+         * with corners on the grid. Otherwise 3 to 8 vertices on an ellipse,
+         * at angles at least 0.4 * 2π / n apart.
+         */
+        [[nodiscard]] Polygon polygon(const Vector2f& center) {
+            if (m_flavor == Flavor::Grid) {
+                const double width = std::max(0.25, std::round(uniform(0.0, 3.0) * 4.0) / 4.0);
+                const double height = std::max(0.25, std::round(uniform(0.0, 3.0) * 4.0) / 4.0);
+                const Vector2f min{center.x - static_cast<float>(width), center.y - static_cast<float>(height)};
+                const Vector2f max{center.x + static_cast<float>(width), center.y + static_cast<float>(height)};
+                const Vector2f corners[4] = {min, {max.x, min.y}, max, {min.x, max.y}};
+                const int kind = static_cast<int>(uniform(0.0, 6.0));
+                if (kind < 4) {  // a right triangle: one corner dropped
+                    return {corners[(kind + 1) % 4], corners[(kind + 2) % 4], corners[(kind + 3) % 4]};
+                }
+                if (kind == 4) {
+                    return Polygon::fromRectangle({min, max});
+                }
+                // A ramp rising to the right, from mid-height on the left.
+                return {min, corners[1], max, {min.x, center.y}};
+            }
+            for (int attempt = 0; attempt < 16; ++attempt) {
+                const int count = 3 + static_cast<int>(uniform(0.0, 6.0));
+                const double radiusX = uniform(0.05, 3.0);
+                const double radiusY = uniform(0.05, 3.0);
+                const double phase = uniform(0.0, 6.283185307179586);
+                Polygon result;
+                for (int i = 0; i < count; ++i) {
+                    const double angle = phase + 6.283185307179586 * (i + 0.6 * uniform(0.0, 1.0)) / count;
+                    result.vertices[result.count++] = {static_cast<float>(center.x + radiusX * std::cos(angle)),
+                                                       static_cast<float>(center.y + radiusY * std::sin(angle))};
+                }
+                if (result.isConvex()) {
+                    return result;
+                }
+            }
+            return {{center.x - 1.f, center.y - 1.f}, {center.x + 1.f, center.y - 1.f}, {center.x, center.y + 1.f}};
+        }
 
         /** @brief A motion of up to 12 per axis; sometimes none. */
         [[nodiscard]] Vector2f motion() {
@@ -357,6 +495,46 @@ namespace TestSupport {
         return exact(normal).dot(delta) > 0.0 ? "the normal faces the same way as the motion" : std::string();
     }
 
+    /**
+     * @brief A hit on a polygon's edge: the normal is the outward normal of
+     * an edge whose line the contact is on, and it faces the motion.
+     */
+    [[nodiscard]] inline std::string checkEdgeNormal(
+        const Vector2f& normal, const Vector2d& contact, const Polygon& polygon, const Vector2d& delta, double tolerance) {
+        bool onAnEdge = false;
+        for (std::size_t i = 0; i < polygon.count && !onAnEdge; ++i) {
+            const Vector2d edgeNormal = exact(polygon.normal(i));
+            onAnEdge = (exact(normal) - edgeNormal).length() <= 1e-5
+                && std::fabs(edgeNormal.dot(contact - exact(polygon.vertex(i)))) <= tolerance;
+        }
+        if (!onAnEdge) {
+            return "the normal is not the outward normal of an edge the contact is on";
+        }
+        return exact(normal).dot(delta) > 0.0 ? "the normal faces the same way as the motion" : std::string();
+    }
+
+    /**
+     * @brief The normal of a sweep between two polygons: a separating
+     * direction at the contact (the still shape lies behind it, the moving
+     * one in front), and it faces the motion.
+     */
+    [[nodiscard]] inline std::string checkSeparatingNormal(
+        const Vector2f& normal, const ExactPolygon& movingAtHit, const ExactPolygon& still, const Vector2d& delta, double tolerance) {
+        const Vector2d direction = exact(normal);
+        double movingLowest = std::numeric_limits<double>::infinity();
+        double stillHighest = -std::numeric_limits<double>::infinity();
+        for (const Vector2d& point : movingAtHit.points) {
+            movingLowest = std::min(movingLowest, point.dot(direction));
+        }
+        for (const Vector2d& point : still.points) {
+            stillHighest = std::max(stillHighest, point.dot(direction));
+        }
+        if (movingLowest < stillHighest - tolerance) {
+            return withValue("the normal does not separate the shapes at the hit, overlap", stillHighest - movingLowest);
+        }
+        return direction.dot(delta) > 0.0 ? "the normal faces the same way as the motion" : std::string();
+    }
+
     /** @brief A hit on a curve: the normal points along outward, within tolerance. */
     [[nodiscard]] inline std::string checkCurveNormal(const Vector2f& normal, const Vector2d& outward, double tolerance) {
         const double length = outward.length();
@@ -385,6 +563,14 @@ namespace TestSupport {
 
     [[nodiscard]] inline std::string describe(const Rectangle& r) {
         return "Rectangle{" + describe(r.min) + ", " + describe(r.max) + "}";
+    }
+
+    [[nodiscard]] inline std::string describe(const Polygon& p) {
+        std::string text = "Polygon{";
+        for (std::size_t i = 0; i < p.count; ++i) {
+            text += (i ? ", " : "") + describe(p.vertices[i]);
+        }
+        return text + "}";
     }
 
     [[nodiscard]] inline std::string describe(const Circle& c) {

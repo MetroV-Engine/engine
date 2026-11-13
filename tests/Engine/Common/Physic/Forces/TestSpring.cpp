@@ -35,6 +35,15 @@ void test_damped_spring_force() {
         expect(near(Physic::dampedSpringForce(V(2, 0), V(0, 0), V(3, 7), 2, 10, 4), V(-12, 0), 1e-12));
     };
 
+    "a spring of rest length 0 is a joint: pulled back and damped in every direction"_test = [] {
+        // Offset (3, 4), relative velocity (1, -2): -10 (3, 4) - 4 (1, -2).
+        expect(near(Physic::dampedSpringForce(V(3, 4), V(0, 0), V(1, -2), 0, 10, 4), V(-34, -32), 1e-12));
+        // The sideways velocity is damped too, and the joint still acts on the anchor itself.
+        expect(near(Physic::dampedSpringForce(V(1, 1), V(1, 1), V(0, 5), 0, 10, 4), V(0, -20), 1e-12));
+        // Without damping, the same pull as springForce of rest length 0.
+        expect(near(Physic::dampedSpringForce(V(3, 4), V(0, 0), V(1, -2), 0, 10, 0), Physic::springForce(V(3, 4), V(0, 0), 0, 10), 1e-12));
+    };
+
     "without damping it matches springForce"_test = [] {
         expect(near(Physic::dampedSpringForce(V(3, 4), V(0, 0), V(1, 1), 2, 10, 0),
                     Physic::springForce(V(3, 4), V(0, 0), 2, 10), 1e-12));

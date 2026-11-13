@@ -11,13 +11,15 @@
  */
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <optional>
 
 #include "Contact.hpp"
-#include "Shapes/Circle.hpp"
-#include "Shapes/Rectangle.hpp"
+#include "Overlap.hpp"
+#include "Shapes.hpp"
 
 namespace Engine::Collision {
     namespace Detail {
@@ -31,6 +33,134 @@ namespace Engine::Collision {
          */
         [[nodiscard]] constexpr float middleOfOverlap(float lowA, float highA, float lowB, float highB) noexcept {
             return (std::max(lowA, lowB) + std::min(highA, highB)) * 0.5f;
+        }
+
+        /** @brief A way to push the second shape out of the first: a unit direction and a distance. */
+        struct Push {
+            Vector2f normal;
+            float depth = std::numeric_limits<float>::infinity();
+        };
+
+        /**
+         * @brief Whether push is a better choice than best: shorter, or as
+         *        short and closer to vertical (ties go to Y), or as vertical
+         *        and pointing up or right. The same choices as
+         *        collide(Rectangle, Rectangle), so a rectangle given as a
+         *        polygon gets the same contact.
+         */
+        [[nodiscard]] constexpr bool isBetter(const Push& push, const Push& best) noexcept {
+            if (push.depth != best.depth) {
+                return push.depth < best.depth;
+            }
+            const float vertical = push.normal.y < 0.f ? -push.normal.y : push.normal.y;
+            const float bestVertical = best.normal.y < 0.f ? -best.normal.y : best.normal.y;
+            if (vertical != bestVertical) {
+                return vertical > bestVertical;
+            }
+            return push.normal.x + push.normal.y > best.normal.x + best.normal.y;
+        }
+
+        /**
+         * @brief Along each edge normal of `edges`, the two pushes that take
+         *        b out of a (along it and against it); keeps the best in
+         *        best. The caller has checked that they overlap: a push a
+         *        rounding below 0 (shapes touching on a slanted edge) is 0.
+         */
+        inline void shortestPush(const Polygon& edges, const Polygon& a, const Polygon& b, Push& best) noexcept {
+            for (std::size_t i = 0; i < edges.count; ++i) {
+                Vector2f normal;
+                if (!edgeNormal(edges, i, normal)) {
+                    continue;
+                }
+                const Interval spanA = project(a, normal);
+                const Interval spanB = project(b, normal);
+                const Push along{normal, std::max(0.f, spanA.max - spanB.min)};      // b moves along the normal
+                const Push against{-normal, std::max(0.f, spanB.max - spanA.min)};   // b moves against it
+                if (isBetter(along, best)) {
+                    best = along;
+                }
+                if (isBetter(against, best)) {
+                    best = against;
+                }
+            }
+        }
+
+        /** @brief Whether one of the polygon's edges has length 0: a Rectangle of size 0 given as a polygon. */
+        [[nodiscard]] constexpr bool hasEmptyEdge(const Polygon& polygon) noexcept {
+            for (std::size_t i = 0; i < polygon.count; ++i) {
+                if (const Vector2f along = polygon.edge(i); along.x == 0.f && along.y == 0.f) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * @brief A point inside both polygons: the average of the vertices of
+         *        their intersection, b clipped by every edge of a
+         *        (Sutherland-Hodgman). The intersection of two convex
+         *        polygons is convex, so the average of its vertices is in it.
+         *        When rounding leaves nothing (they only touch), the point of
+         *        a closest to b's deepest vertex along -normal.
+         *
+         *        An edge of length 0 bounds nothing, so a rectangle of size 0
+         *        (a segment) cannot clip: then it is the one clipped.
+         */
+        [[nodiscard]] inline Vector2f middleOfIntersection(const Polygon& a, const Polygon& b, const Vector2f& normal) noexcept {
+            if (hasEmptyEdge(a) && !hasEmptyEdge(b)) {
+                return middleOfIntersection(b, a, -normal);
+            }
+            // Clipping by one edge adds at most one vertex.
+            constexpr std::size_t Capacity = 2 * Polygon::MaxVertices;
+            std::array<Vector2f, Capacity> current{};
+            std::array<Vector2f, Capacity> next{};
+            std::size_t currentCount = b.count;
+            std::copy(b.vertices.begin(), b.vertices.begin() + static_cast<std::ptrdiff_t>(b.count), current.begin());
+            for (std::size_t i = 0; i < a.count && currentCount > 0; ++i) {
+                const Vector2f start = a.vertex(i);
+                const Vector2f along = a.edge(i);
+                // >= 0: on the inner side of edge i (its left).
+                const auto side = [&](const Vector2f& point) { return along.cross(point - start); };
+                std::size_t nextCount = 0;
+                for (std::size_t j = 0; j < currentCount; ++j) {
+                    const Vector2f& from = current[j];
+                    const Vector2f& to = current[(j + 1) % currentCount];
+                    const float sideFrom = side(from);
+                    const float sideTo = side(to);
+                    if (sideFrom >= 0.f) {
+                        next[nextCount++] = from;
+                    }
+                    if ((sideFrom >= 0.f) != (sideTo >= 0.f)) {
+                        next[nextCount++] = from + (to - from) * (sideFrom / (sideFrom - sideTo));
+                    }
+                }
+                current.swap(next);
+                currentCount = std::min(nextCount, Capacity);
+            }
+            if (currentCount == 0) {
+                return a.closestPoint(b.support(-normal));
+            }
+            Vector2f sum;
+            for (std::size_t j = 0; j < currentCount; ++j) {
+                sum += current[j];
+            }
+            return sum / static_cast<float>(currentCount);
+        }
+
+        /**
+         * @brief How far a unit direction goes from start, a point in or on
+         *        the polygon, before leaving it: the nearest edge line it
+         *        crosses going out.
+         */
+        [[nodiscard]] inline float exitDistance(const Polygon& polygon, const Vector2f& start, const Vector2f& direction) noexcept {
+            float exit = std::numeric_limits<float>::infinity();
+            for (std::size_t i = 0; i < polygon.count; ++i) {
+                const Vector2f normal = polygon.normal(i);
+                if (const float facing = normal.dot(direction); facing > 0.f) {
+                    exit = std::min(exit, std::max(0.f, normal.dot(polygon.vertex(i) - start) / facing));
+                }
+            }
+            return exit;
         }
     }
 
@@ -146,6 +276,115 @@ namespace Engine::Collision {
     /** @brief Contact between a circle and a rectangle: collide(rectangle, circle) with the normal turned around. */
     [[nodiscard]] inline std::optional<Contact> collide(const Circle& circle, const Rectangle& rectangle) noexcept {
         std::optional<Contact> contact = collide(rectangle, circle);
+        if (contact) {
+            contact->normal = -contact->normal;
+        }
+        return contact;
+    }
+
+    /**
+     * @brief Contact between two convex polygons, or none when they do not
+     *        overlap.
+     *
+     * Separating axis theorem: along each edge normal of either polygon,
+     * their spans must meet, and the shortest push that separates them is
+     * along one of those normals. Ties go to Y as for rectangles, so a
+     * rectangle given as a polygon gets the same contact as
+     * collide(Rectangle, Rectangle). The point is the middle of their
+     * intersection.
+     *
+     * Computed around a's first vertex: subtracting nearby coordinates is
+     * exact, and projections then stay small, where float steps are tiny.
+     */
+    [[nodiscard]] inline std::optional<Contact> collide(const Polygon& a, const Polygon& b) noexcept {
+        // Whether they meet is overlaps()'s answer: its axes are not normalized, so it is
+        // exact on grid coordinates, and collide() always agrees with it.
+        if (!overlaps(a, b)) {
+            return std::nullopt;
+        }
+        const Vector2f origin = a.vertices[0];
+        const Polygon localA = a.translated(-origin);
+        const Polygon localB = b.translated(-origin);
+        Detail::Push best;
+        Detail::shortestPush(localA, localA, localB, best);
+        Detail::shortestPush(localB, localA, localB, best);
+        const Vector2f point = Detail::middleOfIntersection(localA, localB, best.normal) + origin;
+        return Contact{best.normal, best.depth, point};
+    }
+
+    /** @brief Contact between a polygon and a rectangle: the rectangle as a polygon. */
+    [[nodiscard]] inline std::optional<Contact> collide(const Polygon& polygon, const Rectangle& rectangle) noexcept {
+        return collide(polygon, Polygon::fromRectangle(rectangle));
+    }
+
+    /** @brief Contact between a rectangle and a polygon: the rectangle as a polygon. */
+    [[nodiscard]] inline std::optional<Contact> collide(const Rectangle& rectangle, const Polygon& polygon) noexcept {
+        return collide(Polygon::fromRectangle(rectangle), polygon);
+    }
+
+    namespace Detail {
+        /** @brief collide(polygon, circle) for a circle of this radius centered at (0, 0). */
+        [[nodiscard]] inline std::optional<Contact> collideAroundCenter(const Polygon& polygon, float radius) noexcept {
+            const Vector2f center = Vector2f::zero();
+            const Vector2f closest = polygon.closestPoint(center);
+            const Vector2f delta = center - closest;
+            const float distanceSquared = delta.lengthSquared();
+            if (distanceSquared > radius * radius) {
+                return std::nullopt;
+            }
+
+            if (distanceSquared > 0.f) {
+                const float distance = std::sqrt(distanceSquared);
+                const Vector2f normal{delta.x / distance, delta.y / distance};  // per coordinate: exact on an axis
+                // Along the normal from the circle's center, the circle covers [-r, r] and the
+                // polygon [-d - across, -d]: from closest, across it to where it leaves.
+                const float across = exitDistance(polygon, closest, -normal);
+                const float middle = middleOfOverlap(-radius, radius, -distance - across, -distance);
+                return Contact{normal, radius - distance, center + normal * middle};
+            }
+
+            // The center is inside the polygon (or on an edge): leave through the nearest edge.
+            Push best;
+            for (std::size_t i = 0; i < polygon.count; ++i) {
+                const Vector2f normal = polygon.normal(i);
+                const Push out{normal, normal.dot(polygon.vertex(i) - center)};
+                if (isBetter(out, best)) {
+                    best = out;
+                }
+            }
+            // Along the normal from the center, the circle covers [-r, r] and the polygon
+            // [-back, toSide].
+            const float toSide = best.depth;
+            const float back = exitDistance(polygon, center, -best.normal);
+            const float middle = middleOfOverlap(-radius, radius, -back, toSide);
+            return Contact{best.normal, radius + toSide, center + best.normal * middle};
+        }
+    }
+
+    /**
+     * @brief Contact between a polygon and a circle, or none when they do
+     *        not overlap.
+     *
+     * As for a rectangle: when the circle's center is outside, the normal
+     * goes from the polygon's closest point to the center, which handles
+     * vertices exactly; when it is inside, the circle leaves through the
+     * nearest edge (ties go to Y, top first).
+     *
+     * Computed around the circle's center: far from the origin, a closest
+     * point on a slanted edge is only known to a float step of the
+     * coordinates, and a center that close would get a wrong normal.
+     */
+    [[nodiscard]] inline std::optional<Contact> collide(const Polygon& polygon, const Circle& circle) noexcept {
+        const std::optional<Contact> local = Detail::collideAroundCenter(polygon.translated(-circle.center), circle.radius);
+        if (!local) {
+            return std::nullopt;
+        }
+        return Contact{local->normal, local->depth, local->point + circle.center};
+    }
+
+    /** @brief Contact between a circle and a polygon: collide(polygon, circle) with the normal turned around. */
+    [[nodiscard]] inline std::optional<Contact> collide(const Circle& circle, const Polygon& polygon) noexcept {
+        std::optional<Contact> contact = collide(polygon, circle);
         if (contact) {
             contact->normal = -contact->normal;
         }

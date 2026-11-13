@@ -11,6 +11,7 @@
 using namespace boost::ut;
 using namespace Engine;
 using Component::Collider;
+using Component::RigidBody;
 using Component::Transform;
 using TestSupport::near;
 using V = Math::Vector2f;
@@ -21,6 +22,13 @@ constexpr float Tolerance = 1e-6f;
 Collider box(V halfSize, V offset = {}) {
     Collider collider;
     collider.shape = Collider::Box{halfSize};
+    collider.offset = offset;
+    return collider;
+}
+
+Collider polygon(const Collider::Polygon& form, V offset = {}) {
+    Collider collider;
+    collider.shape = form;
     collider.offset = offset;
     return collider;
 }
@@ -79,10 +87,28 @@ void test_world_shape() {
         expect(std::get<Collision::Circle>(placed) == Collision::Circle{V(2.f, 4.f), 1.5f});
     };
 
+    "a polygon is its vertices moved to the Transform's position plus the offset"_test = [] {
+        const Collider collider = polygon(Collider::Polygon::slope(V(1.f, 0.5f)), V(0.f, 1.f));
+        const Collider::WorldShape placed = collider.worldShape(Transform{V(3.f, 4.f)});
+
+        expect(fatal(std::holds_alternative<Collision::Polygon>(placed)));
+        expect(std::get<Collision::Polygon>(placed) == Collision::Polygon{V(2.f, 4.5f), V(4.f, 4.5f), V(4.f, 5.5f)});
+    };
+
+    "slope builds a right triangle rising to the right or to the left, convex and counter-clockwise"_test = [] {
+        constexpr Collider::Polygon right = Collider::Polygon::slope(V(1.f, 0.5f));
+        constexpr Collider::Polygon left = Collider::Polygon::slope(V(1.f, 0.5f), false);
+
+        expect(constant<right.points == Collision::Polygon{V(-1.f, -0.5f), V(1.f, -0.5f), V(1.f, 0.5f)}>);
+        expect(constant<left.points == Collision::Polygon{V(-1.f, -0.5f), V(1.f, -0.5f), V(-1.f, 0.5f)}>);
+        expect(constant<right.points.isConvex() && left.points.isConvex()>);
+    };
+
     "the bounding box contains the shape exactly"_test = [] {
         const Transform at{V(1.f, 1.f)};
 
         expect(box(V(2.f, 1.f)).boundingBox(at) == Collision::Rectangle{V(-1.f, 0.f), V(3.f, 2.f)});
+        expect(polygon(Collider::Polygon::slope(V(1.f, 0.5f))).boundingBox(at) == Collision::Rectangle{V(0.f, 0.5f), V(2.f, 1.5f)});
         expect(circle(0.5f, V(1.f, 0.f)).boundingBox(at) == Collision::Rectangle{V(1.5f, 0.5f), V(2.5f, 1.5f)});
     };
 
@@ -102,7 +128,9 @@ void test_collide() {
     "collide gives the contact of the two forms, for every pair of forms"_test = [] {
         const Transform atA{V(0.f, 0.f)};
         const Transform atB{V(0.6f, 0.3f)};
-        const Collider forms[] = {box(V(0.5f, 0.5f)), circle(0.75f), box(V(1.f, 0.25f), V(0.2f, 0.f)), circle(0.5f, V(0.f, -0.2f))};
+        const Collider forms[] = {box(V(0.5f, 0.5f)), circle(0.75f), box(V(1.f, 0.25f), V(0.2f, 0.f)), circle(0.5f, V(0.f, -0.2f)),
+                                  polygon(Collider::Polygon::slope(V(0.75f, 0.75f))),
+                                  polygon(Collider::Polygon::slope(V(0.5f, 0.5f), false), V(0.f, 0.1f))};
 
         for (const Collider& a : forms) {
             for (const Collider& b : forms) {
@@ -150,8 +178,59 @@ void test_collide() {
 }
 }
 
+void test_rotation() {
+    "turned, a box becomes the polygon of its turned corners; unturned it stays a Rectangle"_test = [] {
+        const Collider collider = box(V(1.f, 0.5f));
+        const Collider::WorldShape level = collider.worldShape(Transform{V(2.f, 3.f), 0.f});
+        const Collider::WorldShape turned = collider.worldShape(Transform{V(2.f, 3.f), 3.14159265f / 2.f});
+
+        expect(std::holds_alternative<Collision::Rectangle>(level));
+        expect(fatal(std::holds_alternative<Collision::Polygon>(turned)));
+        const Collision::Polygon& corners = std::get<Collision::Polygon>(turned);
+        expect(corners.isConvex());
+        // A quarter turn: 2 m wide becomes 2 m tall.
+        expect(near(corners.boundingBox().min, V(1.5f, 2.f), 1e-5f));
+        expect(near(corners.boundingBox().max, V(2.5f, 4.f), 1e-5f));
+        expect(near(collider.boundingBox(Transform{V(2.f, 3.f), 3.14159265f / 2.f}).max, V(2.5f, 4.f), 1e-5f));
+    };
+
+    "the offset turns with the body; a circle stays a circle, a polygon turns"_test = [] {
+        const Transform quarter{V(0.f, 0.f), 3.14159265f / 2.f};
+        const Collider ball = circle(0.5f, V(1.f, 0.f));
+        expect(near(ball.center(quarter), V(0.f, 1.f), 1e-6f));
+        expect(near(std::get<Collision::Circle>(ball.worldShape(quarter)).center, V(0.f, 1.f), 1e-6f));
+
+        const Collider ramp = polygon(Collider::Polygon::slope(V(1.f, 1.f)));
+        const Collision::Polygon turned = std::get<Collision::Polygon>(ramp.worldShape(quarter));
+        expect(near(turned.vertex(1), V(1.f, 1.f), 1e-6f)) << "(1, -1) turned a quarter";
+    };
+
+    "momentOfInertia: the shape's own, moved by the offset (parallel axis)"_test = [] {
+        expect(near(box(V(1.f, 0.5f)).momentOfInertia(6.f), 2.5f, 1e-6f));
+        expect(near(circle(0.5f).momentOfInertia(4.f), 0.5f, 1e-6f));
+        expect(near(circle(0.5f, V(0.f, 2.f)).momentOfInertia(4.f), 0.5f + 16.f, 1e-5f));
+        expect(near(box(V(1.f, 0.5f), V(0.f, 2.f)).momentOfInertia(6.f), 2.5f + 24.f, 1e-5f));
+        // A slope's vertices are around its box's center, not its centroid: the parallel axis counts it.
+        const Collider ramp = polygon(Collider::Polygon::slope(V(1.5f, 1.f)));
+        const float own = Physic::polygonInertia(9.f, std::get<Collider::Polygon>(ramp.shape).points);
+        const V centroid(0.5f, -1.f / 3.f);
+        expect(near(ramp.momentOfInertia(9.f), own + 9.f * centroid.lengthSquared(), 1e-4f));
+    };
+
+    "inverseInertia is 0 for what does not turn: fixedRotation, mass 0, no Collider"_test = [] {
+        const Collider collider = box(V(1.f, 0.5f));
+        RigidBody body{6.f};
+        expect(near(Component::inverseInertia(body, &collider), 0.4f, 1e-6f));
+        expect(Component::inverseInertia(body, nullptr) == 0.f);
+        body.fixedRotation = true;
+        expect(Component::inverseInertia(body, &collider) == 0.f);
+        expect(Component::inverseInertia(RigidBody{0.f}, &collider) == 0.f);
+    };
+}
+
 void run_collider_tests() {
     test_defaults();
+    test_rotation();
     test_world_shape();
     test_collide();
 }

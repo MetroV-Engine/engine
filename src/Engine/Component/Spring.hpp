@@ -60,5 +60,17 @@ namespace Engine::Component {
          * their reduced mass m1 * m2 / (m1 + m2).
          */
         float damping = 0.f;
+        /**
+         * @brief Where the spring holds `body`, in the body's own space, in m:
+         *        an offset from its position that turns with its rotation.
+         *
+         * 0 (the default) holds it at its position, its center of mass: the
+         * spring then never turns it. Off the center, the pull also turns
+         * the body (torque arm x F): links of a rope joined end to end, a
+         * sign hanging from one corner, a door on a hinge.
+         */
+        Math::Vector2f bodyPoint;
+        /** @brief Where the spring holds `other`, in its own space, like bodyPoint. Unused with a fixed anchor. */
+        Math::Vector2f otherPoint;
     };
 }

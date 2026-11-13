@@ -96,6 +96,29 @@ void test_jump_formulas() {
 
         expect(near(highest, 3.0, 0.09));
     };
+
+    "speedToReachHeightForStep: the integrated jump peaks at the height, at most g dt² / 8 above"_test = [] {
+        for (const double rate : {30.0, 60.0, 144.0}) {
+            const double dt = 1.0 / rate;
+            for (double height = 0.1; height < 10.0; height += 0.37) {
+                V position;
+                V velocity(0, Physic::speedToReachHeightForStep(height, Gravity, dt));
+                double highest = 0.0;
+                while (velocity.y > 0.0) {
+                    Physic::integrate(position, velocity, V(0, -Gravity), dt);
+                    highest = std::max(highest, position.y);
+                }
+
+                expect(highest >= height - 1e-9) << "rate" << rate << "height" << height;
+                expect(highest <= height + Gravity * dt * dt / 8.0 + 1e-9) << "rate" << rate << "height" << height;
+            }
+        }
+    };
+
+    "speedToReachHeightForStep with no step length is speedToReachHeight"_test = [] {
+        expect(near(Physic::speedToReachHeightForStep(2.5, Gravity, 0.0), Physic::speedToReachHeight(2.5, Gravity), 1e-12));
+        expect(near(Physic::speedToReachHeightForStep(0.0, Gravity, 1.0 / 60.0), Gravity / 60.0, 1e-12));
+    };
 }
 }
 

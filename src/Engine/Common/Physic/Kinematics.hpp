@@ -89,6 +89,32 @@ namespace Engine::Physic {
     }
 
     /**
+     * @brief Initial upward speed to rise by a height when integrate() moves
+     *        the body in steps of deltaTime: the speedToReachHeight() of
+     *        the simulation rather than of the continuous motion.
+     *
+     * Semi-implicit Euler lowers the velocity before each move, so a body
+     * launched at sqrt(2 g h) peaks about v * dt / 2 short of h: 12 cm
+     * (5%) for a 2.5 m jump at 60 Hz. Summing the steps' moves while the
+     * velocity is positive gives h = v² / (2 g) - v * dt / 2, up to at most
+     * g * dt² / 8 (0.3 mm at 60 Hz, and never below h: the body always
+     * clears a ledge of that height); solved for v:
+     * v = g dt / 2 + sqrt((g dt / 2)² + 2 g h). With deltaTime 0, this is
+     * speedToReachHeight().
+     *
+     * @param height Height to reach, in m, >= 0.
+     * @param gravityMagnitude Strength of gravity |g|, in m/s², >= 0.
+     * @param deltaTime Length of the integration steps, in s, >= 0.
+     * @return The speed in m/s.
+     */
+    template <std::floating_point T>
+    [[nodiscard]] T speedToReachHeightForStep(
+        T height, std::type_identity_t<T> gravityMagnitude, std::type_identity_t<T> deltaTime) noexcept {
+        const T halfStepLoss = gravityMagnitude * deltaTime / T{2};
+        return halfStepLoss + std::sqrt(halfStepLoss * halfStepLoss + T{2} * gravityMagnitude * height);
+    }
+
+    /**
      * @brief Height reached by a body launched upwards: h = v² / (2 * g).
      * @param launchSpeed Initial upward speed, in m/s.
      * @param gravityMagnitude Strength of gravity |g|, in m/s².

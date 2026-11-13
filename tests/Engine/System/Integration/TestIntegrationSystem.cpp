@@ -9,6 +9,7 @@
 #include "Engine/Common/Physic/Kinematics.hpp"
 #include "Engine/System/Friction/FrictionSystem.hpp"
 #include "Engine/System/Gravity/GravitySystem.hpp"
+#include "Engine/Component/Collider.hpp"
 #include "Engine/System/Integration/IntegrationSystem.hpp"
 #include "Engine/System/Spring/SpringSystem.hpp"
 #include "../../Support/Approx.hpp"
@@ -81,6 +82,52 @@ void test_integration_step() {
 
         expect(world.getComponent<RigidBody>(platform).velocity == V(2.f, 0.f));
         expect(near(world.getComponent<Transform>(platform).position, V(1.f, 0.f), 1e-6f));
+    };
+}
+
+void test_rotation() {
+    "a torque turns a body: angular acceleration torque / I, then the angle, then the torque is cleared"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        systems.addSystem<IntegrationSystem>(world);
+        const ECS::Entity plate = world.spawnEntity();
+        world.addComponent(plate, Transform{});
+        Component::Collider collider;
+        collider.shape = Component::Collider::Box{V(1.f, 0.5f)};    // I = 2.5 for 6 kg
+        world.addComponent(plate, Component::Collider{collider});
+        world.addComponent(plate, RigidBody{6.f});
+        world.getComponent<RigidBody>(plate).torque = 5.f;
+
+        systems.update(world, 0.5);
+
+        expect(near(world.getComponent<RigidBody>(plate).angularVelocity, 1.f, 1e-6f));    // 5 / 2.5 * 0.5
+        expect(near(world.getComponent<Transform>(plate).rotation, 0.5f, 1e-6f));
+        expect(world.getComponent<RigidBody>(plate).torque == 0.f);
+    };
+
+    "a kinematic body keeps turning at its angular velocity; fixedRotation keeps its angle; no Collider, no torque effect"_test = [] {
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        systems.addSystem<IntegrationSystem>(world);
+        Component::Collider collider;
+        const ECS::Entity wheel = world.spawnEntity();
+        world.addComponent(wheel, Transform{});
+        world.addComponent(wheel, Component::Collider{collider});
+        world.addComponent(wheel, RigidBody{0.f, 1.f, {}, {}, 2.f, 100.f});
+        const ECS::Entity upright = world.spawnEntity();
+        world.addComponent(upright, Transform{});
+        world.addComponent(upright, Component::Collider{collider});
+        world.addComponent(upright, RigidBody{1.f, 1.f, {}, {}, 3.f, 100.f, true});
+        const ECS::Entity bare = world.spawnEntity();
+        world.addComponent(bare, Transform{});
+        world.addComponent(bare, RigidBody{1.f, 1.f, {}, {}, 0.f, 100.f});
+
+        systems.update(world, 0.5);
+
+        expect(near(world.getComponent<Transform>(wheel).rotation, 1.f, 1e-6f));
+        expect(world.getComponent<RigidBody>(wheel).angularVelocity == 2.f);
+        expect(world.getComponent<Transform>(upright).rotation == 0.f);
+        expect(world.getComponent<Transform>(bare).rotation == 0.f);
     };
 }
 
@@ -288,7 +335,7 @@ void test_springs_then_integration() {
         expect(near(lowest, -0.5f, 0.005f));
     };
 
-    "a critically damped spring settles without overshooting"_test = [] {
+    "with integration, a critically damped spring settles without overshooting"_test = [] {
         SpringScene scene;
         const ECS::Entity body = scene.body(V(1.5f, 0.f), 1.f);
         scene.link(body, {}, V::zero(), 1.f, 100.f, Physic::criticalDamping(100.f, 1.f));
@@ -433,6 +480,7 @@ void test_orbit_fates() {
 }
 
 void run_integration_system_tests() {
+    test_rotation();
     test_integration_step();
     test_gravity_then_integration();
     test_friction_then_integration();

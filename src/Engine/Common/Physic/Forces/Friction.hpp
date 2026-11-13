@@ -156,8 +156,14 @@ namespace Engine::Physic {
      * Semi-implicit Euler first moves the velocity by the other forces:
      * predicted = velocity + appliedForce / m * dt. Friction then acts on
      * that predicted velocity:
-     * - resting (speed at most Math::Epsilon) and held by static friction
-     *   (staticFrictionHolds()): the body stays still, velocity 0;
+     * - held: when the force that would stop it within the step,
+     *   m * predicted / dt, is within muStatic * N (staticFrictionHolds()),
+     *   static friction grips and the body ends the step still, velocity 0.
+     *   For a body at rest that is exactly "the applied force is within
+     *   muStatic * N"; a body creeping by a few mm/s is caught too, as in
+     *   Box2D or PhysX, instead of sliding on forever where muKinetic is
+     *   too weak to stop it (a crate on a slope steeper than atan(muKinetic)
+     *   but gentler than atan(muStatic));
      * - otherwise kinetic friction, which stops the body rather than
      *   reversing it (velocityAfterKineticFriction()).
      * The returned force is m * (velocity wanted - predicted) / dt: added to
@@ -187,12 +193,11 @@ namespace Engine::Physic {
         if (inverse == T{0} || deltaTime <= T{0}) {
             return {};
         }
-        const bool resting = velocity.lengthSquared() <= Math::Epsilon<T> * Math::Epsilon<T>;
         const Math::Vector2<T> predicted = velocity + appliedForce * (inverse * deltaTime);
-        const Math::Vector2<T> wanted =
-            resting && staticFrictionHolds(appliedForce, staticCoefficient, normalForce)
-                ? Math::Vector2<T>{}
-                : velocityAfterKineticFriction(predicted, kineticCoefficient, normalForce, mass, deltaTime);
+        const Math::Vector2<T> toStop = predicted * (mass / deltaTime);  // the force that stops it this step
+        const Math::Vector2<T> wanted = staticFrictionHolds(toStop, staticCoefficient, normalForce)
+            ? Math::Vector2<T>{}
+            : velocityAfterKineticFriction(predicted, kineticCoefficient, normalForce, mass, deltaTime);
         return (wanted - predicted) * (mass / deltaTime);
     }
 }

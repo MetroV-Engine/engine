@@ -1,9 +1,9 @@
 #include <boost/ut.hpp>
 
-#include "Engine/Common/Collision/Shapes/Circle.hpp"
+#include "Engine/Common/Shapes/Circle.hpp"
 
 using namespace boost::ut;
-using namespace Engine::Collision;
+using namespace Engine::Shapes;
 
 namespace {
 void test_bounding_box() {

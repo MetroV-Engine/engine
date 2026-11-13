@@ -49,5 +49,15 @@ namespace Engine::Component {
          *        relative to it, so it drags the body along.
          */
         Math::Vector2f surfaceVelocity;
+
+        /**
+         * @brief From the body's center of mass (its Transform's position) to
+         *        the contact point, in m. Friction applies there: off center,
+         *        it also turns the body, which makes a ball roll. (0, 0):
+         *        at the center, no turning, as for a body lying on a face,
+         *        which the face keeps from turning (CollisionResponseSystem
+         *        sets it so).
+         */
+        Math::Vector2f arm;
     };
 }

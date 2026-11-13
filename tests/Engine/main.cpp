@@ -2,18 +2,24 @@ void run_scalar_tests();
 void run_vector_tests();
 void run_kinematics_tests();
 void run_impact_tests();
+void run_rotation_tests();
 void run_dynamics_tests();
 void run_gravity_tests();
 void run_friction_tests();
 void run_surface_tests();
 void run_spring_tests();
 void run_radial_tests();
+void run_drag_tests();
+void run_buoyancy_tests();
 void run_collision_rectangle_tests();
 void run_collision_circle_tests();
+void run_polygon_tests();
 void run_collision_overlap_tests();
 void run_collision_collide_tests();
 void run_collision_raycast_tests();
 void run_collision_sweep_tests();
+void run_collision_polygon_tests();
+void run_collision_manifold_tests();
 void run_collider_tests();
 void run_gravity_system_tests();
 void run_friction_system_tests();
@@ -24,6 +30,8 @@ void run_drag_system_tests();
 void run_buoyancy_system_tests();
 void run_collision_system_tests();
 void run_collision_response_system_tests();
+void run_character_controller_system_tests();
+void run_physics_tests();
 
 int main()
 {
@@ -31,18 +39,24 @@ int main()
     run_vector_tests();
     run_kinematics_tests();
     run_impact_tests();
+    run_rotation_tests();
     run_dynamics_tests();
     run_gravity_tests();
     run_friction_tests();
     run_surface_tests();
     run_spring_tests();
     run_radial_tests();
+    run_drag_tests();
+    run_buoyancy_tests();
     run_collision_rectangle_tests();
     run_collision_circle_tests();
+    run_polygon_tests();
     run_collision_overlap_tests();
     run_collision_collide_tests();
     run_collision_raycast_tests();
     run_collision_sweep_tests();
+    run_collision_polygon_tests();
+    run_collision_manifold_tests();
     run_collider_tests();
     run_gravity_system_tests();
     run_friction_system_tests();
@@ -53,4 +67,6 @@ int main()
     run_buoyancy_system_tests();
     run_collision_system_tests();
     run_collision_response_system_tests();
+    run_character_controller_system_tests();
+    run_physics_tests();
 }

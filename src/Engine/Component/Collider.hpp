@@ -10,7 +10,10 @@
 #include <variant>
 
 #include "Engine/Common/Collision/Collision.hpp"
+#include "Engine/Common/Math/Scalar.hpp"
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Common/Physic/Rotation.hpp"
+#include "RigidBody.hpp"
 #include "Transform.hpp"
 
 namespace Engine::Component {
@@ -27,7 +30,11 @@ namespace Engine::Component {
      *   which pushes others but is never pushed.
      * - Without a RigidBody: static scenery (a wall, the ground).
      *
-     * The shape never rotates: boxes stay axis-aligned.
+     * The shape turns with the Transform's rotation, around the Transform's
+     * position (the body's center of mass): offset turns too. A turned box
+     * becomes a Polygon in the world; unturned, it stays an exact
+     * axis-aligned Rectangle. A slope is a Polygon:
+     * Collider::Polygon::slope() builds the right triangle of one.
      */
     struct Collider {
         /** @brief Axis-aligned box centered on the collider. */
@@ -46,11 +53,38 @@ namespace Engine::Component {
             [[nodiscard]] constexpr bool operator==(const Circle& other) const noexcept = default;
         };
 
+        /**
+         * @brief Convex polygon: a slope, a ramp, a cut corner. Its vertices
+         *        are relative to the collider's center, counter-clockwise,
+         *        strictly convex (Shapes::Polygon's invariant, which
+         *        points.isConvex() checks).
+         */
+        struct Polygon {
+            Shapes::Polygon points;
+
+            /**
+             * @brief The right triangle filling the box of this half size
+             *        below its diagonal: a slope rising to the right (or to
+             *        the left), at atan(height / width). Equal half sizes
+             *        give 45°, a width twice the height 26.6°.
+             */
+            [[nodiscard]] static constexpr Polygon slope(const Math::Vector2f& halfSize, bool risesToTheRight = true) noexcept {
+                const Math::Vector2f bottomLeft = -halfSize;
+                const Math::Vector2f bottomRight{halfSize.x, -halfSize.y};
+                if (risesToTheRight) {
+                    return {{bottomLeft, bottomRight, halfSize}};
+                }
+                return {{bottomLeft, bottomRight, {-halfSize.x, halfSize.y}}};
+            }
+
+            [[nodiscard]] constexpr bool operator==(const Polygon& other) const noexcept = default;
+        };
+
         /** @brief The forms a collider can take, in its own space. Add a form here, then in worldShape(). */
-        using Shape = std::variant<Box, Circle>;
+        using Shape = std::variant<Box, Circle, Polygon>;
 
         /** @brief The same forms placed in the world: what Collision::collide() and friends take. */
-        using WorldShape = std::variant<Collision::Rectangle, Collision::Circle>;
+        using WorldShape = std::variant<Collision::Rectangle, Collision::Circle, Collision::Polygon>;
 
         /** @brief The form: a 1 m box by default. */
         Shape shape = Box{};
@@ -106,24 +140,65 @@ namespace Engine::Component {
          */
         float kineticFriction = 0.3f;
 
-        /** @brief Center of the shape in the world, in m. */
+        /** @brief Center of the shape in the world, in m: the offset turned with the Transform. */
         [[nodiscard]] constexpr Math::Vector2f center(const Transform& transform) const noexcept {
-            return transform.position + offset;
+            return transform.position + (transform.rotation == 0.f ? offset : offset.rotated(transform.rotation));
+        }
+
+        /**
+         * @brief Moment of inertia about the Transform's position (the center
+         *        of mass) for this mass spread uniformly over the shape, in
+         *        kg·m²: the shape's own (Physic::boxInertia, discInertia,
+         *        polygonInertia) moved by the offset (parallel axis).
+         */
+        [[nodiscard]] float momentOfInertia(float mass) const noexcept {
+            return std::visit(
+                [this, mass](const auto& form) -> float {
+                    using Form = std::decay_t<decltype(form)>;
+                    if constexpr (std::is_same_v<Form, Box>) {
+                        return Physic::parallelAxis(Physic::boxInertia(mass, form.halfSize), mass, offset);
+                    } else if constexpr (std::is_same_v<Form, Circle>) {
+                        return Physic::parallelAxis(Physic::discInertia(mass, form.radius), mass, offset);
+                    } else {
+                        return Physic::parallelAxis(
+                            Physic::polygonInertia(mass, form.points), mass, offset + form.points.centroid());
+                    }
+                },
+                shape);
+        }
+
+        /**
+         * @brief A form placed in the world: its center at the Transform's
+         *        position plus offset (turned with it), turned by its
+         *        rotation. What worldShape() does with the collider's own
+         *        shape; Buoyant places its shape the same way.
+         */
+        [[nodiscard]] static constexpr WorldShape place(
+            const Shape& form, const Math::Vector2f& offset, const Transform& transform) noexcept {
+            const float turn = transform.rotation;
+            const Math::Vector2f worldCenter = transform.position + (turn == 0.f ? offset : offset.rotated(turn));
+            return std::visit(
+                [&worldCenter, turn](const auto& kind) -> WorldShape {
+                    using Form = std::decay_t<decltype(kind)>;
+                    if constexpr (std::is_same_v<Form, Box>) {
+                        if (turn == 0.f) {
+                            return Collision::Rectangle::fromCenter(worldCenter, kind.halfSize);
+                        }
+                        return Collision::Polygon::fromRectangle(Collision::Rectangle::fromCenter({}, kind.halfSize))
+                            .rotated(turn)
+                            .translated(worldCenter);
+                    } else if constexpr (std::is_same_v<Form, Circle>) {
+                        return Collision::Circle{worldCenter, kind.radius};
+                    } else {
+                        return (turn == 0.f ? kind.points : kind.points.rotated(turn)).translated(worldCenter);
+                    }
+                },
+                form);
         }
 
         /** @brief The shape where the entity stands, as collision geometry. */
         [[nodiscard]] constexpr WorldShape worldShape(const Transform& transform) const noexcept {
-            const Math::Vector2f worldCenter = center(transform);
-            return std::visit(
-                [&worldCenter](const auto& form) -> WorldShape {
-                    using Form = std::decay_t<decltype(form)>;
-                    if constexpr (std::is_same_v<Form, Box>) {
-                        return Collision::Rectangle::fromCenter(worldCenter, form.halfSize);
-                    } else {
-                        return Collision::Circle{worldCenter, form.radius};
-                    }
-                },
-                shape);
+            return place(shape, offset, transform);
         }
 
         /** @brief The smallest axis-aligned box containing the shape, in the world: for a broad phase. */
@@ -153,5 +228,45 @@ namespace Engine::Component {
         return std::visit(
             [](const auto& first, const auto& second) { return Collision::collide(first, second); },
             a.worldShape(transformA), b.worldShape(transformB));
+    }
+
+    /**
+     * @brief Where two colliders that collide press on each other, given
+     *        their contact (collide(a, ..., b, ...)): one or two points
+     *        (Collision::contactPoints).
+     */
+    [[nodiscard]] inline Collision::Manifold contactPoints(const Collider& a, const Transform& transformA, const Collider& b,
+                                                           const Transform& transformB, const Collision::Contact& contact) noexcept {
+        return std::visit(
+            [&contact](const auto& first, const auto& second) { return Collision::contactPoints(first, second, contact); },
+            a.worldShape(transformA), b.worldShape(transformB));
+    }
+
+    /**
+     * @brief First contact of a collider moving by delta with a still one,
+     *        whatever their forms, or none.
+     *
+     * Calls the Collision::sweep() of the two forms: the moving collider
+     * moved by delta * fraction touches the other, and the normal is the
+     * still one's surface there, pointing back at the moving one. Colliders
+     * that already overlap give no hit.
+     */
+    [[nodiscard]] inline std::optional<Collision::Hit> sweep(const Collider& moving, const Transform& transform,
+        const Math::Vector2f& delta, const Collider& still, const Transform& stillTransform) noexcept {
+        return std::visit(
+            [&delta](const auto& first, const auto& second) { return Collision::sweep(first, delta, second); },
+            moving.worldShape(transform), still.worldShape(stillTransform));
+    }
+
+    /**
+     * @brief 1 / I of a body about its center of mass, or 0 when it does
+     *        not rotate: fixedRotation, static or kinematic (mass at most
+     *        Math::Epsilon: impacts do not turn it), or no Collider.
+     */
+    [[nodiscard]] inline float inverseInertia(const RigidBody& body, const Collider* collider) noexcept {
+        if (!collider || body.fixedRotation || body.mass <= Math::Epsilon<float>) {
+            return 0.f;
+        }
+        return Physic::inverseInertia(collider->momentOfInertia(body.mass));
     }
 }

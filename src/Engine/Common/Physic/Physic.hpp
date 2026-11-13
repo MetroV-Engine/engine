@@ -11,9 +11,15 @@
  * - Forces/Friction.hpp: static and kinetic friction between surfaces.
  * - Forces/Spring.hpp: damped spring (Hooke's law).
  * - Forces/Radial.hpp: radial push (explosions, shockwaves).
- * - Impact.hpp: bounce (restitution) and separation of two bodies that hit.
+ * - Forces/Drag.hpp: air and water resistance.
+ * - Forces/Buoyancy.hpp: Archimedes' push in a fluid.
+ * - Rotation.hpp: moments of inertia, torque, angular integration.
+ * - Impact.hpp: bounce (restitution) and separation of two bodies that hit,
+ *   at their center or, with rotation, at the contact point.
  */
 
+#include "Forces/Buoyancy.hpp"
+#include "Forces/Drag.hpp"
 #include "Forces/Dynamics.hpp"
 #include "Forces/Friction.hpp"
 #include "Forces/Gravity.hpp"
@@ -22,3 +28,4 @@
 #include "Forces/Surface.hpp"
 #include "Impact.hpp"
 #include "Kinematics.hpp"
+#include "Rotation.hpp"

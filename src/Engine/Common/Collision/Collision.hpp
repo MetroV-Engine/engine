@@ -8,12 +8,15 @@
  * state. The collision system and gameplay code (a character controller,
  * a line-of-sight check) both build on it.
  *
- * - Shapes/: what is tested, Rectangle (axis-aligned) and Circle.
+ * - Shapes.hpp: what is tested, Rectangle (axis-aligned), Circle and
+ *   Polygon (convex: slopes), from Engine/Common/Shapes.
  * - Contact.hpp, Hit.hpp: what the tests return. Contact for collide(),
  *   Hit for raycast() and sweep().
  * - Overlap.hpp: contains() and overlaps(), the yes/no tests.
  * - Collide.hpp: collide(), the contact (normal, depth, point) of two
  *   overlapping shapes.
+ * - Manifold.hpp: contactPoints(), the one or two points where they press
+ *   on each other, for a response that turns bodies.
  * - Raycast.hpp: raycast(), the first hit of a ray on a shape.
  * - Sweep.hpp: sweep(), the first contact of a moving shape with a still
  *   one (continuous collision: no tunneling through thin walls).
@@ -32,8 +35,8 @@
 #include "Collide.hpp"
 #include "Contact.hpp"
 #include "Hit.hpp"
+#include "Manifold.hpp"
 #include "Overlap.hpp"
 #include "Raycast.hpp"
-#include "Shapes/Circle.hpp"
-#include "Shapes/Rectangle.hpp"
+#include "Shapes.hpp"
 #include "Sweep.hpp"

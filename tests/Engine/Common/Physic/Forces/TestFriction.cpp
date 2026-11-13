@@ -106,7 +106,7 @@ void test_friction_force_for_step() {
         expect(near(integrated(V::zero(), V(60, 0), friction), V(0.3057, 0), 1e-9));
     };
 
-    "a sliding body gets kinetic friction against its velocity"_test = [=] {
+    "for a step, a sliding body gets kinetic friction against its velocity"_test = [=] {
         expect(near(forStep(V(0, 2), V::zero()), V(0, -29.43), 1e-9));
     };
 

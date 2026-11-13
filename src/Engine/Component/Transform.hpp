@@ -9,12 +9,16 @@
 
 namespace Engine::Component {
     /**
-     * @brief Position of an entity, in meters.
+     * @brief Where an entity is and how it is turned.
      *
-     * Only the position for now; rotation and scale come with the systems
-     * that need them.
+     * For a body, position is its center of mass: the point it turns
+     * around, where forces apply. Its Collider's shape turns with it.
      */
     struct Transform {
+        /** @brief Position, in m. */
         Math::Vector2f position;
+
+        /** @brief Rotation, in radians, counter-clockwise (from +X towards +Y). 0: as built. */
+        float rotation = 0.f;
     };
 }

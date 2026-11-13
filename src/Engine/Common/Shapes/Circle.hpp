@@ -2,13 +2,13 @@
 
 /**
  * @file
- * @brief Circle: the round collision shape.
+ * @brief Circle: the round shape.
  */
 
-#include "../../Math/Vector.hpp"
+#include "../Math/Vector.hpp"
 #include "Rectangle.hpp"
 
-namespace Engine::Collision {
+namespace Engine::Shapes {
     /** @brief Disc of the given center and radius, in world space and meters. */
     struct Circle {
         Vector2f center;

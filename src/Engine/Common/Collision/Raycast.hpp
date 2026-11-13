@@ -14,13 +14,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <optional>
 #include <utility>
 
-#include "Shapes/Circle.hpp"
 #include "Hit.hpp"
-#include "Shapes/Rectangle.hpp"
+#include "Shapes.hpp"
 
 namespace Engine::Collision {
     /**
@@ -135,5 +135,53 @@ namespace Engine::Collision {
         }
         const float speed = delta.length();
         return Hit{fraction, point, {-delta.x / speed, -delta.y / speed}};
+    }
+
+    /**
+     * @brief First hit of the ray from origin to origin + delta on a convex
+     *        polygon.
+     *
+     * Cyrus-Beck, the slab method of the rectangle generalized: the
+     * polygon is the region on the inner side of every edge line. The ray
+     * crosses each line once, entering that side (an edge facing it) or
+     * leaving it; it is in the polygon from the latest entry to the
+     * earliest exit. A vertex hit exactly (two entries equal) reports the
+     * edge closer to horizontal, like the rectangle.
+     */
+    [[nodiscard]] inline std::optional<Hit> raycast(
+        const Vector2f& origin, const Vector2f& delta, const Polygon& polygon) noexcept {
+        float enter = -std::numeric_limits<float>::infinity();
+        float exit = std::numeric_limits<float>::infinity();
+        Vector2f normal;
+        bool entersSomewhere = false;
+        for (std::size_t i = 0; i < polygon.count; ++i) {
+            const Vector2f edgeNormal = polygon.normal(i);
+            const float facing = edgeNormal.dot(delta);                          // < 0: moving in across this line
+            const float inside = edgeNormal.dot(polygon.vertex(i) - origin);     // >= 0: origin on the inner side
+            if (facing == 0.f) {
+                // Parallel to this edge: on its inner side for the whole motion, or never.
+                if (inside < 0.f) {
+                    return std::nullopt;
+                }
+                continue;
+            }
+            const float at = inside / facing;
+            if (facing < 0.f) {
+                const bool flatter = std::fabs(edgeNormal.y) > std::fabs(normal.y);
+                if (!entersSomewhere || at > enter || (at == enter && flatter)) {
+                    enter = at;
+                    normal = edgeNormal;
+                    entersSomewhere = true;
+                }
+            } else {
+                exit = std::min(exit, at);
+            }
+        }
+
+        // Never crosses into it, misses it, starts inside it (enter < 0), or does not reach it.
+        if (!entersSomewhere || enter > exit || enter < 0.f || enter > 1.f) {
+            return std::nullopt;
+        }
+        return Hit{enter, origin + delta * enter, normal};
     }
 }

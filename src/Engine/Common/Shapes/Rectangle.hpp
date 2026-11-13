@@ -2,14 +2,14 @@
 
 /**
  * @file
- * @brief Rectangle: the axis-aligned collision box.
+ * @brief Rectangle: the axis-aligned box.
  */
 
 #include <algorithm>
 
-#include "../../Math/Vector.hpp"
+#include "../Math/Vector.hpp"
 
-namespace Engine::Collision {
+namespace Engine::Shapes {
     using Math::Vector2f;
 
     /**

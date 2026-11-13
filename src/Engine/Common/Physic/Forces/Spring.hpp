@@ -58,6 +58,14 @@ namespace Engine::Physic {
      * Only the speed along the spring is damped, so a body swinging on a
      * rope keeps its sideways motion.
      *
+     * A spring of rest length 0 has no line to act along: it is a joint
+     * holding two points together (links of a chain joined end to end).
+     * Its force is -k * d - c * v with the whole offset d and relative
+     * velocity v: the joint is damped in every direction, and it still
+     * acts when the two points meet, where the direction of the spring is
+     * undefined. Damped along its line only, a joint would keep its
+     * sideways jitter and pump energy into a chain.
+     *
      * @param position Position of the body, in m.
      * @param anchor Position of the other end of the spring, in m.
      * @param relativeVelocity Velocity of the body minus that of the
@@ -66,7 +74,7 @@ namespace Engine::Physic {
      * @param stiffness Stiffness k, in N/m, >= 0.
      * @param damping Damping c, in N·s/m, >= 0.
      * @return The force in N, or the zero vector when the body is at most
-     *         Math::Epsilon from the anchor.
+     *         Math::Epsilon from the anchor (and the rest length is not 0).
      */
     template <std::floating_point T>
     [[nodiscard]] Math::Vector2<T> dampedSpringForce(
@@ -74,6 +82,9 @@ namespace Engine::Physic {
         const Math::Vector2<T>& relativeVelocity, std::type_identity_t<T> restLength,
         std::type_identity_t<T> stiffness, std::type_identity_t<T> damping) noexcept {
         const Math::Vector2<T> fromAnchor = position - anchor;
+        if (restLength <= T{0}) {
+            return fromAnchor * -stiffness - relativeVelocity * damping;  // a joint: every direction
+        }
         const T length = fromAnchor.length();
         if (length <= Math::Epsilon<T>) {
             return {};
