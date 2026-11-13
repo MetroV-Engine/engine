@@ -20,6 +20,7 @@ set(LOGGER_TEST_FILES
 	Logger/TestCapacity.cpp
 	Logger/TestOutput.cpp
 	Logger/TestConcurrency.cpp
+	Logger/TestWriteFailure.cpp
 )
 
 add_executable(tests_logger

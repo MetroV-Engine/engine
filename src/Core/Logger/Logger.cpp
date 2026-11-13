@@ -63,7 +63,11 @@ namespace Log {
         const std::string line = formatLine(section, level, message);
         std::ostream& out = level >= Level::Warning ? std::cerr : std::cout;
         std::lock_guard outputLock(s.outputMutex);
-        out << line;
+        try {
+            out << line;
+        } catch (...) {
+            // A line that cannot be written is dropped: a logger must never take the engine down.
+        }
     }
 
     bool Logger::isEnabled(Level level) {
