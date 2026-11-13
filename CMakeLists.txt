@@ -4,7 +4,9 @@ cmake_minimum_required(VERSION 3.24)
 # CI does not build yet. Its vcpkg dependencies are the "gui" manifest feature,
 # selected here because vcpkg reads VCPKG_MANIFEST_FEATURES at project().
 option(ENGINE_BUILD_GUI "Build the editor GUI" OFF)
-if(ENGINE_BUILD_GUI)
+# Visual demos (demos/): they need SDL3 too, from the same manifest feature.
+option(ENGINE_BUILD_DEMOS "Build the visual demos" OFF)
+if(ENGINE_BUILD_GUI OR ENGINE_BUILD_DEMOS)
   list(APPEND VCPKG_MANIFEST_FEATURES "gui")
 endif()
 
@@ -79,6 +81,7 @@ if(ENGINE_ENABLE_COVERAGE)
 endif()
 
 add_subdirectory(src/ECS)
+add_subdirectory(src/Engine)
 
 if(ENGINE_BUILD_GUI)
   add_subdirectory(src/Editor)
@@ -98,4 +101,8 @@ endif()
 
 if(ENGINE_BUILD_BENCHMARKS)
   add_subdirectory(benchmarks)
+endif()
+
+if(ENGINE_BUILD_DEMOS)
+  add_subdirectory(demos)
 endif()
