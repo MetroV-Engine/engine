@@ -47,26 +47,28 @@ namespace Log {
         if (!isEnabled(level)) {
             return;
         }
-        State& s = state();
-        {
-            std::lock_guard lock(s.mutex);
-            if (s.count == s.ring.size()) {
-                ++s.dropped;
-            } else {
-                ++s.count;
-            }
-            s.ring[s.head] = Entry{std::chrono::steady_clock::now() - s.start, level,
-                                   std::string(section.name), std::string(message)};
-            s.head = (s.head + 1) % s.ring.size();
-        }
-
-        const std::string line = formatLine(section, level, message);
-        std::ostream& out = level >= Level::Warning ? std::cerr : std::cout;
-        std::lock_guard outputLock(s.outputMutex);
+        // Nothing may escape: a message or line that cannot be built or written is dropped.
         try {
+            State& s = state();
+            // Built before any lock: if a copy fails, the buffer has not been touched.
+            Entry entry{std::chrono::steady_clock::now() - s.start, level,
+                        std::string(section.name), std::string(message)};
+            const std::string line = formatLine(section, level, message);
+            {
+                std::lock_guard lock(s.mutex);
+                s.ring[s.head] = std::move(entry);
+                s.head = (s.head + 1) % s.ring.size();
+                if (s.count == s.ring.size()) {
+                    ++s.dropped;
+                } else {
+                    ++s.count;
+                }
+            }
+
+            std::ostream& out = level >= Level::Warning ? std::cerr : std::cout;
+            std::lock_guard outputLock(s.outputMutex);
             out << line;
         } catch (...) {
-            // A line that cannot be written is dropped: a logger must never take the engine down.
         }
     }
 

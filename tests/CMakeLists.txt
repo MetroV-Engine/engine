@@ -21,6 +21,7 @@ set(LOGGER_TEST_FILES
 	Logger/TestOutput.cpp
 	Logger/TestConcurrency.cpp
 	Logger/TestWriteFailure.cpp
+	Logger/TestOutOfMemory.cpp
 )
 
 add_executable(tests_logger
