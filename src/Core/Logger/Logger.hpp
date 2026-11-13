@@ -43,3 +43,17 @@ namespace Log {
         static void clear();
     };
 }
+
+/**
+ * @brief Logs a message: `ENGINE_LOG(ECS, Log::Level::Info, "entity spawned");`
+ *
+ * The level is evaluated once. The message is evaluated only when its level
+ * passes the minimum level, so a filtered message is never built.
+ */
+#define ENGINE_LOG(section, level, message)                              \
+    do {                                                                 \
+        const ::Log::Level engineLogLevel_ = (level);                    \
+        if (::Log::Logger::isEnabled(engineLogLevel_)) {                 \
+            ::Log::Logger::send((section), engineLogLevel_, (message));  \
+        }                                                                \
+    } while (false)
