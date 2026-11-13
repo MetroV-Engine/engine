@@ -15,6 +15,7 @@ find_package(Threads REQUIRED)
 set(LOGGER_TEST_FILES
 	Logger/main.cpp
 	Logger/TestSend.cpp
+	Logger/TestFilter.cpp
 )
 
 add_executable(tests_logger

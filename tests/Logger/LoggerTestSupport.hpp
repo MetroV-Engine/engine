@@ -31,6 +31,7 @@ public:
 
 private:
     static void reset() {
+        Log::Logger::setMinLevel(Log::Level::Debug);
         Log::Logger::clear();
     }
 
