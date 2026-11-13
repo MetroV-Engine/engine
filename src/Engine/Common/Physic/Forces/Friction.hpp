@@ -26,6 +26,23 @@
 
 namespace Engine::Physic {
     /**
+     * @brief Friction coefficient of two materials in contact: the
+     *        geometric mean sqrt(muA * muB).
+     *
+     * Ice on anything stays slippery (0.03 with 0.8 gives 0.15, far from
+     * 0.8), two equal materials keep their coefficient, and a material of
+     * coefficient 0 makes the contact frictionless. Box2D and PhysX
+     * combine friction the same way by default.
+     *
+     * @param coefficientA Static or kinetic coefficient of the first material, >= 0.
+     * @param coefficientB The same coefficient of the second material, >= 0.
+     */
+    template <std::floating_point T>
+    [[nodiscard]] T combinedFriction(T coefficientA, std::type_identity_t<T> coefficientB) noexcept {
+        return std::sqrt(coefficientA * coefficientB);
+    }
+
+    /**
      * @brief Strength of Coulomb friction: mu * N.
      * @param frictionCoefficient Static or kinetic coefficient mu, >= 0.
      * @param normalForce Force pressing the body against the surface, in N, >= 0.

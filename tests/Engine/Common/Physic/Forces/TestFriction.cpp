@@ -125,7 +125,19 @@ void test_friction_force_for_step() {
 }
 }
 
+void test_combined_friction() {
+    "two materials combine as the geometric mean of their coefficients"_test = [] {
+        expect(near(Physic::combinedFriction(0.5, 0.5), 0.5, 1e-12));
+        expect(near(Physic::combinedFriction(0.2, 0.8), 0.4, 1e-12));
+        expect(near(Physic::combinedFriction(0.8, 0.2), 0.4, 1e-12));
+        expect(Physic::combinedFriction(0.0, 0.9) == 0.0);
+        // Ice stays slippery on rubber: closer to the ice than to the rubber.
+        expect(Physic::combinedFriction(0.03, 0.8) < (0.03 + 0.8) / 2.0);
+    };
+}
+
 void run_friction_tests() {
+    test_combined_friction();
     test_magnitude();
     test_kinetic_friction();
     test_static_friction();

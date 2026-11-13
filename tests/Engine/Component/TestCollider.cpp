@@ -42,13 +42,14 @@ bool sameContact(const std::optional<Collision::Contact>& actual, const std::opt
 }
 
 void test_defaults() {
-    "a default collider is a 1 m box on the Transform that does not bounce"_test = [] {
+    "a default collider is a 1 m box on the Transform that bounces a little"_test = [] {
         const Collider collider;
 
         expect(std::holds_alternative<Collider::Box>(collider.shape));
         expect(std::get<Collider::Box>(collider.shape).halfSize == V(0.5f, 0.5f));
         expect(collider.offset == V::zero());
-        expect(collider.restitution == 0.f);
+        expect(collider.response == Collider::Response::Bounce);
+        expect(collider.restitution > 0.f && collider.restitution < 1.f);
         expect(collider.staticFriction >= collider.kineticFriction);
     };
 

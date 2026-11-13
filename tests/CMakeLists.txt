@@ -60,6 +60,7 @@ set(ENGINE_TEST_FILES
 	Engine/System/Drag/TestDragSystem.cpp
 	Engine/System/Buoyancy/TestBuoyancySystem.cpp
 	Engine/System/Collision/TestCollisionSystem.cpp
+	Engine/System/Collision/TestCollisionResponseSystem.cpp
 	Engine/main.cpp
 )
 

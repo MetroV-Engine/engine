@@ -12,14 +12,13 @@ namespace Engine::Component {
      * @brief The surface a RigidBody touches this step: FrictionSystem slows
      *        the body along it.
      *
-     * Present only while the body touches the surface: whatever detects the
-     * contact adds it, and removes it when the body leaves (game code for
-     * now, the collision system later). One surface per body: the one it
-     * stands on.
+     * Present only while the body touches the surface. CollisionResponseSystem
+     * adds it to every dynamic body that touches a Collider, updates it each
+     * step and removes it when the body leaves; without that system, game
+     * code can add it itself. One surface per body: the one it stands on.
      *
      * Friction only: the surface's support, which keeps the body from going
-     * through it, is not applied here (it will come from the collision
-     * response).
+     * through it, comes from the collision response.
      */
     struct SurfaceContact {
         /**

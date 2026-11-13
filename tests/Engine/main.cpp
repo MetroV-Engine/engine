@@ -23,6 +23,7 @@ void run_radial_field_system_tests();
 void run_drag_system_tests();
 void run_buoyancy_system_tests();
 void run_collision_system_tests();
+void run_collision_response_system_tests();
 
 int main()
 {
@@ -51,4 +52,5 @@ int main()
     run_drag_system_tests();
     run_buoyancy_system_tests();
     run_collision_system_tests();
+    run_collision_response_system_tests();
 }

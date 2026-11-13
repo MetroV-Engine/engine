@@ -58,12 +58,40 @@ namespace Engine::Component {
         /** @brief Center of the shape relative to the Transform's position, in m. */
         Math::Vector2f offset;
 
+        /** @brief What an impact does along the contact normal (CollisionResponseSystem). */
+        enum class Response {
+            /**
+             * The default: the bodies bounce off each other with the
+             * restitution of their materials, and share the impulse by mass
+             * (a light crate flies off a heavy one, momentum is conserved).
+             */
+            Bounce,
+            /**
+             * Impacts involving this collider never bounce: the velocity
+             * along the contact normal stops, the velocity along the
+             * surface is kept (a character landing keeps running, one
+             * hitting a wall keeps falling). Against another body, both
+             * leave at the same speed along the normal, still shared by
+             * mass. Put it on the character: on the ground, it would stop
+             * everything landing there, bouncy balls included.
+             */
+            Stop,
+        };
+
+        /** @brief Bounce by default; Stop for a character that must never bounce. */
+        Response response = Response::Bounce;
+
         /**
-         * @brief Coefficient of restitution e, in [0, 1]: 0 stops dead on
-         *        impact, 1 bounces back at full speed. Two colliders bounce
-         *        with the larger of their two (Physic::combinedRestitution).
+         * @brief Coefficient of restitution e, in [0, 1]: the speed after
+         *        an impact over the speed before, along the normal. 0 stops
+         *        dead, 1 bounces back at full speed. Two colliders bounce
+         *        with the larger of their two (Physic::combinedRestitution),
+         *        and never when one of them is Response::Stop.
+         *
+         * The default 0.3 is a wooden crate on a floor. About 0.8 for a
+         * rubber ball, 0.05 for a sandbag.
          */
-        float restitution = 0.f;
+        float restitution = 0.3f;
 
         /**
          * @brief Static friction coefficient muStatic, >= 0 (SurfaceContact::staticFriction):
