@@ -47,6 +47,17 @@ namespace Log {
         state().minLevel.store(level, std::memory_order_relaxed);
     }
 
+    void Logger::setCapacity(std::size_t entries) {
+        // Allocated before the lock: an impossible size throws with the buffer untouched.
+        std::vector<Entry> fresh(entries == 0 ? 1 : entries);
+        State& s = state();
+        std::lock_guard lock(s.mutex);
+        s.ring.swap(fresh);
+        s.head = 0;
+        s.count = 0;
+        s.dropped = 0;
+    }
+
     std::size_t Logger::droppedCount() {
         State& s = state();
         std::lock_guard lock(s.mutex);
