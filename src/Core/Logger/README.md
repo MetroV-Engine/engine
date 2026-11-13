@@ -68,7 +68,9 @@ all of its messages. An empty name is allowed and prints as `[Info][] message`.
 ## Output and the buffer
 
 - **Output:** each message is printed as one whole line,
-  `[Level][Section] message`. Lines from different threads never mix.
+  `[Level][Section] message`. Lines from different threads never mix. Each line
+  is flushed at once, so the last lines before a crash are not lost when the
+  output goes to a pipe or a file (CI logs, IDE consoles).
 - **Minimum level:** messages below it are dropped: not built, not stored, not
   printed. The default is `Debug`, so everything is kept.
 - **Buffer:** every kept message is also stored in a ring buffer, 1024 entries

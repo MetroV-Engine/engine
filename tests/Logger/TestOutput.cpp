@@ -1,10 +1,23 @@
 #include <boost/ut.hpp>
 
+#include <iostream>
+#include <sstream>
 #include <string>
 
 #include "LoggerTestSupport.hpp"
 
 using namespace boost::ut;
+
+namespace {
+    // Counts flushes, so a test can see whether each line is pushed out at once.
+    struct FlushCountingBuffer : std::stringbuf {
+        int flushes = 0;
+        int sync() override {
+            ++flushes;
+            return std::stringbuf::sync();
+        }
+    };
+}
 
 void run_logger_output_tests() {
     "Info goes to stdout in the exact format"_test = [] {
@@ -56,5 +69,19 @@ void run_logger_output_tests() {
         const std::string big(100000, 'x');
         Log::Logger::send(Log::Section{"ECS"}, Log::Level::Info, big);
         expect(scope.stdoutText() == "[Info][ECS] " + big + "\n");
+    };
+
+    "each stdout line is flushed as soon as it is written"_test = [] {
+        ScopedLoggerTest scope;
+        FlushCountingBuffer counting;
+        std::streambuf* previous = std::cout.rdbuf(&counting);
+        Log::Logger::send(Log::Section{"ECS"}, Log::Level::Info, "one");
+        const int flushesAfterFirst = counting.flushes;
+        Log::Logger::send(Log::Section{"ECS"}, Log::Level::Info, "two");
+        std::cout.rdbuf(previous);
+
+        expect(flushesAfterFirst == 1_i);
+        expect(counting.flushes == 2_i);
+        expect(counting.str() == "[Info][ECS] one\n[Info][ECS] two\n");
     };
 }

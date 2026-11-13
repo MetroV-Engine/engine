@@ -71,7 +71,8 @@ namespace Log {
 
             std::ostream& out = level >= Level::Warning ? std::cerr : std::cout;
             std::lock_guard outputLock(s.outputMutex);
-            out << line;
+            // Flushed at once, so the last lines before a crash reach a pipe or file.
+            out << line << std::flush;
         } catch (...) {
         }
     }
