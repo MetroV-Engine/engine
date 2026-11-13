@@ -38,9 +38,12 @@ namespace Log {
             std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
         };
 
+        // Created on first use and never destroyed, on purpose: a global
+        // destructor may still log after main returns, after every other
+        // static is gone. Leak checkers see it as still reachable.
         State& state() {
-            static State instance;
-            return instance;
+            static State* const instance = new State;
+            return *instance;
         }
     }
 

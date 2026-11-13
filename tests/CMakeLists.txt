@@ -51,3 +51,19 @@ add_executable(tests_logger_switch
 target_link_libraries(tests_logger_switch PRIVATE engine_logger Boost::ut)
 target_compile_definitions(tests_logger_switch PRIVATE ENGINE_EXPECT_LOG_ENABLED=$<IF:$<CONFIG:Debug>,1,0>)
 add_test(NAME tests_logger_switch COMMAND tests_logger_switch)
+
+# Logs from a global destructor at exit. Needs Valgrind to see a use-after-free.
+add_executable(tests_logger_shutdown
+	LoggerShutdown/main.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../src/Core/Logger/Logger.cpp
+)
+target_include_directories(tests_logger_shutdown PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_compile_definitions(tests_logger_shutdown PRIVATE ENGINE_LOG_ENABLED)
+
+find_program(VALGRIND_EXECUTABLE valgrind)
+if(VALGRIND_EXECUTABLE)
+	add_test(NAME tests_logger_shutdown
+		COMMAND ${VALGRIND_EXECUTABLE} --error-exitcode=1 $<TARGET_FILE:tests_logger_shutdown>)
+else()
+	message(STATUS "Valgrind not found: tests_logger_shutdown is built but not run")
+endif()
