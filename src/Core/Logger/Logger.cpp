@@ -5,9 +5,14 @@
 
 namespace Log {
     namespace {
+        constexpr std::size_t kDefaultCapacity = 1024;
+
         struct State {
             std::mutex mutex;
-            std::vector<Entry> entries;
+            std::vector<Entry> ring = std::vector<Entry>(kDefaultCapacity);
+            std::size_t head = 0;     // next slot to write
+            std::size_t count = 0;    // stored entries, at most ring.size()
+            std::size_t dropped = 0;  // entries overwritten since the last clear
             std::atomic<Level> minLevel{Level::Debug};
             std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
         };
@@ -24,8 +29,14 @@ namespace Log {
         }
         State& s = state();
         std::lock_guard lock(s.mutex);
-        s.entries.push_back(Entry{std::chrono::steady_clock::now() - s.start, level,
-                                  std::string(section.name), std::string(message)});
+        if (s.count == s.ring.size()) {
+            ++s.dropped;
+        } else {
+            ++s.count;
+        }
+        s.ring[s.head] = Entry{std::chrono::steady_clock::now() - s.start, level,
+                               std::string(section.name), std::string(message)};
+        s.head = (s.head + 1) % s.ring.size();
     }
 
     bool Logger::isEnabled(Level level) {
@@ -36,15 +47,29 @@ namespace Log {
         state().minLevel.store(level, std::memory_order_relaxed);
     }
 
+    std::size_t Logger::droppedCount() {
+        State& s = state();
+        std::lock_guard lock(s.mutex);
+        return s.dropped;
+    }
+
     std::vector<Entry> Logger::snapshot() {
         State& s = state();
         std::lock_guard lock(s.mutex);
-        return s.entries;
+        std::vector<Entry> entries;
+        entries.reserve(s.count);
+        const std::size_t oldest = (s.head + s.ring.size() - s.count) % s.ring.size();
+        for (std::size_t i = 0; i < s.count; ++i) {
+            entries.push_back(s.ring[(oldest + i) % s.ring.size()]);
+        }
+        return entries;
     }
 
     void Logger::clear() {
         State& s = state();
         std::lock_guard lock(s.mutex);
-        s.entries.clear();
+        s.head = 0;
+        s.count = 0;
+        s.dropped = 0;
     }
 }

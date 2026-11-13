@@ -16,6 +16,7 @@ set(LOGGER_TEST_FILES
 	Logger/main.cpp
 	Logger/TestSend.cpp
 	Logger/TestFilter.cpp
+	Logger/TestRingBuffer.cpp
 )
 
 add_executable(tests_logger
