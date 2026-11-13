@@ -19,6 +19,7 @@ set(LOGGER_TEST_FILES
 	Logger/TestRingBuffer.cpp
 	Logger/TestCapacity.cpp
 	Logger/TestOutput.cpp
+	Logger/TestConcurrency.cpp
 )
 
 add_executable(tests_logger

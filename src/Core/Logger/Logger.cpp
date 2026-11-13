@@ -27,7 +27,8 @@ namespace Log {
         }
 
         struct State {
-            std::mutex mutex;
+            std::mutex mutex;        // guards the buffer
+            std::mutex outputMutex;  // keeps each printed line whole
             std::vector<Entry> ring = std::vector<Entry>(kDefaultCapacity);
             std::size_t head = 0;     // next slot to write
             std::size_t count = 0;    // stored entries, at most ring.size()
@@ -59,8 +60,10 @@ namespace Log {
             s.head = (s.head + 1) % s.ring.size();
         }
 
+        const std::string line = formatLine(section, level, message);
         std::ostream& out = level >= Level::Warning ? std::cerr : std::cout;
-        out << formatLine(section, level, message);
+        std::lock_guard outputLock(s.outputMutex);
+        out << line;
     }
 
     bool Logger::isEnabled(Level level) {
