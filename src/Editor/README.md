@@ -53,8 +53,8 @@ automatically.
 | --- | --- |
 | `src/core/` | `Editor` (assembles everything), `GuiContext` (SDL3 + ImGui, frame loop), `PanelManager`, `EventManager`, `FrameTimer`, `Logger` (central log, thread-safe), `CommandRegistry` (console commands) |
 | `src/ui/` | Reusable widgets (buttons, inputs, performance overlay...), dialogs and notifications, themes |
-| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Settings, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportObjectMover` selects and moves objects with the mouse |
-| `src/scene/` | What the editor edits and runs: `HierarchyModel` and `PropertyModel` (what the Hierarchy and Inspector display), `Selection`, `SceneBackend`, `EntityTemplate` (an entry of the Entity Palette), `ViewportView` (Viewport pixels to world positions), `Simulation` and `PlayController` (Play / Pause / Stop / Step). `DemoScene` / `DemoBackend`: the built-in demo |
+| `src/panels/` | Hierarchy, Entity Palette, Inspector, Viewport, Game Controls, Console, Settings, Keyboard Shortcuts... `EntityDropTarget` creates the entities dropped on a panel, `ViewportTransformTool` selects, moves and scales objects with the mouse |
+| `src/scene/` | What the editor edits and runs: `HierarchyModel` and `PropertyModel` (what the Hierarchy and Inspector display), `Selection`, `SceneBackend`, `EntityTemplate` (an entry of the Entity Palette), `ViewportView` (Viewport pixels to world positions), `ViewportGrid` (snapping of the mouse edits), `Simulation` and `PlayController` (Play / Pause / Stop / Step). `DemoScene` / `DemoBackend`: the built-in demo |
 | `src/ecs/` | The editor on an ECS world: `EcsScene` (entities and reflected components), `EcsSimulation` (systems, world restored on Stop), `EcsBackend` |
 | `src/navigation/` | Actions, menu bar, toolbar, command palette, shortcuts |
 | `src/layout/` | Dockspace layout, status bar, saved workspace |
@@ -118,10 +118,11 @@ What the editor then does with the world:
   warning and the entity is created without it. A layout saved before this
   panel existed shows it floating until View > Reset Layout.
 - **Viewport**: a template dropped there lands under the mouse. Clicking near
-  an object selects it and dragging moves it (see
-  [Placing objects with the mouse](#placing-objects-with-the-mouse)).
+  an object selects it and dragging moves it; the handles of the selected
+  object scale it (see
+  [Editing objects with the mouse](#editing-objects-with-the-mouse)).
 - **During Play**: the palette is disabled, a drag in progress is cancelled
-  and objects cannot be moved with the mouse.
+  and objects cannot be moved or scaled with the mouse.
 - **Play / Stop**: Play runs `SystemManager::update(world, dt)` every frame.
   Stop restores the world as it was on Play: entities spawned during play are
   killed, the others get their saved components back (added ones are removed,
@@ -138,7 +139,7 @@ Limits:
 - Reflection gives no ranges, formats or enum names, so fields are edited
   with generic widgets.
 
-### Placing objects with the mouse
+### Editing objects with the mouse
 
 The renderer given to `setViewportRenderer` returns how it mapped the world to
 the screen, as a `ViewportView`: the screen position of the world's (0, 0) and
@@ -152,9 +153,20 @@ editor.setViewportRenderer([&world](ImDrawList *drawList, ImVec2 min, ImVec2 max
 });
 ```
 
-The mouse reads and writes the `position` field of the `Transform` component,
-so a game needs a reflected component with these names, the field being a
-struct `{float x, y;}`. A click grabs the nearest such object within 24 pixels.
+The mouse reads and writes two fields of the `Transform` component: `position`
+to place and move objects, `scale` to resize them. A game needs a reflected
+component with these names, both fields being a struct `{float x, y;}`; an
+object without a `scale` can be moved but not resized. A click grabs the
+nearest object within 24 pixels.
+
+The selected object shows three scale handles: one stretches it horizontally,
+one vertically, the corner one on both axes, keeping their ratio. The renderer
+decides what the scale looks like: the demo multiplies its boxes by it,
+`EcsExample.cpp` its circles.
+
+Settings > Viewport turns snapping on: positions, dropped templates included,
+snap to a grid of world units (16 by default) drawn under the game, and scales
+to tenths. Both settings are saved with the workspace.
 
 Without a view (`ViewportView{}`, or no renderer as in `./build/gui`) the mouse
 cannot select or move anything in the Viewport. A template dropped there, or
@@ -181,7 +193,7 @@ ctest --test-dir build --output-on-failure
 | `ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
 | `ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
 | `ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged |
-| `ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved; nothing is created or moved during Play, even when Play is pressed during the drag or at the drop |
+| `ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved, and scaled with the handles of the selected one; with snapping on, moves, drops and scales land on the grid, and the settings are saved; nothing is created, moved or scaled during Play, even when Play is pressed during the drag or at the drop |
 | `scene/TestDemoSceneRenderer.cpp` | The demo's Viewport: an object moved with the mouse stays drawn under it; an object moved far away is brought back into view |
 
 On macOS SDL's `offscreen` driver cannot start, so the tests opening the real

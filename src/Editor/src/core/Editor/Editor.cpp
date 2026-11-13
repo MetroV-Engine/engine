@@ -121,7 +121,7 @@ void Editor::registerPanels()
     _layout.setDefaultArea("Entity Palette", Area::LeftBottom);
 
     _viewport = &_panels.registerPanel<ViewportPanel>(
-        _performanceOverlay, _play, _entityDropTarget, _scene->hierarchy(), _scene->properties(), _selection);
+        _performanceOverlay, _play, _entityDropTarget, _scene->hierarchy(), _scene->properties(), _selection, _grid);
     _viewport->setRenderer(_scene->renderer(_selection));
     _layout.setDefaultArea("Viewport", Area::Center);
 
@@ -129,7 +129,7 @@ void Editor::registerPanels()
         return _play.isStopped() ? std::string() : std::string("Play mode: changes are lost when the game stops.");
     });
     _layout.setDefaultArea("Inspector", Area::Right);
-    _panels.registerPanel<SettingsPanel>(_gui, _performanceOverlay);
+    _panels.registerPanel<SettingsPanel>(_gui, _performanceOverlay, _grid);
     _layout.setDefaultArea("Settings", Area::Right);
 
     _panels.registerPanel<PlayControlsPanel>(_actions, _play).setOnResetPosition([this] {
@@ -549,6 +549,8 @@ void Editor::collectWorkspace(Workspace::Values &values) const
     Workspace::setBool(values, "editor.vsync", _gui.isVSync());
     Workspace::setBool(values, "editor.statusBar", _statusBar.isVisible());
     Workspace::setBool(values, "editor.performanceOverlay", _performanceOverlay.isVisible());
+    Workspace::setBool(values, "viewport.snap", _grid.snap);
+    Workspace::setInt(values, "viewport.gridSize", _grid.size);
 
     for (const auto &panel : _panels.getPanels())
         Workspace::setBool(values, "panel." + panel->getName(), panel->isVisible());
@@ -581,6 +583,9 @@ void Editor::applyWorkspace(const Workspace::Values &values)
     _gui.setVSync(Workspace::getBool(values, "editor.vsync", _gui.isVSync()));
     _statusBar.setVisible(Workspace::getBool(values, "editor.statusBar", true));
     _performanceOverlay.setVisible(Workspace::getBool(values, "editor.performanceOverlay", true));
+    _grid.snap = Workspace::getBool(values, "viewport.snap", false);
+    _grid.size = std::clamp(Workspace::getInt(values, "viewport.gridSize", ViewportGrid::DefaultSize), ViewportGrid::MinSize,
+        ViewportGrid::MaxSize);
 
     // Panels added since the save keep their default visibility.
     for (const auto &panel : _panels.getPanels()) {
