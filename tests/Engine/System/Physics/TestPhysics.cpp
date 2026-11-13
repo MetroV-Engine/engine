@@ -4,7 +4,7 @@
 #include <cmath>
 
 #include "ECS/ECS.hpp"
-#include "Engine/System/Physics.hpp"
+#include "Engine/System/Physics/Physics.hpp"
 #include "../../Support/Approx.hpp"
 
 using namespace boost::ut;

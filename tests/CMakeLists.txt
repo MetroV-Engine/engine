@@ -51,23 +51,23 @@ set(ENGINE_TEST_FILES
 	Engine/Common/Shapes/TestRectangle.cpp
 	Engine/Common/Shapes/TestCircle.cpp
 	Engine/Common/Shapes/TestPolygon.cpp
-	Engine/Common/Collision/TestOverlap.cpp
-	Engine/Common/Collision/TestCollide.cpp
-	Engine/Common/Collision/TestRaycast.cpp
-	Engine/Common/Collision/TestSweep.cpp
-	Engine/Common/Collision/TestPolygonQueries.cpp
-	Engine/Common/Collision/TestManifold.cpp
-	Engine/Component/TestCollider.cpp
-	Engine/System/Gravity/TestGravitySystem.cpp
-	Engine/System/Friction/TestFrictionSystem.cpp
-	Engine/System/Spring/TestSpringSystem.cpp
-	Engine/System/Integration/TestIntegrationSystem.cpp
-	Engine/System/Radial/TestRadialFieldSystem.cpp
-	Engine/System/Drag/TestDragSystem.cpp
-	Engine/System/Buoyancy/TestBuoyancySystem.cpp
-	Engine/System/Collision/TestCollisionSystem.cpp
-	Engine/System/Collision/TestCollisionResponseSystem.cpp
-	Engine/System/Character/TestCharacterControllerSystem.cpp
+	Engine/Common/Physic/Collision/TestOverlap.cpp
+	Engine/Common/Physic/Collision/TestCollide.cpp
+	Engine/Common/Physic/Collision/TestRaycast.cpp
+	Engine/Common/Physic/Collision/TestSweep.cpp
+	Engine/Common/Physic/Collision/TestPolygonQueries.cpp
+	Engine/Common/Physic/Collision/TestManifold.cpp
+	Engine/Component/Physics/TestCollider.cpp
+	Engine/System/Physics/Gravity/TestGravitySystem.cpp
+	Engine/System/Physics/Friction/TestFrictionSystem.cpp
+	Engine/System/Physics/Spring/TestSpringSystem.cpp
+	Engine/System/Physics/Integration/TestIntegrationSystem.cpp
+	Engine/System/Physics/Radial/TestRadialFieldSystem.cpp
+	Engine/System/Physics/Drag/TestDragSystem.cpp
+	Engine/System/Physics/Buoyancy/TestBuoyancySystem.cpp
+	Engine/System/Physics/Collision/TestCollisionSystem.cpp
+	Engine/System/Physics/Collision/TestCollisionResponseSystem.cpp
+	Engine/System/Physics/Character/TestCharacterControllerSystem.cpp
 	Engine/System/Physics/TestPhysics.cpp
 	Engine/main.cpp
 )
