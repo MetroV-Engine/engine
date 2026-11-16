@@ -1,5 +1,7 @@
+# Logger.cpp holds the logger, LoggerDisabled.cpp the empty version. Debug
+# builds get the first, every other build the second.
 add_library(engine_logger STATIC
-	Logger.cpp
+	$<IF:$<CONFIG:Debug>,Logger.cpp,LoggerDisabled.cpp>
 )
 
 target_include_directories(engine_logger

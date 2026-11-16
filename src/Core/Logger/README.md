@@ -267,8 +267,11 @@ Release (logging off):
   code. The arguments are never evaluated.
 - `do { ... } while (false)` makes the macro behave like one statement, so it
   is safe after an `if` without braces.
-- In Release, `Logger.cpp` also compiles to empty functions: there is no
-  buffer, no lock and no output in the program at all.
+- The library itself has two source files. Debug builds compile
+  `Logger.cpp`, the real logger. Every other build compiles
+  `LoggerDisabled.cpp` instead, where every function is empty: there is no
+  buffer, no lock and no output in the program at all. Each file stops the
+  build with an `#error` if it is compiled in the wrong mode.
 
 ## Testing the logger
 
@@ -283,8 +286,9 @@ behaves differently with logging on and off:
 | `tests_logger_shutdown` | always on | Logging from a global destructor after `main`, checked by Valgrind |
 | `tests_logger_type_check_valid` / `_invalid` | always off | A correct call builds; a call with an `int` message fails to build, as in Debug |
 
-`tests_logger` and `tests_logger_disabled` compile `Logger.cpp` themselves, so
-they test the same thing in every build type.
+`tests_logger` and `tests_logger_shutdown` compile `Logger.cpp` themselves,
+and `tests_logger_disabled` compiles `LoggerDisabled.cpp`, so they test the
+same thing in every build type.
 
 ### Run the tests
 
