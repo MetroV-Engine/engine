@@ -21,9 +21,9 @@ def require_tool(tool: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build MetroV Engine")
     parser.add_argument(
-        "--compile-tests",
-        action="store_true",
-        help=argparse.SUPPRESS,
+        "--preset",
+        default="all",
+        help="CMake preset (see CMakePresets.json): all (default: executables and editor), tests (adds the unit tests), runtime",
     )
     args = parser.parse_args()
 
@@ -40,21 +40,8 @@ def main() -> None:
         "vcpkg",
     ])
 
-    build_dir = ROOT / "build"
-
-    run([
-        "cmake",
-        "-S",
-        ".",
-        "-B",
-        str(build_dir),
-        "-G",
-        "Ninja",
-        "-DCMAKE_BUILD_TYPE=Debug",
-        f"-DENGINE_BUILD_TESTS={'ON' if args.compile_tests else 'OFF'}",
-        "-DENGINE_ENABLE_COVERAGE=OFF",
-    ])
-    run(["cmake", "--build", str(build_dir), "--parallel"])
+    run(["cmake", "--preset", args.preset])
+    run(["cmake", "--build", "--preset", args.preset, "--parallel"])
 
 
 if __name__ == "__main__":
