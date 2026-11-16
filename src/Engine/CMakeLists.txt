@@ -1,20 +1,27 @@
-# Engine common code (src/Engine/Common): math and physics formulas.
-# Header-only for now, so an INTERFACE target that only carries the include
-# path: link it and include "Engine/Common/Math/Math.hpp" or
+# Engine module (src/Engine). Header-only for now, so INTERFACE targets that
+# only carry the include path and the dependencies.
+
+# engine_common (src/Engine/Common): math and physics formulas, shapes.
+# Link it and include "Engine/Common/Math/Math.hpp" or
 # "Engine/Common/Physic/Physic.hpp".
 add_library(engine_common INTERFACE)
+target_include_directories(engine_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-target_include_directories(engine_common
-	INTERFACE
-	${CMAKE_CURRENT_SOURCE_DIR}/..
-)
-
-# Engine components (src/Engine/Component) and ECS systems (src/Engine/System),
-# built on the common formulas and the ECS. Header-only as well.
+# engine_systems: components (src/Engine/Component) and ECS systems
+# (src/Engine/System), built on the common formulas and the ECS.
 add_library(engine_systems INTERFACE)
+target_link_libraries(engine_systems INTERFACE engine_common engine_ecs)
 
-target_link_libraries(engine_systems
-	INTERFACE
-	engine_common
-	engine_ecs
-)
+# engine_core: the runtime library of a game. The main loop, the scenes and
+# the systems bridging the ECS and the other modules. No editor, no ImGui.
+#
+# Not built yet. To enable it:
+#   1. uncomment the block below and add its first .cpp (Engine.cpp);
+#   2. link it from apps/runtime and from src/Editor instead of engine_ecs.
+# Later, it becomes SHARED (plugins / hot-reload), see COMPILATION.md.
+
+# file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+# add_library(engine_core STATIC ${ENGINE_SOURCES})
+# target_include_directories(engine_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# target_link_libraries(engine_core PUBLIC engine_systems)
+# target_link_libraries(engine_core PRIVATE engine_render) # once Rendering is enabled

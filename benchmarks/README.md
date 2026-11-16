@@ -15,11 +15,12 @@ cmake -S . -B cmake-build-bench -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DENGINE_BUILD_BENCHMARKS=ON \
     -DENGINE_BUILD_TESTS=OFF \
-    -DENGINE_BUILD_APP=OFF
+    -DENGINE_BUILD_APP=OFF \
+    -DENGINE_BUILD_GUI=OFF
 cmake --build cmake-build-bench --parallel
 ```
 
-Every benchmark executable ends up in `cmake-build-bench/benchmarks/`.
+Every benchmark executable ends up at the root of `cmake-build-bench/`.
 
 ## Available benchmarks
 
@@ -32,7 +33,7 @@ Every benchmark executable ends up in `cmake-build-bench/benchmarks/`.
 ### bench_zipper_driver
 
 ```sh
-./cmake-build-bench/benchmarks/bench_zipper_driver [repetitions]
+./cmake-build-bench/bench_zipper_driver [repetitions]
 ```
 
 `repetitions` defaults to 200. Raise it (for example to 1000) when results are
@@ -42,13 +43,13 @@ for each scenario.
 To keep a result so you can compare it later:
 
 ```sh
-./cmake-build-bench/benchmarks/bench_zipper_driver > zipper_driver_before.txt
+./cmake-build-bench/bench_zipper_driver > zipper_driver_before.txt
 ```
 
 ### bench_has_components
 
 ```sh
-./cmake-build-bench/benchmarks/bench_has_components [repetitions]
+./cmake-build-bench/bench_has_components [repetitions]
 ```
 
 `repetitions` defaults to 200. Scenarios 5 to 7 register 1,000 extra
@@ -58,7 +59,7 @@ of membership bits is much wider.
 ### bench_collision_recentering
 
 ```sh
-taskset -c 2 ./cmake-build-bench/benchmarks/bench_collision_recentering [repetitions] [all|precision|cost]
+taskset -c 2 ./cmake-build-bench/bench_collision_recentering [repetitions] [all|precision|cost]
 ```
 
 Compares three versions of `sweep(circle, rectangle)`: the former code, the
