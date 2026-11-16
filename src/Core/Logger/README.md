@@ -13,8 +13,9 @@ Each function is documented in [Logger.hpp](Logger.hpp), as docstrings.
 4. [Output and the buffer](#output-and-the-buffer)
 5. [Release builds](#release-builds)
 6. [Errors](#errors)
-7. [Testing the logger](#testing-the-logger)
-8. [Known limits](#known-limits)
+7. [How it works](#how-it-works)
+8. [Testing the logger](#testing-the-logger)
+9. [Known limits](#known-limits)
 
 ## Quick start
 
@@ -137,6 +138,137 @@ impossible, and the buffer is then left as it was.
 
 You can log from anywhere, including a global object's destructor that runs
 after `main` returns: the logger stays alive until the program ends.
+
+## How it works
+
+You do not need this section to use the logger. Read it before you change
+`Logger.cpp`, or when you want to know why it behaves the way it does.
+
+### What one `ENGINE_LOG` call does
+
+```
+ENGINE_LOG(ECS, Log::Level::Info, "player spawned")
+   │
+   1. Is Info at or above the minimum level?  ── no ──► stop: the message is never built
+   │ yes
+   2. Build the entry and the line, with no lock held:
+   │     Entry { timestamp, Info, "ECS", "player spawned" }
+   │     "[Info][ECS] player spawned\n"
+   │
+   3. Lock the buffer, move the entry into the next slot, unlock
+   │
+   4. Lock the output, write the line to stdout or stderr, flush, unlock
+```
+
+1. **Level check.** The macro reads the minimum level first. It is a
+   `std::atomic`, so this check takes no lock and costs almost nothing.
+   If the level is filtered out, the message argument is never evaluated:
+   `"x = " + std::to_string(x)` is not even computed.
+2. **Build first.** The entry (with its own copies of the section name and
+   the message) and the printed line are built before any lock is taken.
+   Building is the slow part, so the locks are held only for a moment. And if
+   building fails, for example out of memory, nothing has been touched yet.
+3. **Store.** Under the buffer lock, the entry is *moved* (not copied) into the
+   ring buffer, and the counters are updated.
+4. **Print.** Under a second lock, the whole line is written in one call, then
+   flushed. Warning and Error go to stderr, the others to stdout.
+
+### The ring buffer
+
+The buffer is a fixed array of slots (1024 by default) used in a circle:
+
+```
+capacity 4, after 6 messages:
+
+  slot:     [0]   [1]   [2]   [3]
+  holds:    m5    m6    m3    m4        head ──► slot 2 (next write)
+                                      count = 4, dropped = 2 (m1, m2)
+```
+
+- `head` is the slot the next message goes into. After each message it moves
+  one slot forward and wraps back to 0 at the end.
+- While the buffer is not full, `count` goes up. Once it is full, each new
+  message overwrites the oldest one, and `dropped` goes up instead.
+- `snapshot()` starts at the oldest entry and walks forward, so it always
+  returns messages oldest first (`m3 m4 m5 m6` above). It returns a copy:
+  the console can keep and draw it while other threads keep logging.
+- The memory is allocated once. Logging never grows the buffer, so a flood
+  of messages cannot use up memory, it only overwrites old ones.
+
+### Threads
+
+Any thread can log at any time. Two locks keep this safe:
+
+| Lock | Protects | Why |
+| --- | --- | --- |
+| buffer lock | the slots, `head`, `count`, `dropped` | Two threads never write the same slot, and a snapshot never sees a half-written entry. |
+| output lock | stdout and stderr | Each line is printed in one piece, so lines from two threads never mix. |
+
+They are separate on purpose: a slow terminal holds only the output lock, so
+reading the buffer (`snapshot()`) never waits for printing.
+
+Because storing and printing are two steps, two threads can store in one order
+and print in the other. The buffer holds the true order.
+
+### Why logging never throws
+
+A log call must never crash the engine. `send` wraps its whole body in
+`try { ... } catch (...) {}`:
+
+- If building the entry fails, step 2 throws before the buffer is touched.
+  The message is lost, and the buffer is exactly as before.
+- If printing fails, the entry is already stored. Only the printed line is
+  lost.
+- The counters change only after the entry is in its slot, so they never
+  count a message that was not stored.
+
+### Why the logger is never destroyed
+
+The logger's state (buffer, locks, minimum level) is created the first time
+anything logs, with `new`, and never deleted:
+
+```cpp
+static State* const instance = new State;  // never deleted, on purpose
+```
+
+When a C++ program exits, global objects are destroyed in an order you do not
+control. If the logger were a normal global, it could be destroyed first, and
+a later destructor that logs would write into freed memory. Never deleting it
+avoids that. The operating system frees the memory when the program ends.
+Valgrind lists it as "still reachable", which is expected and not a leak.
+
+### How Release removes logging
+
+CMake defines `ENGINE_LOG_ENABLED` only in Debug builds, for every target that
+links `engine_logger`. `Logger.hpp` then picks one of two versions of the
+macro.
+
+Debug (logging on):
+
+```cpp
+#define ENGINE_LOG(section, level, message) do {               \
+    const ::Log::Level engineLogLevel_ = (level);              \
+    if (::Log::Logger::isEnabled(engineLogLevel_)) {           \
+        ::Log::Logger::send((section), engineLogLevel_, (message)); \
+    } } while (false)
+```
+
+Release (logging off):
+
+```cpp
+#define ENGINE_LOG(section, level, message) do {               \
+    static_cast<void>(sizeof((::Log::Logger::send((section), (level), (message)), 0))); \
+    } while (false)
+```
+
+- `sizeof` asks the compiler for the size of an expression *without running
+  it*. So in Release the compiler still checks that the call to `send` is
+  valid (a wrong argument type is an error, as in Debug), but generates no
+  code. The arguments are never evaluated.
+- `do { ... } while (false)` makes the macro behave like one statement, so it
+  is safe after an `if` without braces.
+- In Release, `Logger.cpp` also compiles to empty functions: there is no
+  buffer, no lock and no output in the program at all.
 
 ## Testing the logger
 
