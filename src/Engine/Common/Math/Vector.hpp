@@ -296,10 +296,24 @@ namespace Engine::Math {
          * @brief Whether each coordinate differs from the matching one of
          *        other by at most epsilon.
          */
-        [[nodiscard]] bool approxEqual(const Vector2& other, T epsilon = Epsilon<T>) const noexcept
+        [[nodiscard]] bool approxEqual(const Vector2& other, T epsilon) const noexcept
             requires std::floating_point<T>
         {
             return std::abs(x - other.x) <= epsilon && std::abs(y - other.y) <= epsilon;
+        }
+
+        /**
+         * @brief approxEqual within Epsilon.
+         *
+         * An overload, not a default argument: MSVC instantiates a default
+         * argument along with the class, so Epsilon<int> (floating-point
+         * only) would break Vector2i. A function body is only instantiated
+         * when called.
+         */
+        [[nodiscard]] bool approxEqual(const Vector2& other) const noexcept
+            requires std::floating_point<T>
+        {
+            return approxEqual(other, Epsilon<T>);
         }
 
         /** @brief Writes the vector as "(x, y)". */
