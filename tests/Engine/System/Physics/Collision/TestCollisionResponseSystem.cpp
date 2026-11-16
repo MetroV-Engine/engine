@@ -285,7 +285,8 @@ void test_static_friction_at_impact() {
 
         systems.update(world, Step);
 
-        expect(velocityOf(world, crate).x == 0.f);
+        // Not == 0: with fused multiply-adds (macOS ARM64) it is a rounding residue, ~1e-16.
+        expect(near(velocityOf(world, crate).x, 0.f, 1e-6f));
         expect(near(positionOf(world, crate).x, 0.f, 1e-6f));
         expect(near(velocityOf(world, pebble).x, 0.f, 1e-5f)) << "stopped as against a wall";
     };

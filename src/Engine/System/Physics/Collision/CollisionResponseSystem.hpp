@@ -297,6 +297,21 @@ namespace Engine::System {
             }
 
             /**
+             * @brief Below this det(K) / (K00 K11), the two points are solved
+             *        as one (Box2D's maximum condition number, 1000).
+             *
+             * Their rows are then nearly the same, as for a body that does not
+             * turn: K = [[1/m, 1/m], [1/m, 1/m]], whose determinant is 0. In
+             * float it is rounding noise, and how much depends on the compiler:
+             * 0 exactly here, about 1e-12 where a*b - c*d is fused into one
+             * fma (Clang on ARM64, macOS). Dividing by that noise gives
+             * impulses of any size: the character bounced off the ground.
+             * A relative threshold far above float precision (~1e-7) keeps the
+             * result the same on every platform.
+             */
+            static constexpr float MaxConditionInverse = 1e-3f;
+
+            /**
              * @brief The impulses (>= 0) at one or two points such that each
              *        point gets at least `wanted` along the normal, and exactly
              *        that where it is pushed: a linear complementarity problem,
@@ -312,7 +327,7 @@ namespace Engine::System {
                 }
                 // Both pushing: K lambda = wanted.
                 const float determinant = k[0][0] * k[1][1] - k[0][1] * k[1][0];
-                if (std::fabs(determinant) > 1e-9f * (k[0][0] * k[1][1] + 1e-12f)) {
+                if (determinant > MaxConditionInverse * k[0][0] * k[1][1]) {
                     const float first = (wanted[0] * k[1][1] - wanted[1] * k[0][1]) / determinant;
                     const float second = (k[0][0] * wanted[1] - k[1][0] * wanted[0]) / determinant;
                     if (first >= 0.f && second >= 0.f) {
