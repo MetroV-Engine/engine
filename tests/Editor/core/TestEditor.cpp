@@ -14,6 +14,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace boost::ut;
 using namespace EditorTest;
@@ -90,6 +91,27 @@ public:
 
 void run_editor_tests()
 {
+    "gui and editor: the SDL renderer is exposed and playState follows Play, Pause and Stop"_test = [] {
+        forgetSavedState();
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        Gui gui;
+        Editor editor(gui, world, systems);
+        expect(gui.getSdlRenderer() != nullptr);
+
+        std::vector<PlayState> seen;
+        const auto record = [&] { seen.push_back(editor.playState()); };
+        Script script;
+        script.wait(6).then(record).keys(ImGuiKey_GraveAccent, 4);
+        script.enter("play").wait(2).then(record);
+        script.enter("pause").wait(2).then(record);
+        script.enter("stop").wait(2).then(record);
+        script.enter("quit").keys(ImGuiKey_Enter, 4);
+        runEditor(gui, editor, script, false);
+
+        expect(seen == std::vector<PlayState>{PlayState::Stopped, PlayState::Playing, PlayState::Paused, PlayState::Stopped});
+    };
+
     "every console command of the editor, typed in the console"_test = [] {
         forgetSavedState();
         ECS::Registry world;

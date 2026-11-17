@@ -60,11 +60,27 @@ namespace gfx {
         // bgfx clamps UVs; the SDL default would tile coordinates outside 0..1.
         SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_CLAMP, SDL_TEXTURE_ADDRESS_CLAMP);
 
-        return std::unique_ptr<SdlRenderer>(new SdlRenderer(renderer, width, height));
+        return std::unique_ptr<SdlRenderer>(new SdlRenderer(renderer, width, height, true));
     }
 
-    SdlRenderer::SdlRenderer(SDL_Renderer* renderer, const uint32_t width, const uint32_t height)
+    std::unique_ptr<SdlRenderer> SdlRenderer::createOffscreen(SDL_Renderer* borrowed, const uint32_t width, const uint32_t height)
+    {
+        if (borrowed == nullptr) {
+            std::cerr << "[SdlRenderer] ERROR: null renderer to draw offscreen with\n";
+            return nullptr;
+        }
+
+        std::unique_ptr<SdlRenderer> renderer(new SdlRenderer(borrowed, width, height, false));
+        if (!renderer->createTarget(width, height)) {
+            return nullptr;
+        }
+
+        return renderer;
+    }
+
+    SdlRenderer::SdlRenderer(SDL_Renderer* renderer, const uint32_t width, const uint32_t height, const bool owned)
         : m_renderer(renderer)
+        , m_ownsRenderer(owned)
         , m_width(width)
         , m_height(height)
     {
@@ -84,7 +100,12 @@ namespace gfx {
         }
         m_textures.clear();
 
-        if (m_renderer != nullptr) {
+        if (m_target != nullptr) {
+            SDL_DestroyTexture(m_target);
+            m_target = nullptr;
+        }
+
+        if (m_renderer != nullptr && m_ownsRenderer) {
             SDL_DestroyRenderer(m_renderer);
             m_renderer = nullptr;
         }
@@ -96,8 +117,58 @@ namespace gfx {
             return;
         }
 
+        if (!m_ownsRenderer && (width != m_width || height != m_height) && !createTarget(width, height)) {
+            return;
+        }
+
         m_width = width;
         m_height = height;
+    }
+
+    bool SdlRenderer::createTarget(const uint32_t width, const uint32_t height)
+    {
+        if (width == 0 || height == 0) {
+            std::cerr << "[SdlRenderer] ERROR: offscreen target needs a non-zero size\n";
+            return false;
+        }
+
+        SDL_Texture* target = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET,
+                                                static_cast<int>(width), static_cast<int>(height));
+        if (target == nullptr) {
+            std::cerr << "[SdlRenderer] ERROR: cannot create the offscreen target: " << SDL_GetError() << "\n";
+            return false;
+        }
+
+        if (m_target != nullptr) {
+            SDL_DestroyTexture(m_target);
+        }
+        m_target = target;
+
+        return true;
+    }
+
+    void SdlRenderer::saveBorrowedState()
+    {
+        m_savedTarget = SDL_GetRenderTarget(m_renderer);
+
+        SDL_BlendMode blend = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(m_renderer, &blend);
+        m_savedBlendMode = blend;
+
+        SDL_TextureAddressMode u = SDL_TEXTURE_ADDRESS_AUTO;
+        SDL_TextureAddressMode v = SDL_TEXTURE_ADDRESS_AUTO;
+        SDL_GetRenderTextureAddressMode(m_renderer, &u, &v);
+        m_savedAddressU = static_cast<int>(u);
+        m_savedAddressV = static_cast<int>(v);
+    }
+
+    void SdlRenderer::restoreBorrowedState()
+    {
+        SDL_SetRenderTarget(m_renderer, m_savedTarget);
+        SDL_SetRenderDrawBlendMode(m_renderer, m_savedBlendMode);
+        SDL_SetRenderTextureAddressMode(m_renderer, static_cast<SDL_TextureAddressMode>(m_savedAddressU),
+                                        static_cast<SDL_TextureAddressMode>(m_savedAddressV));
+        m_savedTarget = nullptr;
     }
 
     void SdlRenderer::beginFrame(const Color clear)
@@ -112,6 +183,13 @@ namespace gfx {
         }
         m_meshVertices.clear();
         m_meshIndices.clear();
+
+        if (!m_ownsRenderer) {
+            saveBorrowedState();
+            SDL_SetRenderTarget(m_renderer, m_target);
+            SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderTextureAddressMode(m_renderer, SDL_TEXTURE_ADDRESS_CLAMP, SDL_TEXTURE_ADDRESS_CLAMP);
+        }
 
         SDL_SetRenderDrawColor(m_renderer, clear.r, clear.g, clear.b, clear.a);
         SDL_RenderClear(m_renderer);
@@ -131,7 +209,11 @@ namespace gfx {
             }
         }
 
-        SDL_RenderPresent(m_renderer);
+        if (m_ownsRenderer) {
+            SDL_RenderPresent(m_renderer);
+        } else {
+            restoreBorrowedState();
+        }
         m_inFrame = false;
         releasePending();
     }
@@ -346,6 +428,11 @@ namespace gfx {
     const char* SdlRenderer::backendName() const
     {
         return m_name.c_str();
+    }
+
+    std::uintptr_t SdlRenderer::outputTexture() const
+    {
+        return reinterpret_cast<std::uintptr_t>(m_target);
     }
 
     bool SdlRenderer::inFrameOrWarn()

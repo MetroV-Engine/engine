@@ -81,6 +81,8 @@ public:
     void setVSync(bool enabled);
     bool isVSync() const;
     const char *getRendererName() const;
+    // The renderer ImGui draws with, e.g. for a game drawing into a texture the Viewport shows.
+    SDL_Renderer *getSdlRenderer() const { return _renderer; }
 
 private:
     SDL_Window *_window = nullptr;

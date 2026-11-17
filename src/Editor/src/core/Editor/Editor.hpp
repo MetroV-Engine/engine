@@ -96,6 +96,9 @@ public:
     // (until the engine renders into it, e.g. a game's debug drawing).
     void setViewportRenderer(SceneBackend::Renderer renderer);
 
+    // Stopped while editing, Playing or Paused while the game runs.
+    PlayState playState() const { return _play.getState(); }
+
     // Runs until the user quits.
     void run();
 

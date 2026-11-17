@@ -39,4 +39,15 @@ namespace gfx {
         return nullptr;
     }
 
+    std::unique_ptr<IOffscreenRenderer> makeOffscreenRenderer(const Backend backend, SDL_Renderer* borrowed,
+                                                              const uint32_t width, const uint32_t height)
+    {
+        if (backend != Backend::Sdl3Cpu) {
+            std::cerr << "[RendererFactory] ERROR: only Backend::Sdl3Cpu can render offscreen\n";
+            return nullptr;
+        }
+
+        return SdlRenderer::createOffscreen(borrowed, width, height);
+    }
+
 }

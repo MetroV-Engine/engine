@@ -11,9 +11,17 @@ It comes from [MetroV-Engine/renderer-wrapper](https://github.com/MetroV-Engine/
 
 | Backend | State |
 | --- | --- |
-| `Backend::Sdl3Cpu` (`SdlRenderer`) | Built. Draws through an `SDL_Renderer` it creates on the window. |
+| `Backend::Sdl3Cpu` (`SdlRenderer`) | Built. Draws through an `SDL_Renderer` it creates on the window, or offscreen (see below). |
 | `Backend::Null` (`NullRenderer`) | Built. Records the draw calls without a window: for tests. |
 | `Backend::Bgfx` | Not built yet: `makeRenderer` logs an error and returns `nullptr`. |
+
+## Offscreen rendering
+
+`gfx::makeOffscreenRenderer(backend, sdlRenderer, width, height)` returns an `IOffscreenRenderer`. It draws
+into a texture on a renderer that someone else owns, such as the editor's, instead of presenting to a
+window. `outputTexture()` gives that texture as an opaque handle (an `SDL_Texture*` for SDL), ready for
+`ImGui::Image`. Each frame puts the borrowed renderer's target, blend mode and texture address mode back
+as they were. Only `Backend::Sdl3Cpu` is supported.
 
 ## Build
 
@@ -21,7 +29,8 @@ It comes from [MetroV-Engine/renderer-wrapper](https://github.com/MetroV-Engine/
 `renderer` feature of the manifest (SDL3 and stb). Like the ECS, it is included from `src/`:
 `#include "Renderer/IRenderer.hpp"`. It does not depend on the ECS.
 
-The `coverage` preset turns it OFF until its tests exist: CI requires 90 % line coverage over `src/`.
+Its tests are in `tests/Renderer` (`tests_render`). The `coverage` preset turns the renderer OFF, because CI
+requires 90 % line coverage over `src/` and most of the renderer has no tests yet.
 
 ## Layout
 

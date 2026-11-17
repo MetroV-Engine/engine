@@ -14,10 +14,12 @@
 #ifndef RENDERER_WRAPPER_RENDERERFACTORY_HPP
 #define RENDERER_WRAPPER_RENDERERFACTORY_HPP
 
+#include "Renderer/IOffscreenRenderer.hpp"
 #include "Renderer/IRenderer.hpp"
 
 #include <memory>
 
+struct SDL_Renderer;
 struct SDL_Window;
 
 namespace gfx {
@@ -27,6 +29,10 @@ namespace gfx {
     // Returns nullptr on failure, after logging the reason. Backend::Null ignores the window.
     std::unique_ptr<IRenderer> makeRenderer(Backend backend, SDL_Window* window,
                                             uint32_t width, uint32_t height);
+
+    // Draws into a texture on a renderer it borrows and never destroys; only Sdl3Cpu is supported, nullptr otherwise.
+    std::unique_ptr<IOffscreenRenderer> makeOffscreenRenderer(Backend backend, SDL_Renderer* borrowed,
+                                                              uint32_t width, uint32_t height);
 
 }
 

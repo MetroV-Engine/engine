@@ -14,10 +14,11 @@
 #ifndef RENDERER_WRAPPER_SDLRENDERER_HPP
 #define RENDERER_WRAPPER_SDLRENDERER_HPP
 
-#include "Renderer/IRenderer.hpp"
+#include "Renderer/IOffscreenRenderer.hpp"
 #include "Renderer/ShapeBuilder/ShapeBuilder.hpp"
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -30,10 +31,12 @@ struct SDL_Vertex;
 
 namespace gfx {
 
-    class SdlRenderer final : public IRenderer {
+    class SdlRenderer final : public IOffscreenRenderer {
         public:
             // Returns nullptr on failure, after logging the reason.
             static std::unique_ptr<SdlRenderer> create(SDL_Window* window, uint32_t width, uint32_t height);
+            // Draws into its own target texture on a renderer it never destroys, and never presents.
+            static std::unique_ptr<SdlRenderer> createOffscreen(SDL_Renderer* borrowed, uint32_t width, uint32_t height);
 
             ~SdlRenderer() override;
 
@@ -60,6 +63,8 @@ namespace gfx {
 
             const char* backendName() const override;
 
+            std::uintptr_t outputTexture() const override;
+
         private:
             struct Command {
                 enum class Kind : uint8_t { Rect, Sprite, Mesh };
@@ -80,7 +85,11 @@ namespace gfx {
                 uint32_t indexCount = 0;
             };
 
-            SdlRenderer(SDL_Renderer* renderer, uint32_t width, uint32_t height);
+            SdlRenderer(SDL_Renderer* renderer, uint32_t width, uint32_t height, bool owned);
+
+            bool createTarget(uint32_t width, uint32_t height);
+            void saveBorrowedState();
+            void restoreBorrowedState();
 
             bool inFrameOrWarn();
             void submit(const Command& command, Layer layer);
@@ -91,6 +100,14 @@ namespace gfx {
             void submitScratch(TextureHandle texture, Layer layer, Space space);
 
             SDL_Renderer* m_renderer = nullptr;
+            bool m_ownsRenderer = true;
+            SDL_Texture* m_target = nullptr;        // offscreen only
+
+            // A borrowed renderer is handed back with its target, blend and address modes untouched.
+            SDL_Texture* m_savedTarget = nullptr;
+            uint32_t m_savedBlendMode = 0;
+            int m_savedAddressU = 0;
+            int m_savedAddressV = 0;
             std::string m_name;
 
             uint32_t m_width = 0;
