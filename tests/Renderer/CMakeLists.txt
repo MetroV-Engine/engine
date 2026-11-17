@@ -1,5 +1,6 @@
-# Tests of engine_render. Not built yet: enable together with src/Rendering
-# (and add_subdirectory(Rendering) in tests/CMakeLists.txt).
+# Tests of engine_render (Boost.ut). Not built yet: once there are tests,
+# uncomment add_subdirectory(Renderer) in tests/CMakeLists.txt and remove
+# ENGINE_BUILD_RENDERER=OFF from the "coverage" preset.
 
 # file(GLOB_RECURSE RENDER_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 # add_executable(tests_render ${RENDER_TEST_SOURCES})

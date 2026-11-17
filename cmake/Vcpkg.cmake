@@ -5,9 +5,13 @@
 # CMake presets already pass CMAKE_TOOLCHAIN_FILE; without a preset, the vcpkg
 # submodule is used automatically (git submodule update --init).
 
-# The editor's dependencies (SDL3, Dear ImGui) are the "gui" manifest feature.
+# Optional modules bring their dependencies as manifest features: the editor's
+# (SDL3, Dear ImGui) are "gui", the renderer's (SDL3, stb) are "renderer".
 if(ENGINE_BUILD_GUI)
   list(APPEND VCPKG_MANIFEST_FEATURES "gui")
+endif()
+if(ENGINE_BUILD_RENDERER)
+  list(APPEND VCPKG_MANIFEST_FEATURES "renderer")
 endif()
 
 # Linux: overlay triplet working around libsystemd failing on recent headers.

@@ -29,6 +29,21 @@
           ]
         }
       ]
+    },
+    "renderer": {
+      "description": "Renderer (src/Renderer): SDL3 backend and stb",
+      "dependencies": [
+        {
+          "name": "sdl3",
+          "features": [
+            {
+              "name": "dbus",
+              "platform": "linux"
+            }
+          ]
+        },
+        "stb"
+      ]
     }
   }
 }
