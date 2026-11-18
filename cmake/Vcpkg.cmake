@@ -6,7 +6,8 @@
 # submodule is used automatically (git submodule update --init).
 
 # The editor's dependencies (SDL3, Dear ImGui) are the "gui" manifest feature.
-if(ENGINE_BUILD_GUI)
+# The visual demos need them too.
+if(ENGINE_BUILD_GUI OR ENGINE_BUILD_DEMOS)
   list(APPEND VCPKG_MANIFEST_FEATURES "gui")
 endif()
 

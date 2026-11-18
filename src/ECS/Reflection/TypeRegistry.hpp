@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <typeindex>
 #include <typeinfo>
@@ -34,8 +35,9 @@ namespace ECS::reflect {
      * registered on demand by registerType<T>(), which also registers the
      * types of its fields, recursively:
      *  - E_REFLECT types become TypeKind::Struct with their fields;
-     *  - types with a ContainerTraits specialisation become Sequence, Map or
-     *    Optional, named after their elements ("vector<float>");
+     *  - types with a ContainerTraits specialisation become Sequence, Map,
+     *    Optional or Variant, named after their elements ("vector<float>",
+     *    "variant<int32,string>");
      *  - enums become TypeKind::Enum;
      *  - anything else becomes TypeKind::Opaque.
      * Enum and Opaque names come from typeid(T).name(), which is
@@ -294,9 +296,48 @@ namespace ECS::reflect {
                     ops.reset = [](void* o) noexcept { Traits::reset(*static_cast<T*>(o)); };
                     info.optionalOps = ops;
                     return info;
+                } else if constexpr (Traits::kind == TypeKind::Variant) {
+                    std::vector<const TypeInfo*> alternatives =
+                        registerAll(std::type_identity<typename Traits::Alternatives>{});
+                    if (const TypeInfo* existing = find<T>()) {
+                        return *existing;
+                    }
+                    std::vector<std::string_view> names;
+                    names.reserve(alternatives.size());
+                    for (const TypeInfo* alternative : alternatives) {
+                        names.push_back(alternative->name);
+                    }
+                    std::string name = Traits::name(names);
+                    if (const TypeInfo* same = findEquivalent<T>(name, TypeKind::Variant)) {
+                        if (same->variantOps && same->variantOps->alternatives == alternatives) {
+                            return alias<T>(*same);
+                        }
+                    }
+                    TypeInfo& info = insert<T>(std::move(name), TypeKind::Variant);
+                    VariantOps ops;
+                    ops.alternatives = std::move(alternatives);
+                    ops.index = [](const void* v) noexcept -> std::size_t {
+                        return Traits::index(*static_cast<const T*>(v));
+                    };
+                    ops.get = [](void* v) noexcept -> void* {
+                        return Traits::get(*static_cast<T*>(v));
+                    };
+                    ops.emplace = [](void* v, std::size_t index) -> void* {
+                        return Traits::emplace(*static_cast<T*>(v), index);
+                    };
+                    info.variantOps = std::move(ops);
+                    return info;
                 } else {
-                    static_assert(sizeof(T) == 0, "ContainerTraits<T>::kind must be Sequence, Map or Optional");
+                    static_assert(sizeof(T) == 0,
+                                  "ContainerTraits<T>::kind must be Sequence, Map, Optional or Variant");
                 }
+            }
+
+            // Registers each type of the tuple, in order (a braced list is
+            // evaluated left to right), and returns their TypeInfos.
+            template<typename... As>
+            std::vector<const TypeInfo*> registerAll(std::type_identity<std::tuple<As...>>) {
+                return std::vector<const TypeInfo*>{&registerType<As>()...};
             }
 
             // Enums are exposed through their integer value. Their name comes

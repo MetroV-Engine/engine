@@ -63,7 +63,7 @@ namespace ECS::reflect {
              * @brief Returns a Ref to the named field.
              * @return An invalid Ref if this Ref is invalid or has no such field,
              *         so lookups can be chained: `ref.field("pos").field("x")`.
-             *         Does not look through an Optional (path() does).
+             *         Does not look through an Optional or a Variant (path() does).
              */
             [[nodiscard]] Ref field(std::string_view name) const noexcept {
                 if (!valid()) {
@@ -82,12 +82,15 @@ namespace ECS::reflect {
              * @brief Follows a path of field names, indices and keys.
              * @param path e.g. "transform.pos.x", "tags[2]", "weights[head]",
              *        "inventory[0].count". A field name or index applied to an
-             *        Optional goes through its value ("weapon.damage").
+             *        Optional goes through its value ("weapon.damage"), and
+             *        applied to a Variant, through the alternative it holds
+             *        ("shape.radius" when the shape is a circle).
              *        Map keys are parsed from text: string, integer and enum
              *        keys are supported.
              * @return This Ref for an empty path; an invalid Ref if any step
              *         fails (missing field, index out of range, missing key,
-             *         empty Optional, malformed path such as "a..b" or "a.").
+             *         empty Optional, a field the held alternative does not
+             *         have, malformed path such as "a..b" or "a.").
              */
             [[nodiscard]] Ref path(std::string_view path) const {
                 if (path.empty()) {
@@ -259,6 +262,50 @@ namespace ECS::reflect {
                 return true;
             }
 
+            // --- Variant --------------------------------------------------
+
+            /** @brief Index of the alternative a Variant holds; nullopt if not a Variant or valueless. */
+            [[nodiscard]] std::optional<std::size_t> alternativeIndex() const noexcept {
+                if (!is(TypeKind::Variant)) {
+                    return std::nullopt;
+                }
+                const VariantOps& ops = *_type->variantOps;
+                const std::size_t index = ops.index(_data);
+                if (index >= ops.alternatives.size()) {
+                    return std::nullopt;   // valueless
+                }
+                return index;
+            }
+
+            /** @brief Ref to the alternative a Variant holds; invalid if not a Variant or valueless. */
+            [[nodiscard]] Ref alternative() const noexcept {
+                const std::optional<std::size_t> index = alternativeIndex();
+                if (!index) {
+                    return {};
+                }
+                const VariantOps& ops = *_type->variantOps;
+                return Ref(*ops.alternatives[*index], ops.get(_data));
+            }
+
+            /**
+             * @brief Makes a Variant hold a default-constructed alternative
+             *        index, replacing the held value (even of the same
+             *        alternative); returns a Ref to it.
+             * @return An invalid Ref, with the Variant unchanged, if this is
+             *         not a Variant, index is out of range, or that
+             *         alternative has no default constructor. If its
+             *         constructor throws, the exception propagates and the
+             *         Variant is left valueless.
+             */
+            Ref emplaceAlternative(std::size_t index) const {
+                if (!is(TypeKind::Variant)) {
+                    return {};
+                }
+                const VariantOps& ops = *_type->variantOps;
+                void* made = ops.emplace(_data, index);
+                return made ? Ref(*ops.alternatives[index], made) : Ref{};
+            }
+
             // --- Enum -----------------------------------------------------
 
             /** @brief Integer value of an Enum; nullopt if not an Enum. */
@@ -342,11 +389,13 @@ namespace ECS::reflect {
                 return is(TypeKind::Map) && key.valid() && key._type == _type->mapOps->key;
             }
 
-            // Goes through Optionals so that path() can descend into their value.
+            // Goes through Optionals and Variants so that path() can descend
+            // into their value: an empty Optional or a valueless Variant gives
+            // an invalid Ref.
             [[nodiscard]] Ref unwrapped() const noexcept {
                 Ref current = *this;
-                while (current.is(TypeKind::Optional)) {
-                    current = current.value();
+                while (current.is(TypeKind::Optional) || current.is(TypeKind::Variant)) {
+                    current = current.is(TypeKind::Optional) ? current.value() : current.alternative();
                 }
                 return current;
             }

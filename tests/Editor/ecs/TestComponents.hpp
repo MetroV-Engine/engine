@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 enum class EdKind : std::uint8_t
@@ -75,6 +76,7 @@ struct EdContainers
     std::optional<int> target;
     std::pair<int, int> pair;
     char letter = 'z';
+    std::variant<int, std::string> choice;
 };
 
 // Not reflected: the editor does not list it.
@@ -170,6 +172,7 @@ E_REFLECT(EdContainers)
     E_FIELD(target, std::optional<int>)
     E_FIELD(pair, std::pair<int, int>)
     E_FIELD(letter, char)
+    E_FIELD(choice, std::variant<int, std::string>)
 E_END
 
 E_REFLECT(EdMoveOnly)

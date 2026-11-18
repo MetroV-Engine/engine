@@ -3,3 +3,6 @@ target_link_libraries(bench_zipper_driver PRIVATE engine_ecs)
 
 add_executable(bench_has_components BenchHasComponents.cpp)
 target_link_libraries(bench_has_components PRIVATE engine_ecs)
+
+add_executable(bench_collision_recentering BenchCollisionRecentering.cpp)
+target_link_libraries(bench_collision_recentering PRIVATE engine_common)

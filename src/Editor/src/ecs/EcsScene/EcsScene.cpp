@@ -254,6 +254,10 @@ std::string summary(const Ref &value)
     }
     if (type.kind == TypeKind::Optional)
         return value.hasValue() ? "(set)" : "(empty)";
+    if (type.kind == TypeKind::Variant) {
+        const Ref held = value.alternative();
+        return held ? held.type().name : "(valueless)";
+    }
     if (!type.print)
         return "(not inspectable)";
     std::ostringstream text;

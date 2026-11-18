@@ -6,6 +6,7 @@ option(ENGINE_BUILD_GUI        "Build the editor GUI (needs SDL3 and Dear ImGui)
 option(ENGINE_BUILD_APP        "Build the executables (apps/)"                    ON)
 option(ENGINE_BUILD_TESTS      "Build unit tests"                                 OFF)
 option(ENGINE_BUILD_BENCHMARKS "Build benchmarks (use a Release build)"           OFF)
+option(ENGINE_BUILD_DEMOS      "Build the visual demos (local demos/, needs SDL3)" OFF)
 option(ENGINE_ENABLE_COVERAGE  "Enable code coverage"                             OFF)
 
 include(cmake/Vcpkg.cmake) # before project(): vcpkg reads its settings there
@@ -22,8 +23,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Modules: one CMakeLists.txt, one target, only the dependencies it needs.
 add_subdirectory(src/ECS)
+add_subdirectory(src/Engine)
 # add_subdirectory(src/Rendering) # engine_render: enable with its first .cpp
-# add_subdirectory(src/Engine)    # engine_core:   enable with its first .cpp
 if(ENGINE_BUILD_GUI)
   add_subdirectory(src/Editor)
 endif()
@@ -39,4 +40,9 @@ endif()
 
 if(ENGINE_BUILD_BENCHMARKS)
   add_subdirectory(benchmarks)
+endif()
+
+# demos/ is not versioned (see .gitignore): build it only when present.
+if(ENGINE_BUILD_DEMOS AND EXISTS "${PROJECT_SOURCE_DIR}/demos/CMakeLists.txt")
+  add_subdirectory(demos)
 endif()

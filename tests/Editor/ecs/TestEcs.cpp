@@ -194,7 +194,7 @@ void run_ecs_scene_tests()
         expect(std::holds_alternative<std::monostate>(scene.get(id, "EdStats", "nope")));
     };
 
-    "read-only summaries: containers, optionals, opaque values, characters"_test = [] {
+    "read-only summaries: containers, optionals, variants, opaque values, characters"_test = [] {
         ECS::Registry world;
         EcsScene scene(world);
         const ECS::Entity entity = world.spawnEntity("Thing");
@@ -211,6 +211,9 @@ void run_ecs_scene_tests()
         expect(scene.get(id, "EdContainers", "target") == PropertyValue(std::string("(set)")));
         expect(scene.get(id, "EdContainers", "pair") == PropertyValue(std::string("(not inspectable)")));
         expect(scene.get(id, "EdContainers", "letter") == PropertyValue(std::string("z")));
+        expect(scene.get(id, "EdContainers", "choice") == PropertyValue(std::string("int32")));
+        world.getComponent<EdContainers>(entity).choice = std::string("text");
+        expect(scene.get(id, "EdContainers", "choice") == PropertyValue(std::string("string")));
         expect(!scene.set(id, "EdContainers", "letter", std::string("y")));
     };
 
