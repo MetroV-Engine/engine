@@ -41,3 +41,5 @@ imgui-demo.ini
 shortcuts.ini
 logs/
 demos/
+# Local benchmark results (project_scripts/benchmarks.py)
+bench-results/
