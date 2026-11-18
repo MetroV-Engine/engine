@@ -23,6 +23,7 @@
 #include "ECS/ECS.hpp"
 #include "ECS/Reflection/Reflection.hpp"
 #include "Support/FreshWorkingDirectory.hpp"
+#include "Support/Headless.hpp"
 #include "Support/Logs.hpp"
 #include "core/CommandRegistry/CommandRegistry.hpp"
 #include "core/Editor/Editor.hpp"
@@ -152,6 +153,8 @@ namespace {
         Renderer renderer(const Selection &selection) override
         {
             return [this, &selection](ImDrawList *, ImVec2 min, ImVec2) {
+                // ~10 ms a frame instead of ~300 with the software renderer.
+                EditorTest::renderSmall();
                 _view = ViewportView{ImVec2(min.x - _scenario.worldOffset * ViewScale, min.y), ViewScale};
                 step(selection);
                 return _view;
@@ -241,9 +244,9 @@ namespace {
     DragResult runDrag(ECS::Registry &world, DragScenario scenario)
     {
         FreshWorkingDirectory directory;
-        // Set for every run: SDL_Quit(), when the previous editor closed, clears
-        // the hints. The SDL_VIDEO_DRIVER environment variable takes precedence.
-        SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
+        // dummy video driver + software renderer: no screen, no OpenGL (CI).
+        // Set again before each GuiContext: SDL_Quit clears the hints.
+        const EditorTest::HeadlessHints hints;
         if (scenario.snapGrid > 0)
             std::ofstream("imgui.ini") << "[Workspace][Editor]\nviewport.snap=1\nviewport.gridSize=" << scenario.snapGrid << "\n";
         ECS::SystemManager systems;

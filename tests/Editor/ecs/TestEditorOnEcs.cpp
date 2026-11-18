@@ -1,4 +1,4 @@
-// The real Editor on an ECS world, in an offscreen window: a script selects
+// The real Editor on an ECS world, in a headless window (dummy video driver, software renderer): a script selects
 // an entity (the Inspector then draws its components), plays, pauses, steps,
 // stops and quits through the console commands, one action per frame. The
 // panels are measured on screen and the saved layout read back.
@@ -26,6 +26,7 @@
 #include "ECS/ECS.hpp"
 #include "ECS/Reflection/Reflection.hpp"
 #include "Support/FreshWorkingDirectory.hpp"
+#include "Support/Headless.hpp"
 #include "Support/Logs.hpp"
 #include "core/CommandRegistry/CommandRegistry.hpp"
 #include "core/Editor/Editor.hpp"
@@ -117,6 +118,8 @@ namespace {
             // the Hierarchy panel does.
             Selection &editable = const_cast<Selection &>(selection);
             return [this, &editable](ImDrawList *, ImVec2, ImVec2) {
+                // ~10 ms a frame instead of ~300 with the software renderer.
+                EditorTest::renderSmall();
                 step(editable);
                 return ViewportView{};
             };
@@ -214,6 +217,9 @@ namespace {
         FreshWorkingDirectory directory;
         if (!options.savedIni.empty())
             std::ofstream("imgui.ini") << options.savedIni;
+        // dummy video driver + software renderer: no screen, no OpenGL (CI).
+        // Set again before each GuiContext: SDL_Quit clears the hints.
+        const EditorTest::HeadlessHints hints;
         GuiContext gui("tests_editor", options.width, options.height);
         auto backend = std::make_unique<ScriptedBackend>(gui, world, systems, std::move(script));
         ScriptedBackend &scripted = *backend;
@@ -258,9 +264,6 @@ E_END
 
 void run_editor_on_ecs_tests()
 {
-    // No window on screen; SDL_VIDEO_DRIVER=x11 (or wayland...) shows it.
-    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
-
     "the editor edits, plays and stops an ECS world, without error"_test = [] {
         ECS::Registry world;
         ECS::SystemManager systems;

@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include "Support/Headless.hpp"
 #include "core/GuiContext/GuiContext.hpp"
 #include "scene/DemoScene/DemoScene.hpp"
 #include "scene/DemoSceneRenderer/DemoSceneRenderer.hpp"
@@ -28,10 +29,10 @@ namespace {
 
 void run_demo_scene_renderer_tests()
 {
-    // Set for every window: SDL_Quit() clears the hints.
-    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
-
     "an object moved under the mouse is drawn under it"_test = [] {
+        // dummy video driver + software renderer: no screen, no OpenGL (CI).
+        // Set again before each GuiContext: SDL_Quit clears the hints.
+        const EditorTest::HeadlessHints hints;
         GuiContext gui("tests_editor", 800, 600);
         DemoScene scene;
         const HierarchyModel::ObjectId id = scene.create(HierarchyModel::InvalidId, "Only object");
@@ -53,6 +54,9 @@ void run_demo_scene_renderer_tests()
     };
 
     "an object moved out of the view is brought back into it"_test = [] {
+        // dummy video driver + software renderer: no screen, no OpenGL (CI).
+        // Set again before each GuiContext: SDL_Quit clears the hints.
+        const EditorTest::HeadlessHints hints;
         GuiContext gui("tests_editor", 800, 600);
         DemoScene scene;
         const HierarchyModel::ObjectId id = scene.create(HierarchyModel::InvalidId, "Only object");
