@@ -96,19 +96,115 @@ passes.
 
 ## Adding a benchmark
 
-1. Add `BenchSomething.cpp` to this directory. Include
-   [BenchSupport.hpp](BenchSupport.hpp), read the arguments with
-   `Bench::repetitionsFromArgs(argc, argv)` and print every scenario with
-   `Bench::report(name, Bench::measure(query, repetitions))`. That is all CI
-   needs: `report` also feeds the JSON output.
-2. Register it in [CMakeLists.txt](CMakeLists.txt); the name must start with
-   `bench_` so the script and CI pick it up:
-   ```cmake
-   add_executable(bench_something BenchSomething.cpp)
-   target_link_libraries(bench_something PRIVATE engine_ecs)
-   ```
-3. Add a row to the table above, plus a short section.
+### 1. Write it
 
-Keep scenario names stable: the comparison matches scenarios by name, so a
-renamed scenario shows up as one *removed* and one *new*, with no comparison
-for that run.
+Create `BenchSomething.cpp` in this directory. This skeleton is all a new
+benchmark needs; CI picks up every scenario passed to `report`:
+
+```cpp
+// Wall-clock benchmark for <what it measures> (#<issue>).
+// Build and run commands: see benchmarks/README.md.
+
+#include <cstddef>
+#include <cstdint>
+
+#include "BenchSupport.hpp"
+#include "ECS/ECS.hpp" // the header of the module you measure
+
+namespace {
+    // Each query adds what it read into this, so the optimizer cannot delete
+    // the code being measured.
+    volatile std::int64_t g_sink = 0;
+
+    void scenarioSomething(int repetitions) {
+        // Setup goes here, outside the measured lambda.
+        ECS::Registry registry;
+
+        // measure() runs the lambda a few times to warm up, then times it
+        // `repetitions` times. The lambda returns a count (entities matched,
+        // items processed...) printed as "matched" to sanity-check the run.
+        Bench::report("1. what this scenario does, with its sizes",
+                      Bench::measure([&] {
+                          std::size_t count = 0;
+                          // ... the work to time, adding to count ...
+                          g_sink = g_sink + static_cast<std::int64_t>(count);
+                          return count;
+                      }, repetitions));
+    }
+}
+
+int main(int argc, char** argv) {
+    // Reads [repetitions] [--json <file>]; --json is what CI uses.
+    const int repetitions = Bench::repetitionsFromArgs(argc, argv);
+
+    scenarioSomething(repetitions);
+    return 0;
+}
+```
+
+Guidelines:
+
+- **One scenario, one `report`.** Number them (`1.`, `2.`...) and put the
+  sizes in the name (`100k entities`), so the output reads on its own.
+- **Keep scenario names stable.** The comparison matches scenarios by name:
+  renaming one shows it as *removed* plus *new*, with no comparison for that
+  run. Rename only when the scenario really changes.
+- **Measure only the work.** Build the data before calling `measure`, and use
+  the result (through `g_sink` or the returned count) so the optimizer cannot
+  remove it.
+- **Aim for at least a few microseconds per scenario.** Below 1 µs, changes are
+  never flagged (see [Running](#running)); time a batch of calls instead of a
+  single one.
+
+### 2. Register it
+
+Add it to [CMakeLists.txt](CMakeLists.txt). The name **must start with
+`bench_`**: that is how `project_scripts/benchmarks.py` and CI find it.
+
+```cmake
+add_executable(bench_something BenchSomething.cpp)
+target_link_libraries(bench_something PRIVATE engine_ecs)
+```
+
+### 3. Document it
+
+Add a row to the [table above](#available-benchmarks), plus a short section
+describing its scenarios.
+
+## Benchmarking a new module
+
+Benchmarks are not limited to the ECS. For another module, link its target
+instead of (or in addition to) `engine_ecs`, for example `engine_core` for
+`src/Engine/` or `engine_render` for `src/Rendering/`, once those libraries
+are enabled in their `CMakeLists.txt`.
+
+Check what the CI job can build first. It configures with:
+
+| Setting | Value | Consequence |
+| --- | --- | --- |
+| vcpkg | not checked out | no vcpkg package is available (no SDL3, no ImGui, no Boost.UT) |
+| `ENGINE_BUILD_GUI` | `OFF` | `engine_editor` does not exist |
+| `ENGINE_BUILD_APP` / `ENGINE_BUILD_TESTS` | `OFF` | `apps/` and `tests/` are not built |
+| Runner | `ubuntu-latest`, no display, no GPU | nothing can open a window or a GPU context |
+
+So a benchmark that needs one of these would build on your machine but break
+the **whole** CI job, not just itself. Two ways to handle it:
+
+- **Preferred:** benchmark the part that does not need them (CPU-side code:
+  culling, sorting draw calls, physics steps, serialization...).
+- **When the dependency is required:** wrap the benchmark in a condition in
+  [CMakeLists.txt](CMakeLists.txt) so it is only built where the dependency
+  exists, and say in its README section that CI does not run it:
+  ```cmake
+  if(ENGINE_BUILD_GUI)
+    add_executable(bench_something_gui BenchSomethingGui.cpp)
+    target_link_libraries(bench_something_gui PRIVATE engine_editor)
+  endif()
+  ```
+  Having CI run it would mean changing [bench.yml](../.github/workflows/bench.yml)
+  (vcpkg, apt packages, a virtual display) like `build.yml` does: a separate
+  change, since it makes the job much slower.
+
+Keep a full run short too: CI runs every benchmark with 1000 repetitions. The
+current ones take about 7 s in total at that count; a new benchmark should
+add no more than a few seconds.
