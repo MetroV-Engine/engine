@@ -2,7 +2,7 @@
 // program under Valgrind: if the logger's state is gone by then, the late
 // call reads and writes freed memory and Valgrind fails the test.
 
-#include "Core/Logger/Logger.hpp"
+#include "Engine/Logger/Logger.hpp"
 
 namespace {
     struct LogsOnDestruction {

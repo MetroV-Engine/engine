@@ -5,7 +5,7 @@
 #include <streambuf>
 #include <string>
 
-#include "Core/Logger/Logger.hpp"
+#include "Engine/Logger/Logger.hpp"
 
 // Gives a test a fresh logger and captures what it prints. Both are undone
 // when the object goes out of scope, so tests never see each other's state

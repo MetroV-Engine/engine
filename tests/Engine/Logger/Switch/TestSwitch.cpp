@@ -1,6 +1,6 @@
 #include <boost/ut.hpp>
 
-#include "Core/Logger/Logger.hpp"
+#include "Engine/Logger/Logger.hpp"
 
 using namespace boost::ut;
 

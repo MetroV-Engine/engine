@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "../Logger/LoggerTestSupport.hpp"
+#include "../Enabled/LoggerTestSupport.hpp"
 
 using namespace boost::ut;
 

@@ -8,7 +8,11 @@
 # Later, it becomes SHARED (plugins / hot-reload), see COMPILATION.md.
 
 # file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+# list(FILTER ENGINE_SOURCES EXCLUDE REGEX "/Logger/") # engine_logger is its own target (Logger/)
 # add_library(engine_core STATIC ${ENGINE_SOURCES})
 # target_include_directories(engine_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# target_link_libraries(engine_core PUBLIC engine_ecs)
+# target_link_libraries(engine_core PUBLIC engine_ecs engine_logger)
 # target_link_libraries(engine_core PRIVATE engine_render) # once Rendering is enabled
+
+# The logger lives in Logger/ as its own library, engine_logger, built from the
+# root CMakeLists.txt even while engine_core is not. Every module links it.

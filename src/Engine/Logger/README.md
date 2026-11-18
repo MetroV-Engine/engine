@@ -22,7 +22,7 @@ Each function is documented in [Logger.hpp](Logger.hpp), as docstrings.
 Each module declares its section once, then logs with `ENGINE_LOG`:
 
 ```cpp
-#include "Core/Logger/Logger.hpp"
+#include "Engine/Logger/Logger.hpp"
 
 inline constexpr Log::Section ECS{"ECS"};
 
@@ -276,15 +276,16 @@ Release (logging off):
 ## Testing the logger
 
 The logger has four test programs and one compile-time check, because it
-behaves differently with logging on and off:
+behaves differently with logging on and off. They live in
+[tests/Engine/Logger/](../../../tests/Engine/Logger/), one folder each:
 
-| Target | Logging | What it checks |
-| --- | --- | --- |
-| `tests_logger` | always on | Storing, filtering, the ring buffer, capacity, output, threads, error handling, `ENGINE_LOG` |
-| `tests_logger_disabled` | always off | `ENGINE_LOG` evaluates nothing; nothing is stored or printed |
-| `tests_logger_switch` | as the build type sets it | Linking `engine_logger` turns logging on in Debug and off otherwise |
-| `tests_logger_shutdown` | always on | Logging from a global destructor after `main`, checked by Valgrind |
-| `tests_logger_type_check_valid` / `_invalid` | always off | A correct call builds; a call with an `int` message fails to build, as in Debug |
+| Folder | Target | Logging | What it checks |
+| --- | --- | --- | --- |
+| `Enabled/` | `tests_logger` | always on | Storing, filtering, the ring buffer, capacity, output, threads, error handling, `ENGINE_LOG` |
+| `Disabled/` | `tests_logger_disabled` | always off | `ENGINE_LOG` evaluates nothing; nothing is stored or printed |
+| `Switch/` | `tests_logger_switch` | as the build type sets it | Linking `engine_logger` turns logging on in Debug and off otherwise |
+| `Shutdown/` | `tests_logger_shutdown` | always on | Logging from a global destructor after `main`, checked by Valgrind |
+| `Disabled/` | `tests_logger_type_check_valid` / `_invalid` | always off | A correct call builds; a call with an `int` message fails to build, as in Debug |
 
 `tests_logger` and `tests_logger_shutdown` compile `Logger.cpp` themselves,
 and `tests_logger_disabled` compiles `LoggerDisabled.cpp`, so they test the
@@ -292,18 +293,28 @@ same thing in every build type.
 
 ### Run the tests
 
-From the repository root:
+From the repository root, with the `tests` preset (what CI builds):
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENGINE_BUILD_TESTS=ON
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake --preset tests
+cmake --build --preset tests
+ctest --preset tests
 ```
 
-All seven tests, `tests_ecs` included, must report `Passed`. The two
-`type_check` tests build a small program: `_invalid` passes when that build
-fails. To run one
-on its own, for example while you work on the logger:
+Every test must report `Passed`: the logger's six, plus `tests_ecs` and
+`tests_editor`. The two `type_check` tests build a small program: `_invalid`
+passes when that build fails.
+
+The preset also builds the editor, which needs SDL3. If vcpkg fails to build
+it (on Fedora, install `autoconf-archive` first), test without the editor:
+
+```sh
+cmake --preset tests -DENGINE_BUILD_GUI=OFF -DENGINE_BUILD_APP=OFF
+cmake --build build/tests
+ctest --test-dir build/tests --output-on-failure
+```
+
+To run one program on its own, for example while you work on the logger:
 
 ```sh
 ./build/tests/tests_logger
@@ -312,16 +323,17 @@ on its own, for example while you work on the logger:
 It prints a single line, `all tests passed`, and exits with code 0. A failing
 check prints `FAILED` with the file, the line and the values compared. With a
 multi-config generator such as Visual Studio, the programs are in
-`build/tests/Debug/` instead.
+`build/tests/Debug/` instead, and `ctest` needs `-C Debug`.
 
 ### Run the tests in Release
 
-The logger must also hold up when logging is compiled out:
+The logger must also hold up when logging is compiled out. There is no
+Release preset, so configure it by hand:
 
 ```sh
-cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DENGINE_BUILD_TESTS=ON -DENGINE_BUILD_APP=OFF
-cmake --build build-release
-ctest --test-dir build-release --output-on-failure
+cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DENGINE_BUILD_TESTS=ON -DENGINE_BUILD_GUI=OFF -DENGINE_BUILD_APP=OFF
+cmake --build build/release
+ctest --test-dir build/release --output-on-failure
 ```
 
 ### Valgrind and the shutdown test
@@ -340,25 +352,25 @@ Linux only. Needs `gcovr` and `ninja`:
 python project_scripts/test_coverage.py --minimum 90
 ```
 
-The script deletes and rebuilds `build/`, runs every test and writes an HTML
-report to `build/tests/coverage/index.html`. It needs a recent `gcovr`, as
-installed by `pip install gcovr`; CI does exactly that. A distribution's
-packaged `gcovr` can be too old (Fedora's 7.2 rejects the script's
-`--merge-lines` option).
+The script deletes and rebuilds `build/coverage/` with the `coverage` preset,
+runs every test and writes an HTML report to
+`build/coverage/report/index.html`. It needs a recent `gcovr`, as installed by
+`pip install gcovr`; CI does exactly that. A distribution's packaged `gcovr`
+can be too old (Fedora's 7.2 rejects the script's `--merge-lines` option).
 
 ### Add a test
 
-1. Create a file in `tests/Logger/`, for example `TestMyFeature.cpp`, with a
-   `run_logger_my_feature_tests()` function that holds the `"name"_test`
-   cases.
+1. Create a file in `tests/Engine/Logger/Enabled/`, for example
+   `TestMyFeature.cpp`, with a `run_logger_my_feature_tests()` function that
+   holds the `"name"_test` cases. CMake picks up every `.cpp` in that folder.
 2. Start every case with `ScopedLoggerTest scope;`, from
-   [LoggerTestSupport.hpp](../../../tests/Logger/LoggerTestSupport.hpp). It
-   resets the logger (minimum level `Debug`, capacity 1024, empty buffer) and
-   captures stdout and stderr until the case ends. Read what was printed with
-   `scope.stdoutText()` and `scope.stderrText()`.
-3. Add the file to `LOGGER_TEST_FILES` in `tests/CMakeLists.txt`.
-4. Declare the function in `tests/Logger/main.cpp` and call it from `main`.
-5. Write the test before the code, run it and see it fail, then write the code.
+   [LoggerTestSupport.hpp](../../../tests/Engine/Logger/Enabled/LoggerTestSupport.hpp).
+   It resets the logger (minimum level `Debug`, capacity 1024, empty buffer)
+   and captures stdout and stderr until the case ends. Read what was printed
+   with `scope.stdoutText()` and `scope.stderrText()`.
+3. Declare the function in `tests/Engine/Logger/Enabled/main.cpp` and call it
+   from `main`.
+4. Write the test before the code, run it and see it fail, then write the code.
 
 ## Known limits
 

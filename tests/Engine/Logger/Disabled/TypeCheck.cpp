@@ -3,7 +3,7 @@
 // rejects, so Release must reject it too: ENGINE_LOG type-checks its arguments
 // in every build even though it evaluates nothing.
 
-#include "Core/Logger/Logger.hpp"
+#include "Engine/Logger/Logger.hpp"
 
 inline constexpr Log::Section ECS{"ECS"};
 
