@@ -289,4 +289,127 @@ void run_scene_manager_tests() {
 
         expect(scenes.top()->name() == std::string("B"));
     };
+
+    // ---- push by id
+
+    "push by id creates, pushes and enters the registered scene"_test = [] {
+        Log log;
+        SceneManager scenes;
+        scenes.registry().add("menu", [&log] { return std::make_unique<RecordingScene>("Menu", log); });
+
+        expect(scenes.push("menu"));
+
+        expect(scenes.top() != nullptr);
+        expect(scenes.top()->name() == std::string("Menu"));
+        expect(log == Log{"Menu:onEnter"});
+    };
+
+    "push by id of an unknown id returns false and changes nothing"_test = [] {
+        Log log;
+        SceneManager scenes;
+        scenes.push(make("A", log));
+        log.clear();
+
+        expect(!scenes.push("nope"));
+
+        expect(scenes.top()->name() == std::string("A"));
+        expect(log.empty());
+    };
+
+    "push by id with an empty id returns false"_test = [] {
+        SceneManager scenes;
+        expect(!scenes.push(""));
+        expect(scenes.empty());
+    };
+
+    "push by id pauses the scene below"_test = [] {
+        Log log;
+        SceneManager scenes;
+        scenes.registry().add("b", [&log] { return std::make_unique<RecordingScene>("B", log); });
+        scenes.push(make("A", log));
+        log.clear();
+
+        scenes.push("b");
+
+        expect(log == Log{"A:onPause", "B:onEnter"});
+    };
+
+    "push by id twice builds two distinct scenes"_test = [] {
+        Log log;
+        SceneManager scenes;
+        scenes.registry().add("b", [&log] { return std::make_unique<RecordingScene>("B", log); });
+        scenes.push("b");
+        Scene* first = scenes.top();
+        scenes.push("b");
+        expect(scenes.top() != first);
+    };
+
+    "push by id with a factory returning nothing returns false"_test = [] {
+        SceneManager scenes;
+        scenes.registry().add("broken", [] { return std::unique_ptr<Scene>(); });
+        expect(!scenes.push("broken"));
+        expect(scenes.empty());
+    };
+
+    "the registry is the same on every call"_test = [] {
+        SceneManager scenes;
+        expect(&scenes.registry() == &scenes.registry());
+        const SceneManager& view = scenes;
+        expect(&view.registry() == &scenes.registry());
+    };
+
+    // ---- initializer
+
+    "the initializer runs on a scene before its onEnter"_test = [] {
+        Log log;
+        SceneManager scenes;
+        scenes.setInitializer([&log](Scene& scene) { log.push_back(scene.name() + ":init"); });
+        scenes.push(make("A", log));
+        expect(log == Log{"A:init", "A:onEnter"});
+    };
+
+    "the initializer also runs on scenes pushed by id"_test = [] {
+        Log log;
+        SceneManager scenes;
+        scenes.registry().add("b", [&log] { return std::make_unique<RecordingScene>("B", log); });
+        scenes.setInitializer([&log](Scene& scene) { log.push_back(scene.name() + ":init"); });
+        scenes.push("b");
+        expect(log == Log{"B:init", "B:onEnter"});
+    };
+
+    "the initializer does not run for a null scene or an unknown id"_test = [] {
+        int calls = 0;
+        SceneManager scenes;
+        scenes.setInitializer([&calls](Scene&) { ++calls; });
+        scenes.push(nullptr);
+        scenes.push("nope");
+        expect(calls == 0);
+    };
+
+    "an empty initializer is allowed"_test = [] {
+        Log log;
+        SceneManager scenes;
+        scenes.setInitializer({});
+        scenes.push(make("A", log));
+        expect(!scenes.empty());
+    };
+
+    // ---- forEach
+
+    "forEach visits the scenes bottom to top"_test = [] {
+        Log log;
+        SceneManager scenes;
+        scenes.push(make("A", log));
+        scenes.push(make("B", log));
+        std::vector<std::string> seen;
+        scenes.forEach([&seen](Scene& scene) { seen.push_back(scene.name()); });
+        expect(seen == std::vector<std::string>{"A", "B"});
+    };
+
+    "forEach on an empty manager does nothing"_test = [] {
+        SceneManager scenes;
+        int calls = 0;
+        scenes.forEach([&calls](Scene&) { ++calls; });
+        expect(calls == 0);
+    };
 }

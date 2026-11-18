@@ -2,9 +2,22 @@
 
 #include <chrono>
 
+Engine::Engine()
+{
+    _scenes.setInitializer([this](Scene& scene) { _services.injectInto(scene.registry()); });
+}
+
 int Engine::init()
 {
     _initialized = true;
+    return 0;
+}
+
+int Engine::step(double dt)
+{
+    if (!_initialized || !(dt >= 0.0))
+        return 1;
+    _scenes.update(dt);
     return 0;
 }
 
@@ -22,7 +35,7 @@ int Engine::run()
         const double dt = std::chrono::duration<double>(now - previous).count();
         previous = now;
 
-        _scenes.update(dt);
+        step(dt);
     }
     _running = false;
     _scenes.clear();
@@ -32,5 +45,14 @@ int Engine::run()
 int Engine::stop()
 {
     _running = false;
+    return 0;
+}
+
+int Engine::shutdown()
+{
+    _running = false;
+    _scenes.clear();
+    _services.clear();
+    _initialized = false;
     return 0;
 }
