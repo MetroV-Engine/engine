@@ -40,27 +40,15 @@ def main() -> None:
 
     run(["git", "submodule", "update", "--init", "--depth", "1", "vcpkg"])
 
-    build_dir = ROOT / "build"
+    build_dir = ROOT / "build" / "coverage"
     if build_dir.exists():
         shutil.rmtree(build_dir)
 
-    run([
-        "cmake",
-        "-S",
-        ".",
-        "-B",
-        str(build_dir),
-        "-G",
-        "Ninja",
-        "-DCMAKE_BUILD_TYPE=Debug",
-        "-DENGINE_BUILD_APP=OFF",
-        "-DENGINE_BUILD_TESTS=ON",
-        "-DENGINE_ENABLE_COVERAGE=ON",
-    ])
-    run(["cmake", "--build", str(build_dir), "--parallel"])
-    run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
+    run(["cmake", "--preset", "coverage"])
+    run(["cmake", "--build", "--preset", "coverage", "--parallel"])
+    run(["ctest", "--preset", "coverage"])
 
-    coverage_dir = ROOT / "build" / "tests" / "coverage"
+    coverage_dir = build_dir / "report"
     coverage_dir.mkdir(parents=True, exist_ok=True)
     run([
         "gcovr",
@@ -76,6 +64,9 @@ def main() -> None:
         "--print-summary",
         "--fail-under-line",
         str(args.minimum),
+        # Only this build's coverage data: another build directory (an older
+        # coverage build, compiled from other sources) would not merge with it.
+        str(build_dir),
     ])
 
 

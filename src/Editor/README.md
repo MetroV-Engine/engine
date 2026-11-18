@@ -18,22 +18,16 @@ yet). Enable it with `ENGINE_BUILD_GUI`; vcpkg (the `vcpkg` submodule:
 manifest:
 
 ```sh
-cmake -B build -S . -DENGINE_BUILD_GUI=ON
-cmake --build build
-./build/gui               # editor of an empty ECS world
-./build/gui --demo        # built-in demo level (no ECS) and widget demo panels
-./build/gui_ecs_example   # a small game opening the editor on its own world
+cmake --preset all                       # configure (executables and editor), from the engine root
+cmake --build --preset all --target editor gui_ecs_example
+./build/all/editor                    # editor of an empty ECS world
+./build/all/editor --demo             # built-in demo level (no ECS) and widget demo panels
+./build/all/gui_ecs_example        # a small game opening the editor on its own world
 ```
 
-When working only on the editor, it can also be built from its own folder
-(it adds the ECS itself and uses the same manifest):
-
-```sh
-cd src/Editor
-cmake -S . -B build
-cmake --build build
-./build/gui --demo
-```
+The configuration always starts from the engine root (`CMakePresets.json`);
+`--target` builds only what you need. The executables are in `apps/editor`
+and `apps/examples`.
 
 The editor writes its layout and preferences (`imgui.ini`, `imgui-demo.ini`),
 custom shortcuts (`shortcuts.ini`) and log (`logs/editor.log`) in the working
@@ -60,12 +54,10 @@ automatically.
 | `src/ecs/` | The editor on an ECS world: `EcsScene` (entities and reflected components), `EcsSimulation` (systems, world restored on Stop), `EcsBackend` |
 | `src/navigation/` | Actions, menu bar, toolbar, command palette, shortcuts |
 | `src/layout/` | Dockspace layout, status bar, saved workspace |
-| `examples/` | `EcsExample.cpp`: a game using the editor (`gui_ecs_example`) |
-| `../../tests/Editor/` | `tests_editor`, with the engine's tests (see [Tests](#tests)) |
 
 ## Using the editor from the ECS
 
-The editor is the `engine_editor` library (the `gui` executable is a small
+The editor is the `engine_editor` library (the `editor` executable is a small
 `main` around it). A program that has an ECS world, the engine or a game,
 links it and gives it its world and systems:
 
@@ -99,7 +91,7 @@ int main() {
 }
 ```
 
-[examples/EcsExample.cpp](examples/EcsExample.cpp) is a complete example.
+[apps/examples/EcsExample.cpp](../../apps/examples/EcsExample.cpp) is a complete example.
 
 What the editor then does with the world:
 
@@ -174,7 +166,7 @@ Settings > Viewport turns snapping on: positions, dropped templates included,
 snap to a grid of world units (16 by default) drawn under the game, and scales
 to tenths. Both settings are saved with the workspace.
 
-Without a view (`ViewportView{}`, or no renderer as in `./build/gui`) the mouse
+Without a view (`ViewportView{}`, or no renderer as in `./build/all/editor`) the mouse
 cannot select or move anything in the Viewport. A template dropped there, or
 on the Hierarchy, keeps its default position.
 
@@ -224,38 +216,47 @@ Images are not previewed: the editor has no image loader yet.
 
 ## Tests
 
-`tests_editor` checks that the editor works on an ECS world, with the
-engine's test framework (boost-ext ut). Like the engine's tests, its files are
-in the root `tests/` folder, in `tests/Editor/`, and listed in
-`tests/CMakeLists.txt`: a new test file goes in that list, and its
-`run_..._tests()` is called from `tests/Editor/main.cpp`. It is built from the
-engine root with the engine's tests, when the editor is built:
+`tests/Editor/` (`tests_editor`, built with `ENGINE_BUILD_GUI`), one folder per
+module of `src/`. They run the real editor, headless, in an empty temporary
+working directory:
 
 ```sh
-cmake -B build -S . -DENGINE_BUILD_GUI=ON -DENGINE_BUILD_TESTS=ON
-cmake --build build
-ctest --test-dir build --output-on-failure
+python project_scripts/test_coverage.py --minimum 90   # build, test, check coverage (Linux)
+ctest --preset tests                                    # or only run them
 ```
 
-| File (in `tests/Editor/`) | What it checks |
-| --- | --- |
-| `ecs/TestEcsScene.cpp` | Hierarchy and Inspector: entities listed, created, renamed and killed; ids of dead entities never reused; each field type gets its widget; values read and written in the world (integers clamped); components added and removed |
-| `ecs/TestEcsSimulation.cpp` | Play runs the systems; Stop restores values and names, removes added components, gives back removed ones, kills entities spawned in play, spawns killed ones again; non-copyable components kept with a warning |
-| `ecs/TestEcsBackend.cpp` | What the Editor receives: the three parts work on the same world, description, `components` command |
-| `ecs/TestEditorOnEcs.cpp` | The real Editor in an offscreen window: selects an entity, plays, pauses, steps, stops, quits (also during play); the world is restored and no error is logged. A panel missing from a saved layout is docked in its area; Create Object does nothing during Play, even from a shortcut; an object selected outside the Hierarchy is scrolled to there; the Game Controls keep their place in every play state and fit the smallest window; levels are saved, created, opened and renamed from the console, never during Play nor over unsaved changes; the assets folder is read and the Asset Browser shows it |
-| `scene/TestLevels.cpp` | A level written and read back gives the same ECS world and the same demo scene (order, parents, every value type, escaped strings); an invalid file leaves the scene untouched; what the scene refuses is reported; the levels folder: create, save, save as, open, rename, delete, unsaved changes, refused names and files |
-| `core/TestAssets.cpp` | The assets folder: files of every subfolder, sorted, with their type (extensions in any case) and size; hidden files and folders skipped; a missing folder; a new scan sees new files |
-| `ecs/TestEntityDragDrop.cpp` | The real Editor with a simulated mouse: a template dropped on the Hierarchy or the Viewport creates and selects its entity (under the mouse on the Viewport), released elsewhere it creates nothing; objects are selected and moved, and scaled with the handles of the selected one, and clicking empty space clears the selection; with snapping on, moves, drops and scales land on the grid, and the settings are saved; nothing is created, moved or scaled during Play, even when Play is pressed during the drag or at the drop |
-| `scene/TestDemoSceneRenderer.cpp` | The demo's Viewport: an object moved with the mouse stays drawn under it; an object moved far away is brought back into view |
+`tests/Editor/Support/Headless.hpp` drives the UI the way a user would:
 
-On macOS SDL's `offscreen` driver cannot start, so the tests opening the real
-Editor fail under plain `ctest`. Run them with
-`SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software ./build/tests/tests_editor`.
+- `Gui`: a real `GuiContext` on SDL's `dummy` video driver and `software`
+  renderer, whose frames the test runs one by one (`frame()`).
+- Input goes to ImGui directly: `press(ImGuiMod_Ctrl | ImGuiKey_N)`,
+  `typeText("help")`, `click(position)`. ImGui sees it on the next frame.
+- A widget is clicked by its ImGui id: `activate(itemId(window("Settings"),
+  {"VSync"}))`, the activation keyboard navigation uses. `itemId` hashes the
+  window and the labels the way ImGui does (a `PushID` scope is one more
+  element: `{"Quality", 2, "High"}`); `openPopup(id)` opens a context menu.
+- The whole `Editor` runs a `Script`: one step per frame, from the Viewport's
+  renderer (`TestEditor.cpp`).
+- `LogWatch` checks what was logged since it was created.
 
-The reflection registry is shared by the whole test program: each file
-prefixes its test components (`SceneMover`, `SimPosition`...) so their names
-never collide. `SDL_VIDEO_DRIVER=x11 ./build/tests/tests_editor` (or
-`wayland`) shows the editor window during the end-to-end test.
+Every `.cpp` of `tests/Editor/` is compiled: a new test file only needs its
+`run_..._tests()` called from `tests/Editor/main.cpp`. The tests driving the
+real `Editor` in an offscreen window (`ecs/TestEditorOnEcs.cpp`, with a
+simulated mouse in `ecs/TestEntityDragDrop.cpp`) use
+`Support/FreshWorkingDirectory.hpp` and `Support/Logs.hpp`; the levels and the
+assets folder are checked in `scene/TestLevels.cpp` and `core/TestAssets.cpp`.
 
-The editor is not built in CI yet (SDL3 and Dear ImGui): `project_scripts/build.py`
-and `test_coverage.py` do not build it, so these tests run locally only.
+Traps met on the way:
+
+- `SDL_Quit` (called by `~GuiContext`) clears every hint: set
+  `SDL_HINT_VIDEO_DRIVER` / `SDL_HINT_RENDER_DRIVER` before each `GuiContext`.
+- Use the `dummy` video driver with the `software` renderer. `offscreen`
+  fails on macOS: SDL asks every window for OpenGL and the driver's EGL does
+  not exist there. The dummy display is 1024x768.
+- One `GuiContext` at a time: ImGui has one current context.
+- The software renderer fills every pixel: a frame of the whole editor takes
+  ~300 ms in a debug build. The tests render it at 1/20 of its size
+  (`renderSmall()`, through `DisplayFramebufferScale`), ~10 ms; layout and
+  input are unchanged.
+- A popup must be drawn in the frame it is opened, and focusing another
+  window closes it.
