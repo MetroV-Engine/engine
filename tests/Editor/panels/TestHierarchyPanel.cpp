@@ -2,13 +2,18 @@
 
 #include "Support/Headless.hpp"
 #include "ecs/EcsScene/EcsScene.hpp"
+#include "panels/EntityDropTarget/EntityDropTarget.hpp"
 #include "panels/HierarchyPanel/HierarchyPanel.hpp"
 #include "scene/DemoScene/DemoScene.hpp"
+#include "scene/EntityTemplate.hpp"
+#include "scene/PlayController/PlayController.hpp"
+#include "scene/Simulation.hpp"
 #include "ui/DialogManager/DialogManager.hpp"
 #include "ui/NotificationManager/NotificationManager.hpp"
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 using namespace boost::ut;
 using namespace EditorTest;
@@ -16,7 +21,16 @@ using ObjectId = HierarchyModel::ObjectId;
 
 namespace {
 
-// A Hierarchy panel at a fixed place, with the dialogs it opens.
+// The game never runs here: the panel only needs a stopped PlayController.
+struct IdleSimulation : Simulation
+{
+    void begin() override {}
+    void update(double) override {}
+    void end() override {}
+};
+
+// A Hierarchy panel at a fixed place, with the dialogs it opens. No entity
+// template: drag and drop is checked in ecs/TestEntityDragDrop.cpp.
 struct HierarchyFixture
 {
     Gui gui;
@@ -24,10 +38,20 @@ struct HierarchyFixture
     Selection selection;
     NotificationManager notifications;
     DialogManager dialogs;
+    IdleSimulation simulation;
+    PlayController play{simulation};
+    std::vector<EntityTemplate> templates;
+    EntityDropTarget dropTarget;
     HierarchyPanel panel;
     bool focus = true;
 
-    explicit HierarchyFixture(HierarchyModel &model) : model(model), panel(model, selection, notifications, dialogs) {}
+    // Scene: a DemoScene or an EcsScene, both a HierarchyModel and a PropertyModel.
+    template <typename Scene>
+    explicit HierarchyFixture(Scene &scene)
+        : model(scene), dropTarget(templates, scene, scene, notifications, play, [](ObjectId) {}),
+          panel(model, selection, notifications, dialogs, dropTarget, play)
+    {
+    }
 
     void frame(int count = 1)
     {

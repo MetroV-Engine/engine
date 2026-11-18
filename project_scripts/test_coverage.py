@@ -64,6 +64,9 @@ def main() -> None:
         "--print-summary",
         "--fail-under-line",
         str(args.minimum),
+        # Only this build's coverage data: another build directory (an older
+        # coverage build, compiled from other sources) would not merge with it.
+        str(build_dir),
     ])
 
 
