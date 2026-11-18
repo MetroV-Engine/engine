@@ -1,14 +1,17 @@
 # engine_core: the runtime library of a game. The main loop, the scenes and
 # the systems bridging the ECS and the other modules. No editor, no ImGui.
 #
-# Not built yet (only a README). To enable it:
-#   1. uncomment the block below and add its first .cpp (Engine.cpp);
-#   2. uncomment add_subdirectory(src/Engine) in the root CMakeLists.txt;
-#   3. link it from apps/runtime and from src/Editor instead of engine_ecs.
-# Later, it becomes SHARED (plugins / hot-reload), see COMPILATION.md.
+# Linked by apps/runtime and by src/Editor. Later, it becomes SHARED
+# (plugins / hot-reload), see COMPILATION.md. Once Rendering is enabled, add
+#   target_link_libraries(engine_core PRIVATE engine_render)
 
-# file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
-# add_library(engine_core STATIC ${ENGINE_SOURCES})
-# target_include_directories(engine_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# target_link_libraries(engine_core PUBLIC engine_ecs)
-# target_link_libraries(engine_core PRIVATE engine_render) # once Rendering is enabled
+# Every .cpp under this folder is picked up automatically; CONFIGURE_DEPENDS
+# re-runs the glob at build time so new files are detected without re-running cmake.
+file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+
+add_library(engine_core STATIC ${ENGINE_SOURCES})
+
+# Includes are written from src/: #include "Engine/Engine.hpp".
+target_include_directories(engine_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# Public: Scene.hpp exposes the ECS types.
+target_link_libraries(engine_core PUBLIC engine_ecs)

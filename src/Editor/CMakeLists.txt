@@ -13,10 +13,10 @@ file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/s
 add_library(engine_editor STATIC ${EDITOR_SOURCES})
 
 # Public: the editor's headers include the ECS, SDL3 and Dear ImGui.
-# Will link engine_core instead of engine_ecs once src/Engine is enabled.
+# engine_core brings engine_ecs: the editor sits on top of the engine.
 target_include_directories(engine_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(engine_editor PUBLIC
-    engine_ecs
+    engine_core
     SDL3::SDL3
     imgui::imgui
 )
