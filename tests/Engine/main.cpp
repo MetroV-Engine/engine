@@ -21,6 +21,7 @@ void run_collision_sweep_tests();
 void run_collision_polygon_tests();
 void run_collision_manifold_tests();
 void run_collider_tests();
+void run_component_reflection_tests();
 void run_gravity_system_tests();
 void run_friction_system_tests();
 void run_spring_system_tests();
@@ -58,6 +59,7 @@ int main()
     run_collision_polygon_tests();
     run_collision_manifold_tests();
     run_collider_tests();
+    run_component_reflection_tests();
     run_gravity_system_tests();
     run_friction_system_tests();
     run_spring_system_tests();

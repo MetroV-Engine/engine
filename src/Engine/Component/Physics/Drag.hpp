@@ -6,6 +6,7 @@
  */
 
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -31,3 +32,9 @@ namespace Engine::Component {
         Math::Vector2f flow;
     };
 }
+
+E_REFLECT_AS(Engine::Component::Drag, "Drag")
+    E_FIELD(linear, float)
+    E_FIELD(quadratic, float)
+    E_FIELD(flow, Engine::Math::Vector2f)
+E_END

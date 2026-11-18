@@ -16,6 +16,7 @@
 #include "Engine/Common/Physic/Rotation.hpp"
 #include "RigidBody.hpp"
 #include "Engine/Component/Transform.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -310,3 +311,27 @@ namespace Engine::Component {
         return Physic::inverseInertia(collider->momentOfInertia(body.mass));
     }
 }
+
+// The alternatives of Collider::Shape, before the Collider that registers them.
+E_REFLECT_AS(Engine::Component::Collider::Box, "Collider::Box")
+    E_FIELD(halfSize, Engine::Math::Vector2f)
+E_END
+
+E_REFLECT_AS(Engine::Component::Collider::Circle, "Collider::Circle")
+    E_FIELD(radius, float)
+E_END
+
+E_REFLECT_AS(Engine::Component::Collider::Polygon, "Collider::Polygon")
+    E_FIELD(points, Engine::Shapes::Polygon)
+E_END
+
+E_REFLECT_AS(Engine::Component::Collider, "Collider")
+    E_FIELD(shape, Engine::Component::Collider::Shape)
+    E_FIELD(offset, Engine::Math::Vector2f)
+    E_FIELD(response, Engine::Component::Collider::Response)
+    E_FIELD(restitution, float)
+    E_FIELD(staticFriction, float)
+    E_FIELD(kineticFriction, float)
+    E_FIELD(layer, std::uint32_t)
+    E_FIELD(mask, std::uint32_t)
+E_END

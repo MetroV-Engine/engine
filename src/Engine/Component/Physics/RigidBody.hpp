@@ -7,6 +7,7 @@
  */
 
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -54,3 +55,12 @@ namespace Engine::Component {
         bool fixedRotation = false;
     };
 }
+
+// Not reflected: force and torque: accumulated and cleared every step.
+E_REFLECT_AS(Engine::Component::RigidBody, "RigidBody")
+    E_FIELD(mass, float)
+    E_FIELD(gravityScale, float)
+    E_FIELD(velocity, Engine::Math::Vector2f)
+    E_FIELD(angularVelocity, float)
+    E_FIELD(fixedRotation, bool)
+E_END

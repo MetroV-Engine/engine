@@ -19,7 +19,7 @@
 #include "Engine/Component/Physics/FluidVolume.hpp"
 #include "Engine/Component/Physics/RigidBody.hpp"
 #include "Engine/Component/Transform.hpp"
-#include "Engine/System/Physics/Gravity/GravitySettings.hpp"
+#include "Engine/Resource/Physics/GravitySettings.hpp"
 
 namespace Engine::System {
     /**
@@ -42,9 +42,7 @@ namespace Engine::System {
     class BuoyancySystem : public ECS::ISystem {
         public:
             void update(ECS::Registry& world, double dt) override {
-                const Math::Vector2f gravity = world.hasResource<GravitySettings>()
-                    ? world.getResource<GravitySettings>().gravity
-                    : GravitySettings{}.gravity;
+                const Math::Vector2f gravity = Resource::GravitySettings::of(world).gravity;
                 const float step = static_cast<float>(dt);
                 for (auto [volume, volumeTransform, fluid] :
                      world.view<Component::Transform, Component::FluidVolume>()) {

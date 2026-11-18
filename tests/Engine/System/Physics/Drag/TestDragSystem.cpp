@@ -15,7 +15,7 @@ using Component::Drag;
 using Component::RigidBody;
 using Component::Transform;
 using System::DragSystem;
-using System::GravitySettings;
+using Resource::GravitySettings;
 using System::GravitySystem;
 using System::IntegrationSystem;
 using TestSupport::near;

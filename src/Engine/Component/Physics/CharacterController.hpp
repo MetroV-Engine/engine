@@ -9,6 +9,7 @@
 #include <limits>
 
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -202,3 +203,23 @@ namespace Engine::Component {
         State state;
     };
 }
+
+// Not reflected: physicsTimeLeft and state: what the system computes every step.
+E_REFLECT_AS(Engine::Component::CharacterController, "CharacterController")
+    E_FIELD(maxSpeed, float)
+    E_FIELD(acceleration, float)
+    E_FIELD(deceleration, float)
+    E_FIELD(fullGripFriction, float)
+    E_FIELD(pushStrength, float)
+    E_FIELD(airAcceleration, float)
+    E_FIELD(airDeceleration, float)
+    E_FIELD(jumpHeight, float)
+    E_FIELD(jumpCutFactor, float)
+    E_FIELD(fallGravityMultiplier, float)
+    E_FIELD(maxFallSpeed, float)
+    E_FIELD(groundSnapDistance, float)
+    E_FIELD(coyoteTime, float)
+    E_FIELD(jumpBufferTime, float)
+    E_FIELD(maxGroundAngle, float)
+    E_FIELD(mode, Engine::Component::CharacterController::Mode)
+E_END

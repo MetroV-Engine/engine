@@ -12,7 +12,7 @@
 #include "Engine/Component/Physics/GravityAttractor.hpp"
 #include "Engine/Component/Physics/RigidBody.hpp"
 #include "Engine/Component/Transform.hpp"
-#include "GravitySettings.hpp"
+#include "Engine/Resource/Physics/GravitySettings.hpp"
 
 namespace Engine::System {
     /**
@@ -30,13 +30,13 @@ namespace Engine::System {
         public:
             /** @brief Sets a default GravitySettings resource when none was set. */
             void init(ECS::Registry& world) override {
-                if (!world.hasResource<GravitySettings>()) {
-                    world.setResource<GravitySettings>();
+                if (!world.hasResource<Resource::GravitySettings>()) {
+                    world.setResource<Resource::GravitySettings>();
                 }
             }
 
             void update(ECS::Registry& world, double) override {
-                const GravitySettings& settings = world.getResource<GravitySettings>();
+                const Resource::GravitySettings& settings = world.getResource<Resource::GravitySettings>();
                 applyUniformGravity(world, settings);
                 applyAttractors(world, settings);
             }
@@ -44,13 +44,13 @@ namespace Engine::System {
             const std::string name() const override { return "GravitySystem"; }
 
         private:
-            static void applyUniformGravity(ECS::Registry& world, const GravitySettings& settings) {
+            static void applyUniformGravity(ECS::Registry& world, const Resource::GravitySettings& settings) {
                 for (auto [entity, body] : world.view<Component::RigidBody>()) {
                     body.force += Physic::weight(body.mass, settings.gravity, body.gravityScale);
                 }
             }
 
-            static void applyAttractors(ECS::Registry& world, const GravitySettings& settings) {
+            static void applyAttractors(ECS::Registry& world, const Resource::GravitySettings& settings) {
                 for (auto [attractor, attractorTransform, field] :
                      world.view<Component::Transform, Component::GravityAttractor>()) {
                     for (auto [entity, transform, body] :

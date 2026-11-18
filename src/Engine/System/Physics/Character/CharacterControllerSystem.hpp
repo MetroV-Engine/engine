@@ -19,8 +19,8 @@
 #include "Engine/Component/Physics/Collider.hpp"
 #include "Engine/Component/Physics/RigidBody.hpp"
 #include "Engine/Component/Physics/SurfaceContact.hpp"
-#include "Engine/System/Physics/Collision/Contacts.hpp"
-#include "Engine/System/Physics/Gravity/GravitySettings.hpp"
+#include "Engine/Resource/Physics/Contacts.hpp"
+#include "Engine/Resource/Physics/GravitySettings.hpp"
 
 namespace Engine::System {
     /**
@@ -90,9 +90,7 @@ namespace Engine::System {
                 if (step <= 0.f) {
                     return;
                 }
-                const Math::Vector2f gravity = world.hasResource<GravitySettings>()
-                    ? world.getResource<GravitySettings>().gravity
-                    : GravitySettings{}.gravity;
+                const Math::Vector2f gravity = Resource::GravitySettings::of(world).gravity;
                 const Math::Vector2f up = gravity.lengthSquared() > Math::Epsilon<float>
                     ? -gravity.normalized()
                     : Math::Vector2f::unitY();
@@ -171,11 +169,11 @@ namespace Engine::System {
              *        degrees): what it pushes by running that way.
              */
             static bool runsInto(const ECS::Registry& world, ECS::Entity character, const Math::Vector2f& direction) {
-                if (!world.hasResource<Contacts>()) {
+                if (!world.hasResource<Resource::Contacts>()) {
                     return false;
                 }
                 constexpr float WithinSixtyDegrees = 0.5f;
-                for (const CollisionPair& pair : world.getResource<Contacts>().pairs) {
+                for (const Resource::CollisionPair& pair : world.getResource<Resource::Contacts>().pairs) {
                     if (pair.first != character && pair.second != character) {
                         continue;
                     }

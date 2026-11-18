@@ -7,6 +7,7 @@
 
 #include "Collider.hpp"
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -32,3 +33,8 @@ namespace Engine::Component {
         }
     };
 }
+
+E_REFLECT_AS(Engine::Component::Buoyant, "Buoyant")
+    E_FIELD(shape, Engine::Component::Collider::Shape)
+    E_FIELD(offset, Engine::Math::Vector2f)
+E_END

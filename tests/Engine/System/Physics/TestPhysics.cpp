@@ -49,9 +49,9 @@ void test_install() {
         expect(systems.getSystem<System::IntegrationSystem>() != nullptr);
         expect(systems.getSystem<System::CollisionSystem>() != nullptr);
         expect(systems.getSystem<System::CollisionResponseSystem>() != nullptr);
-        expect(world.hasResource<System::GravitySettings>());
-        expect(world.hasResource<System::Contacts>());
-        expect(world.hasResource<System::CollisionSettings>());
+        expect(world.hasResource<Resource::GravitySettings>());
+        expect(world.hasResource<Resource::Contacts>());
+        expect(world.hasResource<Resource::CollisionSettings>());
     };
 
     "a whole scene runs on it: a crate settles, a ball rolls, a character jumps its height, a raft floats"_test = [] {

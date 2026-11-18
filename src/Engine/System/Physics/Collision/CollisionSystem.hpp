@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "Contacts.hpp"
+#include "Engine/Resource/Physics/Contacts.hpp"
 #include "ECS/ECS.hpp"
 #include "Engine/Common/Physic/Collision/Overlap.hpp"
 #include "Engine/Component/Physics/Collider.hpp"
@@ -46,13 +46,13 @@ namespace Engine::System {
         public:
             /** @brief Sets an empty Contacts resource when none was set. */
             void init(ECS::Registry& world) override {
-                if (!world.hasResource<Contacts>()) {
-                    world.setResource<Contacts>();
+                if (!world.hasResource<Resource::Contacts>()) {
+                    world.setResource<Resource::Contacts>();
                 }
             }
 
             void update(ECS::Registry& world, double) override {
-                std::vector<CollisionPair>& pairs = world.getResource<Contacts>().pairs;
+                std::vector<Resource::CollisionPair>& pairs = world.getResource<Resource::Contacts>().pairs;
                 pairs.clear();
                 gather(world);
                 sweep(pairs);
@@ -90,7 +90,7 @@ namespace Engine::System {
                 });
             }
 
-            void sweep(std::vector<CollisionPair>& pairs) const {
+            void sweep(std::vector<Resource::CollisionPair>& pairs) const {
                 for (std::size_t i = 0; i < _entries.size(); ++i) {
                     const Entry& a = _entries[i];
                     // Sorted by min.x: once a box starts after a ends, so do all the next ones.

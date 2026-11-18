@@ -14,8 +14,8 @@
 #include <string>
 #include <vector>
 
-#include "CollisionSettings.hpp"
-#include "Contacts.hpp"
+#include "Engine/Resource/Physics/CollisionSettings.hpp"
+#include "Engine/Resource/Physics/Contacts.hpp"
 #include "ECS/ECS.hpp"
 #include "Engine/Common/Math/Scalar.hpp"
 #include "Engine/Common/Physic/Forces/Dynamics.hpp"
@@ -25,7 +25,7 @@
 #include "Engine/Component/Physics/RigidBody.hpp"
 #include "Engine/Component/Physics/SurfaceContact.hpp"
 #include "Engine/Component/Transform.hpp"
-#include "Engine/System/Physics/Gravity/GravitySettings.hpp"
+#include "Engine/Resource/Physics/GravitySettings.hpp"
 
 namespace Engine::System {
     /**
@@ -94,26 +94,24 @@ namespace Engine::System {
         public:
             /** @brief Sets default CollisionSettings and Contacts resources when none were set. */
             void init(ECS::Registry& world) override {
-                if (!world.hasResource<CollisionSettings>()) {
-                    world.setResource<CollisionSettings>();
+                if (!world.hasResource<Resource::CollisionSettings>()) {
+                    world.setResource<Resource::CollisionSettings>();
                 }
-                if (!world.hasResource<Contacts>()) {
-                    world.setResource<Contacts>();
+                if (!world.hasResource<Resource::Contacts>()) {
+                    world.setResource<Resource::Contacts>();
                 }
             }
 
             void update(ECS::Registry& world, double dt) override {
-                const Math::Vector2f gravity = world.hasResource<GravitySettings>()
-                    ? world.getResource<GravitySettings>().gravity
-                    : GravitySettings{}.gravity;
+                const Math::Vector2f gravity = Resource::GravitySettings::of(world).gravity;
                 const Step step{
-                    world.getResource<CollisionSettings>().restingSpeed,
+                    world.getResource<Resource::CollisionSettings>().restingSpeed,
                     gravity.lengthSquared() > Math::Epsilon<float> ? -gravity.normalized() : Math::Vector2f::unitY(),
                     gravity.length(),
                     static_cast<float>(dt),
                 };
                 _surfaces.clear();
-                for (const CollisionPair& pair : world.getResource<Contacts>().pairs) {
+                for (const Resource::CollisionPair& pair : world.getResource<Resource::Contacts>().pairs) {
                     resolve(world, pair, step);
                 }
                 updateSurfaceContacts(world);
@@ -207,7 +205,7 @@ namespace Engine::System {
                 return along <= self.surface->staticFriction * pressing * step.dt;
             }
 
-            void resolve(ECS::Registry& world, const CollisionPair& pair, const Step& step) {
+            void resolve(ECS::Registry& world, const Resource::CollisionPair& pair, const Step& step) {
                 Side a = side(world, pair.first);
                 Side b = side(world, pair.second);
                 if (!a.isDynamic() && !b.isDynamic()) {

@@ -23,7 +23,7 @@ using Component::RigidBody;
 using Component::SurfaceContact;
 using Component::Transform;
 using System::CollisionResponseSystem;
-using System::CollisionSettings;
+using Resource::CollisionSettings;
 using System::CollisionSystem;
 using TestSupport::near;
 using V = Math::Vector2f;
@@ -740,8 +740,8 @@ void test_surface_contact() {
 
         systems.update(world, Step);
 
-        expect(fatal(world.getResource<System::Contacts>().pairs.size() == 1_u));
-        expect(world.getResource<System::Contacts>().pairs[0].first == crate);
+        expect(fatal(world.getResource<Resource::Contacts>().pairs.size() == 1_u));
+        expect(world.getResource<Resource::Contacts>().pairs[0].first == crate);
         expect(fatal(world.hasComponents<SurfaceContact>(crate)));
         expect(near(world.getComponent<SurfaceContact>(crate).normal, V(0.f, 1.f), 1e-6f));
         expect(near(positionOf(world, crate).y, 0.5f, 1e-6f));
@@ -918,7 +918,7 @@ void test_who_responds() {
         ECS::SystemManager systems;
         systems.addSystem<CollisionResponseSystem>(world);
         expect(world.getResource<CollisionSettings>().restingSpeed == 2.f);
-        expect(world.hasResource<System::Contacts>());
+        expect(world.hasResource<Resource::Contacts>());
 
         ECS::Registry other;
         ECS::SystemManager otherSystems;

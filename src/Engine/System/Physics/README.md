@@ -19,9 +19,9 @@ systems.addSystem<CameraSystem>(world);       // the game's systems that read th
 systems.update(world, Physics::Step);
 ```
 
-Each system sets the resources it needs (`GravitySettings`,
-`CollisionSettings`, `Contacts`) when they are not there yet. Set your own
-before `install` to change them.
+Each system sets the resources it needs (`Resource::GravitySettings`,
+`Resource::CollisionSettings`, `Resource::Contacts`) when they are not there
+yet. Set your own before `install` to change them.
 
 ## Systems, in order
 
@@ -45,6 +45,7 @@ Systems 1 to 5 only add to `RigidBody::force` and `torque`.
 | What | Where |
 | --- | --- |
 | Components (`RigidBody`, `Collider`, `CharacterController`, ...) | [Component/Physics/](../../Component/Physics/) |
+| Resources: world-wide data, set once per world (`GravitySettings`, `CollisionSettings`, the step's `Contacts`) | [Resource/Physics/](../../Resource/Physics/) |
 | Formulas with no ECS (kinematics, impacts, forces, collision shapes, raycasts) | [Common/Physic/](../../Common/Physic/) |
 | Tests | [tests/Engine/System/Physics/](../../../../tests/Engine/System/Physics/) |
 

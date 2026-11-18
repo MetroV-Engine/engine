@@ -6,6 +6,7 @@
  */
 
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -61,3 +62,7 @@ namespace Engine::Component {
         Math::Vector2f arm;
     };
 }
+
+// Not reflected: every field: written again by CollisionResponseSystem every step.
+E_REFLECT_AS(Engine::Component::SurfaceContact, "SurfaceContact")
+E_END

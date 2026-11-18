@@ -6,6 +6,7 @@
  */
 
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -22,3 +23,8 @@ namespace Engine::Component {
         float rotation = 0.f;
     };
 }
+
+E_REFLECT_AS(Engine::Component::Transform, "Transform")
+    E_FIELD(position, Engine::Math::Vector2f)
+    E_FIELD(rotation, float)
+E_END

@@ -20,9 +20,9 @@ using namespace Engine;
 using Component::Collider;
 using Component::RigidBody;
 using Component::Transform;
-using System::CollisionPair;
+using Resource::CollisionPair;
 using System::CollisionSystem;
-using System::Contacts;
+using Resource::Contacts;
 using TestSupport::near;
 using V = Math::Vector2f;
 

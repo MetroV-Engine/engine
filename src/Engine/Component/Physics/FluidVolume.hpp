@@ -6,6 +6,7 @@
  */
 
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -34,3 +35,9 @@ namespace Engine::Component {
         float drag = 0.f;
     };
 }
+
+E_REFLECT_AS(Engine::Component::FluidVolume, "FluidVolume")
+    E_FIELD(halfSize, Engine::Math::Vector2f)
+    E_FIELD(density, float)
+    E_FIELD(drag, float)
+E_END

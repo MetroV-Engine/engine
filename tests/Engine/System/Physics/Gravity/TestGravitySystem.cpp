@@ -10,7 +10,7 @@ using namespace Engine;
 using Component::GravityAttractor;
 using Component::RigidBody;
 using Component::Transform;
-using System::GravitySettings;
+using Resource::GravitySettings;
 using System::GravitySystem;
 using TestSupport::near;
 using V = Math::Vector2f;
@@ -44,6 +44,28 @@ void test_init_sets_default_settings() {
         systems.addSystem<GravitySystem>(world);
 
         expect(world.getResource<GravitySettings>().gravity == V(0.f, 3.f));
+    };
+}
+
+void test_settings_of() {
+    "GravitySettings::of gives the defaults when the world has none"_test = [] {
+        const ECS::Registry world;
+
+        const GravitySettings settings = GravitySettings::of(world);
+
+        expect(settings.gravity == V(0.f, -Physic::StandardGravity<float>));
+        expect(settings.gravitationalConstant == Physic::GravitationalConstant<float>);
+        expect(!world.hasResource<GravitySettings>()) << "reading must not create the resource";
+    };
+
+    "GravitySettings::of gives the world's settings when it has some"_test = [] {
+        ECS::Registry world;
+        world.setResource<GravitySettings>(GravitySettings{V(2.f, 3.f), 5.f});
+
+        const GravitySettings settings = GravitySettings::of(world);
+
+        expect(settings.gravity == V(2.f, 3.f));
+        expect(settings.gravitationalConstant == 5.f);
     };
 }
 
@@ -187,6 +209,7 @@ void test_settings_change_at_runtime() {
 
 void run_gravity_system_tests() {
     test_init_sets_default_settings();
+    test_settings_of();
     test_uniform_gravity();
     test_attractors();
     test_settings_change_at_runtime();

@@ -8,6 +8,7 @@
 
 #include "ECS/Core/Entity/Entity.hpp"
 #include "Engine/Common/Math/Vector.hpp"
+#include "Engine/Component/Reflection.hpp"
 
 namespace Engine::Component {
     /**
@@ -74,3 +75,13 @@ namespace Engine::Component {
         Math::Vector2f otherPoint;
     };
 }
+
+// Not reflected: body and other: entity handles, only valid in the world that made them.
+E_REFLECT_AS(Engine::Component::Spring, "Spring")
+    E_FIELD(anchor, Engine::Math::Vector2f)
+    E_FIELD(restLength, float)
+    E_FIELD(stiffness, float)
+    E_FIELD(damping, float)
+    E_FIELD(bodyPoint, Engine::Math::Vector2f)
+    E_FIELD(otherPoint, Engine::Math::Vector2f)
+E_END

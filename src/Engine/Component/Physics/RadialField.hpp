@@ -5,6 +5,8 @@
  * @brief A field that pushes bodies away from a point, or pulls them in.
  */
 
+#include "Engine/Component/Reflection.hpp"
+
 namespace Engine::Component {
     /**
      * @brief Pushes every RigidBody within `radius` away from the entity's
@@ -25,3 +27,8 @@ namespace Engine::Component {
         float radius = 1.f;
     };
 }
+
+E_REFLECT_AS(Engine::Component::RadialField, "RadialField")
+    E_FIELD(strength, float)
+    E_FIELD(radius, float)
+E_END

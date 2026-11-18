@@ -21,7 +21,7 @@ using Component::Spring;
 using Component::SurfaceContact;
 using Component::Transform;
 using System::FrictionSystem;
-using System::GravitySettings;
+using Resource::GravitySettings;
 using System::GravitySystem;
 using System::IntegrationSystem;
 using System::SpringSystem;

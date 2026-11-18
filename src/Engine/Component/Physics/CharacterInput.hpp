@@ -5,6 +5,8 @@
  * @brief What the player (or an AI) asks a character to do this step.
  */
 
+#include "Engine/Component/Reflection.hpp"
+
 namespace Engine::Component {
     /**
      * @brief The intent of a character, written by the game every step and
@@ -29,3 +31,7 @@ namespace Engine::Component {
         bool jump = false;
     };
 }
+
+// Not reflected: move and jump: written by the game every step.
+E_REFLECT_AS(Engine::Component::CharacterInput, "CharacterInput")
+E_END

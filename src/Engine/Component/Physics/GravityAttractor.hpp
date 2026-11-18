@@ -5,6 +5,8 @@
  * @brief A body that attracts the others by universal gravitation.
  */
 
+#include "Engine/Component/Reflection.hpp"
+
 namespace Engine::Component {
     /**
      * @brief Attracts every RigidBody with F = G * mA * mB / d².
@@ -18,3 +20,7 @@ namespace Engine::Component {
         float mass = 0.f;
     };
 }
+
+E_REFLECT_AS(Engine::Component::GravityAttractor, "GravityAttractor")
+    E_FIELD(mass, float)
+E_END

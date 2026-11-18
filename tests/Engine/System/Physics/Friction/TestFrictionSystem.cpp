@@ -13,7 +13,7 @@ using namespace Engine;
 using Component::RigidBody;
 using Component::SurfaceContact;
 using System::FrictionSystem;
-using System::GravitySettings;
+using Resource::GravitySettings;
 using System::GravitySystem;
 using TestSupport::near;
 using V = Math::Vector2f;
