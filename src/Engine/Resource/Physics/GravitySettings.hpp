@@ -5,10 +5,11 @@
  * @brief World-wide gravity parameters, stored as an ECS resource.
  */
 
+#include "ECS/ECS.hpp"
 #include "Engine/Common/Math/Vector.hpp"
 #include "Engine/Common/Physic/Forces/Gravity.hpp"
 
-namespace Engine::System {
+namespace Engine::Resource {
     /**
      * @brief Gravity of the world, read by GravitySystem every step.
      *
@@ -31,5 +32,17 @@ namespace Engine::System {
          * far too weak to notice: raise it to tune them.
          */
         float gravitationalConstant = Physic::GravitationalConstant<float>;
+
+        /**
+         * @brief The world's GravitySettings, or the defaults when it has
+         *        none (GravitySystem sets them in init(), but a world without
+         *        GravitySystem still has a gravity to float or fall with).
+         *
+         * A copy: cheap (three floats), and valid even without the resource.
+         * To change the world's gravity, use world.getResource<GravitySettings>().
+         */
+        [[nodiscard]] static GravitySettings of(const ECS::Registry& world) {
+            return world.hasResource<GravitySettings>() ? world.getResource<GravitySettings>() : GravitySettings{};
+        }
     };
 }

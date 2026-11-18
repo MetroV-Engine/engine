@@ -5,7 +5,7 @@
  * @brief Settings of the collision response, as an ECS resource.
  */
 
-namespace Engine::System {
+namespace Engine::Resource {
     /**
      * @brief Resource read by CollisionResponseSystem. It sets a default one
      *        in init() when none was set.

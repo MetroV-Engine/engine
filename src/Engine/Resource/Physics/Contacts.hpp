@@ -10,7 +10,7 @@
 #include "ECS/ECS.hpp"
 #include "Engine/Common/Physic/Collision/Contact.hpp"
 
-namespace Engine::System {
+namespace Engine::Resource {
     /** @brief Two colliders that overlap, and how they touch. */
     struct CollisionPair {
         /** @brief The first entity: contact.normal points away from it. */

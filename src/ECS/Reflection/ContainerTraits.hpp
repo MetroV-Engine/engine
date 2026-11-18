@@ -6,8 +6,11 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include "TypeInfo.hpp"
@@ -31,6 +34,11 @@ namespace ECS::reflect {
      *   optionally `insert(T&, const Key&) -> Value*`.
      * - Optional: `using Value`, `name(valueName)`, `hasValue(const T&)`,
      *   `get(T&) -> Value*`, `reset(T&)`; optionally `emplace(T&) -> Value*`.
+     * - Variant: `using Alternatives = std::tuple<...>` (the alternative
+     *   types, in index order), `name(alternativeNames)` (a
+     *   std::vector<std::string_view>), `index(const T&)` (std::size_t(-1)
+     *   when valueless), `get(T&) -> void*` (the held alternative) and
+     *   `emplace(T&, index) -> void*` (null if impossible, T unchanged).
      *
      * Specialise it next to your own container type to make it inspectable
      * by the editor, scripts and serializers without touching the engine.
@@ -146,6 +154,57 @@ namespace ECS::reflect {
         static void reset(Container& o) noexcept { o.reset(); }
     };
 
+    // --- Variant ----------------------------------------------------------
+
+    template<typename... Ts>
+    struct ContainerTraits<std::variant<Ts...>> {
+        using Container = std::variant<Ts...>;
+        static constexpr TypeKind kind = TypeKind::Variant;
+        using Alternatives = std::tuple<Ts...>;
+
+        static std::string name(const std::vector<std::string_view>& alternatives) {
+            std::string result = "variant<";
+            for (std::size_t i = 0; i < alternatives.size(); ++i) {
+                result += (i > 0 ? "," : "") + std::string(alternatives[i]);
+            }
+            return result + ">";
+        }
+        // std::variant_npos is std::size_t(-1).
+        static std::size_t index(const Container& v) noexcept { return v.index(); }
+        static void* get(Container& v) noexcept {
+            return getAt(v, v.index(), std::index_sequence_for<Ts...>{});
+        }
+        static void* emplace(Container& v, std::size_t index) {
+            return emplaceAt(v, index, std::index_sequence_for<Ts...>{});
+        }
+
+    private:
+        // By index rather than std::visit: the same type may appear twice,
+        // and a valueless variant gives null instead of throwing.
+        template<std::size_t... I>
+        static void* getAt(Container& v, std::size_t index, std::index_sequence<I...>) noexcept {
+            void* held = nullptr;
+            (void)((I == index && (held = std::get_if<I>(&v), true)) || ...);
+            return held;
+        }
+
+        template<std::size_t... I>
+        static void* emplaceAt(Container& v, std::size_t index, std::index_sequence<I...>) {
+            void* made = nullptr;
+            (void)((I == index && (made = emplaceOne<I>(v), true)) || ...);
+            return made;
+        }
+
+        template<std::size_t I>
+        static void* emplaceOne(Container& v) {
+            if constexpr (std::is_default_constructible_v<std::variant_alternative_t<I, Container>>) {
+                return &v.template emplace<I>();
+            } else {
+                return nullptr;
+            }
+        }
+    };
+
     namespace detail {
         /**
          * @brief is_copy_constructible that also looks inside containers.
@@ -166,6 +225,10 @@ namespace ECS::reflect {
                            isDeepCopyable<typename Traits::Value>();
                 } else if constexpr (Traits::kind == TypeKind::Optional) {
                     return isDeepCopyable<typename Traits::Value>();
+                } else if constexpr (Traits::kind == TypeKind::Variant) {
+                    return []<typename... As>(std::type_identity<std::tuple<As...>>) {
+                        return (isDeepCopyable<As>() && ...);
+                    }(std::type_identity<typename Traits::Alternatives>{});
                 } else {
                     return isDeepCopyable<typename Traits::Element>();
                 }

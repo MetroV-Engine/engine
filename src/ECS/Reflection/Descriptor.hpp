@@ -128,10 +128,24 @@ namespace ECS::reflect {
  * as a component usable by TypeInfo (see RegistryInspector). Include
  * ECS/Reflection/Reflection.hpp to use it.
  */
-#define E_REFLECT(T)                                                          \
+#define E_REFLECT(T) E_REFLECT_AS(T, #T)
+
+/**
+ * @brief E_REFLECT under a chosen name: the name the editor, the level files
+ *        and TypeRegistry::find use. For a type whose spelling at global
+ *        scope is qualified, so that its name stays short:
+ * @code
+ * E_REFLECT_AS(Engine::Component::Transform, "Transform")
+ *     E_FIELD(position, Engine::Math::Vector2f)
+ * E_END
+ * @endcode
+ * Two reflected types must not share a name: the second one is refused (its
+ * error is listed by ComponentCatalog).
+ */
+#define E_REFLECT_AS(T, displayName)                                          \
     template<> struct ECS::reflect::Descriptor<T> {                           \
         using Self = T;                                                       \
-        static constexpr std::string_view name = #T;                          \
+        static constexpr std::string_view name = displayName;                 \
         static inline const bool registered_ =                                \
             (::ECS::reflect::detail::registerReflectedType<T>(), true);       \
         template<typename Visitor_> static void forEach(Visitor_& v_) {      \

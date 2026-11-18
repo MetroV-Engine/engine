@@ -40,7 +40,7 @@ read with `getComponent<T>`, and the other way round.
 | --- | --- |
 | **`E_REFLECT`** | Macro that describes a type and its fields. It is written next to the type and does not modify it. |
 | **`TypeInfo`** | Runtime description of a type: `name`, `id`, `size`, `kind`, `fields` and the operations the kind needs (construct, destroy, copy, container access). You never build one yourself. |
-| **`TypeKind`** | How a type can be inspected: `Struct` (reflected), `Scalar` (`bool`, integers, `float`, `double`, `std::string`), `Sequence` (`vector`, `array`), `Map` (`map`, `unordered_map`), `Optional`, `Enum` (through its integer value), `Opaque` (known size, contents not inspectable). |
+| **`TypeKind`** | How a type can be inspected: `Struct` (reflected), `Scalar` (`bool`, integers, `float`, `double`, `std::string`), `Sequence` (`vector`, `array`), `Map` (`map`, `unordered_map`), `Optional`, `Variant` (`std::variant`: the alternative it holds), `Enum` (through its integer value), `Opaque` (known size, contents not inspectable). |
 | **`TypeId`** | Hash of the reflected name. It is stable across runs and builds, so it can be persisted, unlike `componentId<T>()`. |
 | **`TypeRegistry`** | Process-wide catalogue of every `TypeInfo`, found by type, name or `TypeId`. |
 | **`Ref`** | Non-owning view on a value: a `TypeInfo` plus an address. You navigate through it by field name, index or key, and read the value back with `as<T>()`. |
@@ -89,8 +89,8 @@ E_END
 - `E_FIELD` checks at compile time that the declared type matches the real
   one.
 - A field can be a scalar, another reflected type, a `std::vector`,
-  `std::array`, `std::map`, `std::unordered_map` or `std::optional` (nested as
-  deep as needed), or an enum. Anything else is `Opaque`. Support for other
+  `std::array`, `std::map`, `std::unordered_map`, `std::optional` or
+  `std::variant` (nested as deep as needed), or an enum. Anything else is `Opaque`. Support for other
   containers is added by specialising `ContainerTraits`.
 
 In this ECS a component is any data struct attached to an entity, so every
@@ -187,6 +187,12 @@ void walk(reflect::Ref value) {
   `nullptr` instead.
 - A missing field, out-of-range index, missing key or empty optional gives an
   invalid `Ref` (`if (ref)`). Lookups can therefore be chained safely.
+- A path goes through a variant into the alternative it holds:
+  `path("shape.radius")` when the shape is a circle, an invalid `Ref` when it
+  is a box. `path("shape")` is the variant itself:
+  `path("shape").emplaceAlternative(1)` makes it hold a default alternative 1.
+  Alternatives are known by index (`type().variantOps->alternatives`), so the
+  same type may appear twice.
 - Path syntax: `a.b`, `list[2]`, `map[key]` (string, integer or enum keys).
 
 | Kind | Operations on `Ref` |
@@ -196,6 +202,7 @@ void walk(reflect::Ref value) {
 | sequence (`vector`, `array`) | `size`, `at`, `resizable`, `resize`, `push`, `eraseAt` |
 | map | `size`, `find(key)`, `insert(key)`, `eraseKey(key)`, `forEachEntry` |
 | optional | `hasValue`, `value`, `emplace`, `reset` |
+| variant | `alternativeIndex`, `alternative`, `emplaceAlternative(index)` |
 | enum | `enumValue`, `setEnumValue` |
 
 For printing, `PrettyPrint.hpp` also provides `prettyPrint(os, ref, options)`

@@ -19,6 +19,7 @@ void run_system_manager_tests();
 void run_descriptor_tests();
 void run_type_registry_tests();
 void run_containers_tests();
+void run_variant_tests();
 void run_pretty_print_tests();
 void run_registry_inspector_tests();
 void run_component_catalog_tests();
@@ -46,6 +47,7 @@ int main()
     run_descriptor_tests();
     run_type_registry_tests();
     run_containers_tests();
+    run_variant_tests();
     run_pretty_print_tests();
     run_registry_inspector_tests();
     run_component_catalog_tests();

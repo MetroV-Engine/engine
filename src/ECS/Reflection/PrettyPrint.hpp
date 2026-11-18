@@ -42,6 +42,7 @@ namespace ECS::reflect {
                         case TypeKind::Sequence: sequence(ref, depth); break;
                         case TypeKind::Map:      map(ref, depth); break;
                         case TypeKind::Optional: optional(ref, depth); break;
+                        case TypeKind::Variant:  variant(ref, depth); break;
                         case TypeKind::Enum:     leaf(ref, [&] { _os << *ref.enumValue(); }); break;
                         case TypeKind::Scalar:
                         case TypeKind::Opaque:   leaf(ref, [&] { scalar(ref); }); break;
@@ -93,6 +94,16 @@ namespace ECS::reflect {
                         value(ref.value(), depth);
                     } else {
                         leaf(ref, [&] { _os << "none"; });
+                    }
+                }
+
+                // The held alternative, as if it were the value itself: a
+                // struct alternative already shows its type name.
+                void variant(Ref ref, int depth) {
+                    if (const Ref held = ref.alternative()) {
+                        value(held, depth);
+                    } else {
+                        leaf(ref, [&] { _os << "valueless"; });
                     }
                 }
 
@@ -201,7 +212,8 @@ namespace ECS::reflect {
      *
      * Works on every TypeKind without knowing the type at compile time:
      * structs show their fields, sequences `[...]`, maps `{key: value}`,
-     * empty optionals `none`, enums their integer value. Leaves use the
+     * empty optionals `none`, variants the alternative they hold, enums
+     * their integer value. Leaves use the
      * TypeInfo print operation (operator<<); a type without one prints as
      * `<TypeName>`. Meant for logs and debugging, not for serialization.
      */

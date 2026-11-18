@@ -35,6 +35,7 @@ namespace ECS::reflect {
         Sequence, ///< Indexed container (std::vector, std::array); see SequenceOps.
         Map,      ///< Key/value container (std::map, std::unordered_map); see MapOps.
         Optional, ///< std::optional; see OptionalOps.
+        Variant,  ///< std::variant: one of several alternatives; see VariantOps.
         Enum,     ///< Enumeration, handled through its integer value; see EnumOps.
         Opaque,   ///< Known size and lifetime ops only; contents not inspectable.
     };
@@ -78,6 +79,31 @@ namespace ECS::reflect {
         /** @brief Default-constructs the value (replacing any); null if Value has no default constructor. */
         void* (*emplace)(void* optional) = nullptr;
         void (*reset)(void* optional) noexcept = nullptr;
+    };
+
+    /**
+     * @brief Runtime operations of a TypeKind::Variant.
+     *
+     * Alternatives are known by their index, in declaration order: the same
+     * type may appear twice (std::variant<int, int>).
+     */
+    struct VariantOps {
+        /** @brief Type of each alternative: index i holds an alternatives[i]. */
+        std::vector<const TypeInfo*> alternatives;
+        /**
+         * @brief Index of the held alternative. std::size_t(-1) when the
+         *        variant is valueless (an emplace threw).
+         */
+        std::size_t (*index)(const void* variant) noexcept = nullptr;
+        /** @brief Address of the held alternative; requires a valid index (unchecked). */
+        void* (*get)(void* variant) noexcept = nullptr;
+        /**
+         * @brief Default-constructs alternative index, replacing the held one,
+         *        and returns its address. Null, with the variant unchanged, if
+         *        index is out of range or that alternative has no default
+         *        constructor.
+         */
+        void* (*emplace)(void* variant, std::size_t index) = nullptr;
     };
 
     /** @brief Runtime operations of a TypeKind::Enum, through its integer value. */
@@ -129,6 +155,7 @@ namespace ECS::reflect {
         std::optional<SequenceOps> sequenceOps;
         std::optional<MapOps> mapOps;
         std::optional<OptionalOps> optionalOps;
+        std::optional<VariantOps> variantOps;
         std::optional<EnumOps> enumOps;
 
         /** @brief Returns the field with this name, or nullptr. */
