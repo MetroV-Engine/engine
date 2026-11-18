@@ -31,8 +31,20 @@ public:
 
     Renderer renderer(const Selection &selection) override
     {
-        return [renderer = DemoSceneRenderer(_scene, selection)](ImDrawList *drawList, ImVec2 min, ImVec2 max) {
-            renderer.draw(drawList, min, max);
+        return [renderer = DemoSceneRenderer(_scene, selection)](ImDrawList *drawList, ImVec2 min, ImVec2 max) mutable {
+            return renderer.draw(drawList, min, max);
+        };
+    }
+
+    // Every demo object is created with a Transform: templates do not list it.
+    std::vector<EntityTemplate> entityTemplates() const override
+    {
+        return {
+            {"Empty Object", "Object", {}},
+            {"Sprite", "Sprite", {"Sprite"}},
+            {"Enemy", "Enemy", {"Sprite", "BoxCollider", "Health", "EnemyAI"}},
+            {"Collectible", "Collectible", {"Sprite", "BoxCollider", "Collectible"}},
+            {"Camera", "Camera", {"Camera"}},
         };
     }
 

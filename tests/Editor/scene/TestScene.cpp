@@ -297,9 +297,9 @@ void run_demo_simulation_tests()
         DemoScene level(true);
         Selection selection;
         selection.set(find(level, "Player"));
-        const DemoSceneRenderer renderer(level, selection);
+        DemoSceneRenderer renderer(level, selection);
         DemoScene empty;
-        const DemoSceneRenderer emptyRenderer(empty, selection);
+        DemoSceneRenderer emptyRenderer(empty, selection);
         gui.frame([&] {
             ImDrawList *drawList = ImGui::GetForegroundDrawList();
             const int before = drawList->VtxBuffer.Size;
