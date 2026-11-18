@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "core/AssetLibrary/AssetLibrary.hpp"
 #include "core/GuiContext/GuiContext.hpp"
 #include "core/PanelManager/PanelManager.hpp"
 #include "ui/PerformanceOverlay/PerformanceOverlay.hpp"
@@ -61,7 +62,7 @@ class ViewportPanel;
 //   | Hierarchy |       Viewport        | Inspector     |
 //   |           |                       | Settings      |
 //   +-----------+-----------------------+ Levels        |
-//   | Entity    | Console | Buttons ... |               |
+//   | Entity    | Console | Assets ...  |               |
 //   | Palette   |                       |               |
 //   +-----------+-----------------------+---------------+
 //   | Status bar                                        |
@@ -125,6 +126,8 @@ private:
     EntityDropTarget _entityDropTarget;
     // The levels folder, opened into the scene and saved from it.
     LevelManager _levels;
+    // The assets folder, shown by the Asset Browser.
+    AssetLibrary _assets;
     CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;
