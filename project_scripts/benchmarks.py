@@ -56,6 +56,14 @@ class Change:
                 and self.baseline_us - self.current_us >= MIN_DELTA_US)
 
 
+def no_baseline_text(branch: str) -> str:
+    """Only pushes to dev become the baseline, so say so on any other run."""
+    if branch == "dev":
+        return "No baseline yet: these results become the baseline for the next runs."
+    return ("No baseline from `dev` yet: comparisons start after the first "
+            "benchmark run on `dev` (the next merge into it).")
+
+
 # --- run ---------------------------------------------------------------------
 
 def find_benchmarks(build_dir: Path) -> list[Path]:
@@ -120,11 +128,12 @@ def format_percent(change: Change) -> str:
     return f"{change.percent:+.1f}%"
 
 
-def markdown_report(changes: list[Change], threshold: float, has_baseline: bool) -> str:
+def markdown_report(changes: list[Change], threshold: float, has_baseline: bool,
+                    branch: str) -> str:
     regressions = [c for c in changes if c.is_regression(threshold)]
     lines = ["## Benchmarks", ""]
     if not has_baseline:
-        lines += ["No baseline yet (no successful run on `dev`): showing raw results.", ""]
+        lines += [no_baseline_text(branch) + " Raw results:", ""]
     elif regressions:
         lines += [f"⚠️ {len(regressions)} possible regression(s) above {threshold:g}% "
                   "(alert only, CI runners are noisy).", ""]
@@ -149,7 +158,7 @@ def discord_payload(changes: list[Change], threshold: float, has_baseline: bool,
                     branch: str, commit: str, run_url: str) -> dict:
     regressions = [c for c in changes if c.is_regression(threshold)]
     if not has_baseline:
-        status, color = "No baseline yet: first results recorded.", 0x95A5A6
+        status, color = no_baseline_text(branch), 0x95A5A6
     elif regressions:
         status, color = f"⚠️ {len(regressions)} possible regression(s) above {threshold:g}%", 0xE67E22
     else:
@@ -201,7 +210,7 @@ def compare(args: argparse.Namespace) -> int:
     has_baseline = bool(baseline)
 
     changes = compute_changes(current, baseline)
-    report = markdown_report(changes, args.threshold, has_baseline)
+    report = markdown_report(changes, args.threshold, has_baseline, args.branch)
     print(report)
     if args.markdown:
         with open(args.markdown, "a", encoding="utf-8") as file:
