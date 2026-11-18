@@ -62,6 +62,7 @@ struct Transform
 {
     Vector2 position;
     float rotation = 0.0f;
+    Vector2 scale{1.0f, 1.0f};
 };
 
 struct Velocity
@@ -120,6 +121,7 @@ E_END
 E_REFLECT(Transform)
     E_FIELD(position, Vector2)
     E_FIELD(rotation, float)
+    E_FIELD(scale, Vector2)
 E_END
 
 E_REFLECT(Velocity)
@@ -250,8 +252,10 @@ ViewportView drawWorld(ECS::Registry &world, ImDrawList *drawList, ImVec2 min, I
         if (!body.visible)
             continue;
         const ImVec2 center = view.toScreen(Vec2{transform.position.x, transform.position.y});
+        const ImVec2 radius(std::max(body.radius * std::abs(transform.scale.x) * scale, 1.0f),
+            std::max(body.radius * std::abs(transform.scale.y) * scale, 1.0f));
         const Rgba &c = body.color;
-        drawList->AddCircleFilled(center, std::max(body.radius * scale, 1.0f), ImGui::ColorConvertFloat4ToU32(ImVec4(c.r, c.g, c.b, c.a)));
+        drawList->AddEllipseFilled(center, radius, ImGui::ColorConvertFloat4ToU32(ImVec4(c.r, c.g, c.b, c.a)));
     }
     return view;
 }

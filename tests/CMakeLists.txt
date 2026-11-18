@@ -58,12 +58,14 @@ endif()
 # Editor tests (src/Editor): built with the editor only, -DENGINE_BUILD_GUI=ON.
 # Those that open a window use SDL's offscreen driver: no screen is needed.
 set(EDITOR_TEST_FILES
+	Editor/core/TestAssets.cpp
 	Editor/ecs/TestEcsBackend.cpp
 	Editor/ecs/TestEcsScene.cpp
 	Editor/ecs/TestEcsSimulation.cpp
 	Editor/ecs/TestEditorOnEcs.cpp
 	Editor/ecs/TestEntityDragDrop.cpp
 	Editor/scene/TestDemoSceneRenderer.cpp
+	Editor/scene/TestLevels.cpp
 	Editor/main.cpp
 )
 

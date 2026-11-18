@@ -13,6 +13,7 @@
 
 #include "Editor.hpp"
 #include "ecs/EcsBackend/EcsBackend.hpp"
+#include "panels/AssetBrowserPanel/AssetBrowserPanel.hpp"
 #include "panels/ButtonsPanel/ButtonsPanel.hpp"
 #include "panels/ConsolePanel/ConsolePanel.hpp"
 #include "panels/EntityPalettePanel/EntityPalettePanel.hpp"
@@ -20,6 +21,7 @@
 #include "panels/ImGuiDemoPanel.hpp"
 #include "panels/InputsPanel/InputsPanel.hpp"
 #include "panels/InspectorPanel/InspectorPanel.hpp"
+#include "panels/LevelsPanel/LevelsPanel.hpp"
 #include "panels/PlayControlsPanel/PlayControlsPanel.hpp"
 #include "panels/SettingsPanel/SettingsPanel.hpp"
 #include "panels/ShortcutsPanel/ShortcutsPanel.hpp"
@@ -56,6 +58,7 @@ Editor::Editor(GuiContext &gui, std::unique_ptr<SceneBackend> scene, Options opt
       _entityTemplates(_scene->entityTemplates()),
       _entityDropTarget(_entityTemplates, _scene->hierarchy(), _scene->properties(), _notifications, _play,
           [this](HierarchyModel::ObjectId id) { _hierarchy->showObject(id); }),
+      _levels(_scene->hierarchy(), _scene->properties()),
       _palette(_actions),
       _menuBar(_actions),
       _toolbar(_actions)
@@ -112,7 +115,8 @@ void Editor::registerPanels()
 {
     using Area = EditorLayout::Area;
 
-    _hierarchy = &_panels.registerPanel<HierarchyPanel>(_scene->hierarchy(), _selection, _notifications, _dialogs, _entityDropTarget);
+    _hierarchy = &_panels.registerPanel<HierarchyPanel>(
+        _scene->hierarchy(), _selection, _notifications, _dialogs, _entityDropTarget, _play);
     _layout.setDefaultArea("Hierarchy", Area::Left);
 
     // Locked: closed or undocked, nothing would be left to drag from.
@@ -121,7 +125,7 @@ void Editor::registerPanels()
     _layout.setDefaultArea("Entity Palette", Area::LeftBottom);
 
     _viewport = &_panels.registerPanel<ViewportPanel>(
-        _performanceOverlay, _play, _entityDropTarget, _scene->hierarchy(), _scene->properties(), _selection);
+        _performanceOverlay, _play, _entityDropTarget, _scene->hierarchy(), _scene->properties(), _selection, _grid);
     _viewport->setRenderer(_scene->renderer(_selection));
     _layout.setDefaultArea("Viewport", Area::Center);
 
@@ -129,8 +133,10 @@ void Editor::registerPanels()
         return _play.isStopped() ? std::string() : std::string("Play mode: changes are lost when the game stops.");
     });
     _layout.setDefaultArea("Inspector", Area::Right);
-    _panels.registerPanel<SettingsPanel>(_gui, _performanceOverlay);
+    _panels.registerPanel<SettingsPanel>(_gui, _performanceOverlay, _grid);
     _layout.setDefaultArea("Settings", Area::Right);
+    _levelsPanel = &_panels.registerPanel<LevelsPanel>(_levels, _play, _selection, _notifications, _dialogs);
+    _layout.setDefaultArea("Levels", Area::Right);
 
     _panels.registerPanel<PlayControlsPanel>(_actions, _play).setOnResetPosition([this] {
         _panels.setVisible("Game Controls", true);
@@ -139,8 +145,10 @@ void Editor::registerPanels()
     _layout.setDefaultArea("Game Controls", Area::Controls);
     _console = &_panels.registerPanel<ConsolePanel>(_commands);
     _layout.setDefaultArea("Console", Area::Bottom);
+    _panels.registerPanel<AssetBrowserPanel>(_assets);
+    _layout.setDefaultArea("Assets", Area::Bottom);
     // Widget demos, next to the console.
-    _layoutPanels = {"Hierarchy", "Entity Palette", "Viewport", "Inspector", "Game Controls", "Console", "Settings"};
+    _layoutPanels = {"Hierarchy", "Entity Palette", "Viewport", "Inspector", "Game Controls", "Console", "Assets", "Settings", "Levels"};
 
     if (_options.demo) {
         _panels.registerPanel<ButtonsPanel>(_notifications, _dialogs, [this] { requestQuit(); });
@@ -165,6 +173,9 @@ void Editor::registerActions()
 {
     _actions.add({.id = "file.quit", .label = "Quit", .callback = [this] { requestQuit(); },
         .shortcut = ImGuiMod_Ctrl | ImGuiKey_Q});
+    _actions.add({.id = "file.level.save", .label = "Save Level", .callback = [this] { _levelsPanel->save(); },
+        .shortcut = ImGuiMod_Ctrl | ImGuiKey_S, .tooltip = "Save the scene in the open level, or as a new one",
+        .isEnabled = [this] { return _play.isStopped(); }});
 
     for (const auto &panel : _panels.getPanels()) {
         Panel *p = panel.get();
@@ -174,7 +185,8 @@ void Editor::registerActions()
     }
     _actions.add({.id = "edit.create", .label = "Create Object",
         .callback = [this] { _hierarchy->createObject(HierarchyModel::InvalidId); },
-        .shortcut = ImGuiMod_Ctrl | ImGuiKey_N, .tooltip = "Create an object at the root of the scene"});
+        .shortcut = ImGuiMod_Ctrl | ImGuiKey_N, .tooltip = "Create an object at the root of the scene",
+        .isEnabled = [this] { return _play.isStopped(); }});
     // F2 and Delete are handled by the Hierarchy when it has focus (so typing
     // elsewhere never deletes an object); the menu shows them as hints.
     _actions.add({.id = "edit.rename", .label = "Rename", .callback = [this] { _hierarchy->startRename(_selection.get()); },
@@ -243,6 +255,8 @@ void Editor::registerActions()
 
 void Editor::buildMenuBar()
 {
+    _menuBar.addAction("File", "file.level.save");
+    _menuBar.addSeparator("File");
     _menuBar.addAction("File", "file.quit");
 
     _menuBar.addAction("Edit", "edit.create");
@@ -469,7 +483,65 @@ void Editor::registerCommands()
             count += 1 + scene.countDescendants(root);
         Logger::instance().info("Console", std::to_string(count) + " objects in the scene");
     });
+    _commands.add("assets", "assets", "Count the files of the assets folder", [this](const auto &) {
+        _assets.scan();
+        Logger::instance().info("Console", std::to_string(_assets.assets().size()) + " assets in " + _assets.folder().string()
+                + (_assets.truncated() ? " (stopped at the limit)" : ""));
+    });
+    _commands.add("level", "level <list|new|open|save|rename|delete> [names]",
+        "Manage the levels: list, new <name>, open <name>, save [new name], rename <old> <new>, delete <name>",
+        [this](const std::vector<std::string> &args) { levelCommand(args); });
     _scene->registerCommands(_commands);
+}
+
+void Editor::levelCommand(const std::vector<std::string> &args)
+{
+    Logger &logger = Logger::instance();
+    const std::string action = args.empty() ? std::string() : args[0];
+    const auto names = [&](std::size_t count) {
+        if (args.size() != count + 1)
+            throw std::invalid_argument(action + " expects " + std::to_string(count) + (count == 1 ? " name" : " names"));
+    };
+    if (action == "list") {
+        names(0);
+        std::string list;
+        for (const std::string &name : _levels.list())
+            list += (list.empty() ? "" : ", ") + name;
+        logger.info("Console", list.empty() ? "No level yet" : "Levels: " + list);
+        return;
+    }
+    if (!_play.isStopped())
+        throw std::invalid_argument("stop the game first");
+    // The Levels panel asks before discarding them; a command cannot.
+    if ((action == "new" || action == "open") && _levels.hasUnsavedChanges())
+        throw std::invalid_argument("the scene has unsaved changes: save them first");
+
+    if (action == "new") {
+        names(1);
+        _levels.create(args[1]);
+        _selection.clear();
+    } else if (action == "open") {
+        names(1);
+        for (const std::string &problem : _levels.open(args[1]))
+            logger.warning("Levels", args[1] + ": " + problem);
+        _selection.clear();
+    } else if (action == "save") {
+        if (args.size() == 2) {
+            _levels.saveAs(args[1]);
+        } else {
+            names(0);
+            _levels.save();
+        }
+    } else if (action == "rename") {
+        names(2);
+        _levels.rename(args[1], args[2]);
+    } else if (action == "delete") {
+        names(1);
+        _levels.remove(args[1]);
+    } else {
+        throw std::invalid_argument("expected list, new, open, save, rename or delete");
+    }
+    logger.info("Console", "Level " + action + ": done" + (_levels.current().empty() ? "" : ", open level " + _levels.current()));
 }
 
 void Editor::registerPlayControls()
@@ -549,6 +621,8 @@ void Editor::collectWorkspace(Workspace::Values &values) const
     Workspace::setBool(values, "editor.vsync", _gui.isVSync());
     Workspace::setBool(values, "editor.statusBar", _statusBar.isVisible());
     Workspace::setBool(values, "editor.performanceOverlay", _performanceOverlay.isVisible());
+    Workspace::setBool(values, "viewport.snap", _grid.snap);
+    Workspace::setInt(values, "viewport.gridSize", _grid.size);
 
     for (const auto &panel : _panels.getPanels())
         Workspace::setBool(values, "panel." + panel->getName(), panel->isVisible());
@@ -581,6 +655,9 @@ void Editor::applyWorkspace(const Workspace::Values &values)
     _gui.setVSync(Workspace::getBool(values, "editor.vsync", _gui.isVSync()));
     _statusBar.setVisible(Workspace::getBool(values, "editor.statusBar", true));
     _performanceOverlay.setVisible(Workspace::getBool(values, "editor.performanceOverlay", true));
+    _grid.snap = Workspace::getBool(values, "viewport.snap", false);
+    _grid.size = std::clamp(Workspace::getInt(values, "viewport.gridSize", ViewportGrid::DefaultSize), ViewportGrid::MinSize,
+        ViewportGrid::MaxSize);
 
     // Panels added since the save keep their default visibility.
     for (const auto &panel : _panels.getPanels()) {

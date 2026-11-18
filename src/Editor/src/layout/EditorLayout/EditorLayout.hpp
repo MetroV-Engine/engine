@@ -68,6 +68,8 @@ public:
 private:
     std::vector<std::pair<std::string, Area>> _defaultAreas;
     bool _resetRequested = false;
+    // Whether the first frame placed the panels a saved layout did not know.
+    bool _newPanelsDocked = false;
     // Frames to wait before selecting each area's first tab (its window must exist).
     int _selectFirstTabsIn = 0;
     float _leftRatio = 0.18f;
@@ -75,5 +77,11 @@ private:
     float _bottomRatio = 0.28f;
 
     void buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size);
+    // A layout saved before a panel existed would show it floating: it joins
+    // a panel of its area instead, or below the Left area for LeftBottom, as
+    // in the default layout.
+    void dockNewPanels(ImGuiID dockspaceId);
+    // The dock node of a panel of this area in the saved layout, or 0.
+    ImGuiID savedNode(Area area) const;
     void selectFirstTabs() const;
 };

@@ -40,7 +40,7 @@ void DemoSimulation::begin()
     _startPositions.clear();
     for (ObjectId id : _scene.allObjects()) {
         Vec2 position;
-        if (read(_scene, id, PositionComponent, PositionProperty, position))
+        if (read(_scene, id, TransformComponent, PositionProperty, position))
             _startPositions[id] = position;
     }
 }
@@ -52,7 +52,7 @@ void DemoSimulation::update(double dt)
 
     for (ObjectId id : _scene.allObjects()) {
         Vec2 position;
-        if (!read(_scene, id, PositionComponent, PositionProperty, position))
+        if (!read(_scene, id, TransformComponent, PositionProperty, position))
             continue;
         const Vec2 start = _startPositions.contains(id) ? _startPositions[id] : position;
 
@@ -85,7 +85,7 @@ void DemoSimulation::update(double dt)
         if (read(_scene, id, "Collectible", "kind", kind))
             position.y = start.y + std::sin(static_cast<float>(_time) * 3.0f + static_cast<float>(id) * 0.7f) * 4.0f;
 
-        _scene.set(id, PositionComponent, PositionProperty, position);
+        _scene.set(id, TransformComponent, PositionProperty, position);
     }
 }
 

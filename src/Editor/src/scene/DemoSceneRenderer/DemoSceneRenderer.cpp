@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <cmath>
 #include <optional>
 #include <vector>
 
@@ -36,11 +37,14 @@ std::vector<Box> collectBoxes(const DemoScene &scene)
 {
     std::vector<Box> boxes;
     for (ObjectId id : scene.allObjects()) {
-        const std::optional<Vec2> position = scene.getAs<Vec2>(id, PositionComponent, PositionProperty);
+        const std::optional<Vec2> position = scene.getAs<Vec2>(id, TransformComponent, PositionProperty);
         if (!position)
             continue;
+        // The collider, or a small marker, at the Transform's scale.
         const std::optional<Vec2> size = scene.getAs<Vec2>(id, "BoxCollider", "size");
-        boxes.push_back({id, *position, size.value_or(Vec2{6, 6}), size.has_value()});
+        const Vec2 base = size.value_or(Vec2{6, 6});
+        const Vec2 scale = scene.getAs<Vec2>(id, TransformComponent, ScaleProperty).value_or(Vec2{1, 1});
+        boxes.push_back({id, *position, Vec2{base.x * std::abs(scale.x), base.y * std::abs(scale.y)}, size.has_value()});
     }
     return boxes;
 }
