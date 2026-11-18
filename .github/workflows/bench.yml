@@ -1,0 +1,100 @@
+name: Benchmarks
+
+# Runs every benchmark, compares it to the last successful run on dev and
+# posts a digest to Discord. Regressions are alerts, never build failures:
+# shared runners are too noisy for that. See benchmarks/README.md.
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read # download the baseline artifact of an earlier run
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REPETITIONS: 1000
+
+jobs:
+  bench:
+    name: Run and compare benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install CMake and Ninja
+        uses: lukka/get-cmake@v4.3.1
+        with:
+          cmakeVersion: 3.31.6
+          ninjaVersion: 1.12.1
+
+      # No vcpkg: the benchmarks only need engine_ecs, and cmake/Vcpkg.cmake
+      # skips vcpkg when its submodule is not checked out.
+      - name: Build benchmarks (Release)
+        run: |
+          cmake -S . -B build/bench -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENGINE_BUILD_BENCHMARKS=ON \
+            -DENGINE_BUILD_TESTS=OFF \
+            -DENGINE_BUILD_APP=OFF \
+            -DENGINE_BUILD_GUI=OFF
+          cmake --build build/bench
+
+      - name: Run benchmarks
+        run: >
+          python project_scripts/benchmarks.py run
+          --build-dir build/bench --out bench-results --repetitions "$REPETITIONS"
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: bench-results/
+          retention-days: 90
+
+      # Baseline: the results of the last successful push to dev. Missing on
+      # the very first run or once the artifact has expired; compare then
+      # reports raw results only.
+      - name: Download baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow bench.yml \
+            --branch dev --event push --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+              --name bench-results --dir baseline \
+              || echo "Baseline artifact of run $run_id is unavailable"
+          else
+            echo "No successful benchmark run on dev yet"
+          fi
+
+      # Fork pull requests get no secrets: the script then skips Discord.
+      # Branch and commit go through env, never straight into the script:
+      # a branch name is user input.
+      - name: Compare and report
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_BENCH_WEBHOOK }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >
+          python project_scripts/benchmarks.py compare
+          --current bench-results --baseline baseline
+          --markdown "$GITHUB_STEP_SUMMARY" --discord
+          --branch "$BRANCH" --commit "$COMMIT" --run-url "$RUN_URL"
