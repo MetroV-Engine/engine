@@ -306,6 +306,19 @@ void run_entity_drag_drop_tests()
         expect(world.getComponent<Transform>(still).position.x == 100.0f);
     };
 
+    "clicking empty space in the Viewport clears the selection"_test = [] {
+        ECS::Registry world;
+        const ECS::Entity box = world.spawnEntity("Box");
+        world.addComponent(box, Transform{{100, 80}});
+
+        // Selects the box, then presses far from it and from its handles.
+        const DragResult result = runDrag(world, {.moveFrom = Vec2{100, 80}, .moveTo = Vec2{100, 80}, .selectFirst = true,
+                                                     .fromOffset = {100, 100}, .toOffset = {100, 100}});
+
+        expect(result.selectedName.empty());
+        expect(world.getComponent<Transform>(box).position.x == 100.0f);
+    };
+
     "objects cannot be moved during Play"_test = [] {
         ECS::Registry world;
         const ECS::Entity still = world.spawnEntity("Still");

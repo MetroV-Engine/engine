@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "core/AssetLibrary/AssetLibrary.hpp"
 #include "core/GuiContext/GuiContext.hpp"
 #include "core/PanelManager/PanelManager.hpp"
 #include "ui/PerformanceOverlay/PerformanceOverlay.hpp"
@@ -27,6 +28,7 @@
 #include "navigation/MenuBar/MenuBar.hpp"
 #include "navigation/Toolbar/Toolbar.hpp"
 #include "panels/EntityDropTarget/EntityDropTarget.hpp"
+#include "scene/LevelManager/LevelManager.hpp"
 #include "scene/PlayController/PlayController.hpp"
 #include "scene/SceneBackend.hpp"
 #include "scene/Selection.hpp"
@@ -45,6 +47,7 @@ class SystemManager;
 
 class ConsolePanel;
 class HierarchyPanel;
+class LevelsPanel;
 class ShortcutsPanel;
 class ViewportPanel;
 
@@ -58,8 +61,8 @@ class ViewportPanel;
 //   +-----------+-----------------------+---------------+
 //   | Hierarchy |       Viewport        | Inspector     |
 //   |           |                       | Settings      |
-//   +-----------+-----------------------+               |
-//   | Entity    | Console | Buttons ... |               |
+//   +-----------+-----------------------+ Levels        |
+//   | Entity    | Console | Assets ...  |               |
 //   | Palette   |                       |               |
 //   +-----------+-----------------------+---------------+
 //   | Status bar                                        |
@@ -121,6 +124,10 @@ private:
     // Only ever appended to: drag and drop payloads are indices into it.
     std::vector<EntityTemplate> _entityTemplates;
     EntityDropTarget _entityDropTarget;
+    // The levels folder, opened into the scene and saved from it.
+    LevelManager _levels;
+    // The assets folder, shown by the Asset Browser.
+    AssetLibrary _assets;
     CommandRegistry _commands;
     PanelManager _panels;
     ActionRegistry _actions;
@@ -131,6 +138,7 @@ private:
     EditorLayout _layout;
     ConsolePanel *_console = nullptr;
     HierarchyPanel *_hierarchy = nullptr;
+    LevelsPanel *_levelsPanel = nullptr;
     ShortcutsPanel *_shortcutsPanel = nullptr;
     ViewportPanel *_viewport = nullptr;
     bool _quitDialogOpen = false;
@@ -151,6 +159,8 @@ private:
     void buildToolbar();
     void buildStatusBar();
     void registerCommands();
+    // The "level" console command: list, new, open, save, rename, delete.
+    void levelCommand(const std::vector<std::string> &args);
     void registerPlayControls();
     void connectFeedback();
     // Loads the user's shortcuts and saves them whenever they change.
