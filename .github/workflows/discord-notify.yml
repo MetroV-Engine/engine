@@ -1,0 +1,137 @@
+name: Discord notifications
+
+# Posts the result of the "Build" workflow to the CI/CD Discord channel.
+# Note: workflow_run only fires from the copy of this file on the default
+# branch (main). Until then, use workflow_dispatch to test it.
+
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Notification to simulate
+        type: choice
+        default: pr-success
+        options:
+          - pr-success
+          - pr-failure
+          - main-success
+          - main-failure
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success' ||
+      github.event.workflow_run.conclusion == 'failure'
+
+    steps:
+      - name: Collect run details
+        id: details
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          SCENARIO: ${{ inputs.scenario }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TITLE: ${{ github.event.workflow_run.display_title }}
+          TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
+          ACTOR: ${{ github.event.workflow_run.actor.login }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          SELF_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            # Manual test: fake the values of a Build run.
+            case "$SCENARIO" in
+              main-*) HEAD_BRANCH=main; TRIGGER_EVENT=push ;;
+              *)      HEAD_BRANCH="${GITHUB_REF_NAME}"; TRIGGER_EVENT=pull_request ;;
+            esac
+            case "$SCENARIO" in
+              *-success) CONCLUSION=success ;;
+              *)         CONCLUSION=failure ;;
+            esac
+            RUN_URL="$SELF_RUN_URL"
+            TITLE="[test] Discord notification (${SCENARIO})"
+            HEAD_SHA="${GITHUB_SHA}"
+            ACTOR="${GITHUB_ACTOR}"
+            PR_NUMBER=""
+            ERRORS="(manual test run, no real failure)"
+          else
+            ERRORS=""
+            if [ "$CONCLUSION" = "failure" ]; then
+              # List failed jobs and their failed steps for context.
+              ERRORS="$(gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/jobs" \
+                --jq '.jobs[] | select(.conclusion == "failure")
+                      | "- \(.name): " + ([.steps[]? | select(.conclusion == "failure") | .name] | join(", ") | if . == "" then "failed" else "failed at \(.)" end)' \
+                || true)"
+              [ -n "$ERRORS" ] || ERRORS="(could not retrieve failed jobs)"
+            fi
+          fi
+
+          # Discord inline code: wrap in backticks (kept out of quotes for shellcheck).
+          BT=$'\x60'
+          SHA_MD="${BT}${HEAD_SHA:0:7}${BT}"
+          BRANCH_MD="${BT}${HEAD_BRANCH}${BT}"
+
+          if [ "$HEAD_BRANCH" = "main" ]; then
+            if [ "$CONCLUSION" = "success" ]; then
+              CONTENT=$(printf '✅ **A new version of MetroV is available for everyone!**\nCommit %s on main built successfully.\n%s' \
+                "$SHA_MD" "$RUN_URL")
+            else
+              CONTENT=$(printf '❌ **Merge to main failed**\nCommit %s on main (%s) did not build.\n%s\n%s' \
+                "$SHA_MD" "$TITLE" "$ERRORS" "$RUN_URL")
+            fi
+          else
+            if [ "$TRIGGER_EVENT" = "pull_request" ]; then
+              LABEL="PR${PR_NUMBER:+ #$PR_NUMBER}"
+            else
+              LABEL="Push"
+            fi
+            if [ "$CONCLUSION" = "success" ]; then
+              CONTENT=$(printf '✅ **%s build succeeded**: %s\nBranch %s · commit %s · by %s\n%s' \
+                "$LABEL" "$TITLE" "$BRANCH_MD" "$SHA_MD" "$ACTOR" "$RUN_URL")
+            else
+              CONTENT=$(printf '❌ **%s build failed**: %s\nBranch %s · commit %s · by %s\n%s\n%s' \
+                "$LABEL" "$TITLE" "$BRANCH_MD" "$SHA_MD" "$ACTOR" "$ERRORS" "$RUN_URL")
+            fi
+          fi
+
+          # Discord rejects messages longer than 2000 characters.
+          if [ "${#CONTENT}" -gt 1900 ]; then
+            CONTENT="${CONTENT:0:1900}…
+          ${RUN_URL}"
+          fi
+
+          jq -n --arg content "$CONTENT" \
+            '{content: $content, username: "MetroV CI", allowed_mentions: {parse: []}}' \
+            > "$RUNNER_TEMP/discord-payload.json"
+          echo "Payload:"
+          cat "$RUNNER_TEMP/discord-payload.json"
+
+      - name: Send to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DISCORD_WEBHOOK_URL}" ]; then
+            echo "::warning::DISCORD_WEBHOOK_URL secret is not set, skipping notification."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            -H "Content-Type: application/json" \
+            --data @"$RUNNER_TEMP/discord-payload.json" \
+            "${DISCORD_WEBHOOK_URL}"
