@@ -23,7 +23,7 @@
 #include "Systems/AnimationSystem/AnimationSystem.hpp"
 #include "Systems/CameraFollowSystem/CameraFollowSystem.hpp"
 #include "Systems/PlayerSystem/PlayerSystem.hpp"
-#include "ViewportView/ViewportView.hpp"
+#include "GameView/GameView.hpp"
 
 #include "Renderer/BasePath/BasePath.hpp"
 #include "Renderer/Font/Font.hpp"
@@ -124,8 +124,8 @@ int main(int argc, char **argv)
         systems.addSystem<CameraFollowSystem>(world);
 
         Editor editor(gui, world, systems);
-        ViewportView view(world, *renderer, textures, font.get(), [&editor] { return editor.playState(); });
-        editor.setViewportRenderer([&view](ImDrawList *drawList, ImVec2 min, ImVec2 max) { view(drawList, min, max); });
+        GameView view(world, *renderer, textures, font.get(), [&editor] { return editor.playState(); });
+        editor.setViewportRenderer([&view](ImDrawList *drawList, ImVec2 min, ImVec2 max) { return view(drawList, min, max); });
         logger.info("Playground", std::string("Rendering through ") + renderer->backendName());
         editor.run();
     } catch (const std::exception &e) {

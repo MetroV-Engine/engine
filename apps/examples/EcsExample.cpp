@@ -64,6 +64,7 @@ struct Transform
 {
     Vector2 position;
     float rotation = 0.0f;
+    Vector2 scale{1.0f, 1.0f};
 };
 
 struct Velocity
@@ -122,6 +123,7 @@ E_END
 E_REFLECT(Transform)
     E_FIELD(position, Vector2)
     E_FIELD(rotation, float)
+    E_FIELD(scale, Vector2)
 E_END
 
 E_REFLECT(Velocity)
@@ -238,23 +240,26 @@ void populate(ECS::Registry &world)
 }
 
 // Draws the arena and the bodies in the Viewport, fitted to it, until the
-// engine renders there.
-void drawWorld(ECS::Registry &world, ImDrawList *drawList, ImVec2 min, ImVec2 max)
+// engine renders there. The returned view lets the mouse place objects.
+ViewportView drawWorld(ECS::Registry &world, ImDrawList *drawList, ImVec2 min, ImVec2 max)
 {
     const Arena &arena = world.getResource<Arena>();
     const float scale = std::min((max.x - min.x) / arena.width, (max.y - min.y) / arena.height) * 0.9f;
-    const ImVec2 origin(min.x + ((max.x - min.x) - arena.width * scale) * 0.5f,
-        min.y + ((max.y - min.y) - arena.height * scale) * 0.5f);
-    drawList->AddRect(origin, ImVec2(origin.x + arena.width * scale, origin.y + arena.height * scale),
-        IM_COL32(128, 128, 128, 255));
+    const ViewportView view{ImVec2(min.x + ((max.x - min.x) - arena.width * scale) * 0.5f,
+                                min.y + ((max.y - min.y) - arena.height * scale) * 0.5f),
+        scale};
+    drawList->AddRect(view.origin, view.toScreen(Vec2{arena.width, arena.height}), IM_COL32(128, 128, 128, 255));
 
     for (auto [entity, transform, body] : world.view<Transform, Body>()) {
         if (!body.visible)
             continue;
-        const ImVec2 center(origin.x + transform.position.x * scale, origin.y + transform.position.y * scale);
+        const ImVec2 center = view.toScreen(Vec2{transform.position.x, transform.position.y});
+        const ImVec2 radius(std::max(body.radius * std::abs(transform.scale.x) * scale, 1.0f),
+            std::max(body.radius * std::abs(transform.scale.y) * scale, 1.0f));
         const Rgba &c = body.color;
-        drawList->AddCircleFilled(center, std::max(body.radius * scale, 1.0f), ImGui::ColorConvertFloat4ToU32(ImVec4(c.r, c.g, c.b, c.a)));
+        drawList->AddEllipseFilled(center, radius, ImGui::ColorConvertFloat4ToU32(ImVec4(c.r, c.g, c.b, c.a)));
     }
+    return view;
 }
 
 namespace {
@@ -305,7 +310,9 @@ int main(int argc, char **argv)
         GuiContext gui("MetroV Editor - ECS example", 1600, 900, backend);
         Editor editor(gui, world, systems);
         editor.setViewportRenderer(
-            [&world](ImDrawList *drawList, ImVec2 min, ImVec2 max) { drawWorld(world, drawList, min, max); });
+            [&world](ImDrawList *drawList, ImVec2 min, ImVec2 max) { return drawWorld(world, drawList, min, max); });
+        // Dragged from the Entity Palette onto the Hierarchy or the Viewport.
+        editor.addEntityTemplate({"Ball", "Ball", {"Transform", "Velocity", "Body"}});
         editor.run();
     } catch (const std::exception &e) {
         logger.error("Fatal", e.what());

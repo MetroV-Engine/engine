@@ -22,6 +22,8 @@
 namespace {
 
 constexpr const char *DockspaceName = "EditorDockspace";
+// Fraction of the left column given to LeftBottom.
+constexpr float LeftBottomRatio = 0.35f;
 
 } // namespace
 
@@ -57,7 +59,10 @@ void EditorLayout::draw()
     if (_resetRequested || !ImGui::DockBuilderGetNode(dockspaceId)) {
         buildDefaultLayout(dockspaceId, viewport->WorkSize);
         _resetRequested = false;
+    } else if (!_newPanelsDocked) {
+        dockNewPanels(dockspaceId);
     }
+    _newPanelsDocked = true;
     if (_selectFirstTabsIn > 0 && --_selectFirstTabsIn == 0)
         selectFirstTabs();
     // Covers the viewport's work area, which excludes the menu bar, the
@@ -74,7 +79,8 @@ void EditorLayout::buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size)
     // Each split takes a slice off the remaining node; what is left in the
     // middle is the center area.
     ImGuiID center = dockspaceId;
-    const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, _leftRatio, nullptr, &center);
+    ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, _leftRatio, nullptr, &center);
+    const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, LeftBottomRatio, nullptr, &left);
     const ImGuiID right =
         ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, _rightRatio / (1.0f - _leftRatio), nullptr, &center);
     ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, _bottomRatio, nullptr, &center);
@@ -91,6 +97,7 @@ void EditorLayout::buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size)
 
     for (const auto &[name, area] : _defaultAreas) {
         const ImGuiID node = area == Area::Left ? left
+            : area == Area::LeftBottom           ? leftBottom
             : area == Area::Right                ? right
             : area == Area::Bottom               ? bottom
             : area == Area::Controls             ? controls
@@ -101,11 +108,44 @@ void EditorLayout::buildDefaultLayout(ImGuiID dockspaceId, ImVec2 size)
     _selectFirstTabsIn = 2;
 }
 
+void EditorLayout::dockNewPanels(ImGuiID dockspaceId)
+{
+    bool docked = false;
+    for (const auto &[name, area] : _defaultAreas) {
+        // Saved panels stay wherever the user put them.
+        if (ImGui::FindWindowSettingsByID(ImHashStr(name.c_str())))
+            continue;
+        ImGuiID node = savedNode(area);
+        if (!node && area == Area::LeftBottom)
+            if (const ImGuiID left = savedNode(Area::Left))
+                node = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, LeftBottomRatio, nullptr, nullptr);
+        if (node) {
+            // Also creates the panel's settings: the next panel of its area joins it.
+            ImGui::DockBuilderDockWindow(name.c_str(), node);
+            docked = true;
+        }
+    }
+    if (docked)
+        ImGui::DockBuilderFinish(dockspaceId);
+}
+
+ImGuiID EditorLayout::savedNode(Area area) const
+{
+    for (const auto &[name, panelArea] : _defaultAreas) {
+        if (panelArea != area)
+            continue;
+        const ImGuiWindowSettings *settings = ImGui::FindWindowSettingsByID(ImHashStr(name.c_str()));
+        if (settings && settings->DockId && ImGui::DockBuilderGetNode(settings->DockId))
+            return settings->DockId;
+    }
+    return 0;
+}
+
 void EditorLayout::selectFirstTabs() const
 {
     // ImGui selects the last tab docked in a node; the first panel declared
     // for an area is the one meant to be shown. Focusing selects its tab.
-    for (const Area area : {Area::Left, Area::Right, Area::Bottom, Area::Center}) {
+    for (const Area area : {Area::Left, Area::LeftBottom, Area::Right, Area::Bottom, Area::Center}) {
         for (const auto &[name, panelArea] : _defaultAreas) {
             if (panelArea == area) {
                 if (ImGui::FindWindowByName(name.c_str()))

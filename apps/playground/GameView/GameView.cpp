@@ -1,6 +1,6 @@
 /*
     Created on: 11/17/26
-    Filename: ViewportView.cpp
+    Filename: GameView.cpp
     Description: The editor's Viewport for the game: input in, the rendered frame out as an image.
 
     ███╗   ███╗███████╗████████╗██████╗  ██████╗ ██╗   ██╗
@@ -11,7 +11,9 @@
     ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝   ╚═══╝
 */
 
-#include "ViewportView.hpp"
+#include "GameView.hpp"
+
+#include "Rendering/ViewMapping/ViewMapping.hpp"
 
 #include "Components/Camera.hpp"
 #include "Components/Transform.hpp"
@@ -40,7 +42,7 @@ bool held(const ImGuiKey a, const ImGuiKey b)
 
 } // namespace
 
-ViewportView::ViewportView(ECS::Registry &world, gfx::IOffscreenRenderer &renderer, TextureCache &textures,
+GameView::GameView(ECS::Registry &world, gfx::IOffscreenRenderer &renderer, TextureCache &textures,
     const gfx::Font *font, std::function<PlayState()> playState)
     : _world(world), _renderer(renderer), _textures(textures), _font(font), _playState(std::move(playState))
 {
@@ -48,12 +50,12 @@ ViewportView::ViewportView(ECS::Registry &world, gfx::IOffscreenRenderer &render
     _viewCamera.center = gfx::Vec2{120.0f, 360.0f};
 }
 
-void ViewportView::operator()(ImDrawList *drawList, const ImVec2 min, const ImVec2 max)
+ViewportView GameView::operator()(ImDrawList *drawList, const ImVec2 min, const ImVec2 max)
 {
     const long width = std::lround(max.x - min.x);
     const long height = std::lround(max.y - min.y);
     if (width < 1 || height < 1)
-        return;
+        return {};
     if (static_cast<uint32_t>(width) != _width || static_cast<uint32_t>(height) != _height) {
         _width = static_cast<uint32_t>(width);
         _height = static_cast<uint32_t>(height);
@@ -70,14 +72,19 @@ void ViewportView::operator()(ImDrawList *drawList, const ImVec2 min, const ImVe
         navigate(ImGui::GetIO().DeltaTime);
 
     _renderer.beginFrame(Background);
-    _renderer.setCamera(state == PlayState::Stopped ? _viewCamera : gameCamera());
+    const gfx::Camera2D camera = state == PlayState::Stopped ? _viewCamera : gameCamera();
+    _renderer.setCamera(camera);
     RenderSystem::draw(_world, _renderer, _textures, _font, gfx::Vec2{static_cast<float>(_width), static_cast<float>(_height)});
     _renderer.endFrame();
 
     drawList->AddImage(static_cast<ImTextureID>(_renderer.outputTexture()), min, max);
+
+    const ViewMapping mapping = viewMapping(camera, gfx::Vec2{min.x, min.y},
+        gfx::Vec2{static_cast<float>(_width), static_cast<float>(_height)});
+    return ViewportView{ImVec2(mapping.origin.x, mapping.origin.y), mapping.scale};
 }
 
-void ViewportView::feedInput(const PlayState state) const
+void GameView::feedInput(const PlayState state) const
 {
     if (!_world.hasResource<InputState>())
         return;
@@ -87,7 +94,7 @@ void ViewportView::feedInput(const PlayState state) const
         held(ImGuiKey_D, ImGuiKey_RightArrow), ImGui::IsKeyPressed(ImGuiKey_Space, false));
 }
 
-void ViewportView::navigate(const float deltaSeconds)
+void GameView::navigate(const float deltaSeconds)
 {
     if (!ImGui::IsWindowHovered())
         return;
@@ -106,7 +113,7 @@ void ViewportView::navigate(const float deltaSeconds)
         _viewCamera.zoom = std::clamp(_viewCamera.zoom * (wheel > 0.0f ? ZoomStep : 1.0f / ZoomStep), MinZoom, MaxZoom);
 }
 
-gfx::Camera2D ViewportView::gameCamera() const
+gfx::Camera2D GameView::gameCamera() const
 {
     for (auto [entity, transform, camera] : _world.view<Transform, Camera>())
         return gfx::Camera2D{gfx::Vec2{transform.position.x, transform.position.y}, camera.zoom};

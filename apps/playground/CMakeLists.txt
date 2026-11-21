@@ -25,7 +25,7 @@ playground_warnings(playground_game)
 
 # The executable needs the editor: built with ENGINE_BUILD_GUI.
 if(ENGINE_BUILD_GUI)
-  add_executable(playground main.cpp ViewportView/ViewportView.cpp)
+  add_executable(playground main.cpp GameView/GameView.cpp)
   target_link_libraries(playground PRIVATE playground_game engine_editor)
   playground_warnings(playground)
   # Assets live next to the binary: the code resolves them from there, never from the working directory.

@@ -1,6 +1,6 @@
 /*
     Created on: 11/17/26
-    Filename: ViewportView.hpp
+    Filename: GameView.hpp
     Description: The editor's Viewport for the game: input in, the rendered frame out as an image.
 
     ███╗   ███╗███████╗████████╗██████╗  ██████╗ ██╗   ██╗
@@ -19,6 +19,7 @@
 
 #include "ECS/ECS.hpp"
 #include "scene/PlayController/PlayController.hpp"
+#include "scene/ViewportView.hpp"
 
 #include <imgui.h>
 
@@ -31,14 +32,15 @@ class Font;
 
 // Called by the Viewport each editor frame, inside its window: Stopped shows a free view camera
 // (WASD/arrows pan, wheel zooms, while hovered); Playing and Paused show the game's Camera entity.
-class ViewportView
+class GameView
 {
 public:
     // Everything passed in must outlive the view.
-    ViewportView(ECS::Registry &world, gfx::IOffscreenRenderer &renderer, TextureCache &textures, const gfx::Font *font,
+    GameView(ECS::Registry &world, gfx::IOffscreenRenderer &renderer, TextureCache &textures, const gfx::Font *font,
         std::function<PlayState()> playState);
 
-    void operator()(ImDrawList *drawList, ImVec2 min, ImVec2 max);
+    // Returns where the world landed in the panel, for the editor's mouse tools.
+    ViewportView operator()(ImDrawList *drawList, ImVec2 min, ImVec2 max);
 
 private:
     void feedInput(PlayState state) const;

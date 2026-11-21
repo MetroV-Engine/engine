@@ -5,6 +5,7 @@ void run_camera_follow_system_tests();
 void run_input_mapping_tests();
 void run_render_system_tests();
 void run_level_tests();
+void run_view_mapping_tests();
 
 int main()
 {
@@ -14,4 +15,5 @@ int main()
     run_input_mapping_tests();
     run_render_system_tests();
     run_level_tests();
+    run_view_mapping_tests();
 }

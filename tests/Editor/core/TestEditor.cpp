@@ -4,6 +4,7 @@
 #include "core/Editor/Editor.hpp"
 #include "ecs/TestComponents.hpp"
 #include "scene/DemoBackend.hpp"
+#include "scene/ViewportView.hpp"
 
 #include "ECS/ECS.hpp"
 
@@ -30,6 +31,8 @@ void runEditor(Gui &gui, Editor &editor, Script &script, bool stopAtEnd = true)
         renderSmall();
         if (!script.step() && stopAtEnd)
             gui.stop();
+        // No view: the mouse cannot pick objects in the Viewport.
+        return ViewportView{};
     });
     const SDL_TimerID watchdog = SDL_AddTimer(
         60000,

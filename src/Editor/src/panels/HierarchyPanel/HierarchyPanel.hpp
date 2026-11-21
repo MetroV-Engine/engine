@@ -18,6 +18,7 @@
 #include "ui/DialogManager/DialogManager.hpp"
 #include "ui/NotificationManager/NotificationManager.hpp"
 #include "scene/HierarchyModel.hpp"
+#include "scene/PlayController/PlayController.hpp"
 #include "scene/Selection.hpp"
 
 #include <functional>
@@ -25,25 +26,35 @@
 #include <unordered_set>
 #include <vector>
 
+class EntityDropTarget;
+
 // Tree of the scene objects (from a HierarchyModel), to browse and organise
 // the level:
 //  - click to select (shared with the Inspector), arrows to move/expand;
 //  - search box: shows matching objects with their parents;
 //  - right click: create child, rename (F2), delete (Del, with confirmation);
 //  - drag an object onto another to make it its child, or onto the empty area
-//    to move it to the root (unless the model is flat, see supportsParenting).
+//    to move it to the root (unless the model is flat, see supportsParenting);
+//  - drop an entity template anywhere on the tree to create an object;
+//  - an object selected elsewhere (in the Viewport) is revealed and scrolled
+//    to, clearing a search that hides it.
+// Objects can only be created while the game is stopped, like with the Entity
+// Palette: created during play, they would vanish on Stop.
 // Changes are applied after the tree has been drawn, never while iterating it.
 class HierarchyPanel : public Panel
 {
 public:
     using ObjectId = HierarchyModel::ObjectId;
 
+    // entityDropTarget and play must outlive the panel.
     HierarchyPanel(HierarchyModel &model, Selection &selection, NotificationManager &notifications,
-        DialogManager &dialogs);
+        DialogManager &dialogs, const EntityDropTarget &entityDropTarget, const PlayController &play);
 
     // Creates an object under parent (InvalidId for the root), selects it and
-    // starts renaming it.
+    // starts renaming it. Its callers are disabled while the game is not stopped.
     void createObject(ObjectId parent);
+    // Clears the search, then scrolls to the object and selects it.
+    void showObject(ObjectId id);
     // Asks for confirmation, then deletes the object and its children.
     void requestDelete(ObjectId id);
     void startRename(ObjectId id);
@@ -63,6 +74,8 @@ private:
     Selection &_selection;
     NotificationManager &_notifications;
     DialogManager &_dialogs;
+    const EntityDropTarget &_entityDropTarget;
+    const PlayController &_play;
     TextInput _search;
 
     std::unordered_set<ObjectId> _expanded;
@@ -70,6 +83,8 @@ private:
     std::string _renameBuffer;
     bool _focusRename = false;
     ObjectId _scrollTo = HierarchyModel::InvalidId;
+    // The selection the tree last showed: a different one was made elsewhere.
+    ObjectId _shownSelection = HierarchyModel::InvalidId;
     // Model changes requested while drawing, applied at the end of the frame.
     std::vector<std::function<void()>> _pending;
 
