@@ -31,6 +31,7 @@
 
 #include "core/Editor/Editor.hpp"
 #include "core/GuiContext/GuiContext.hpp"
+#include "core/GuiContext/UiBackendOption.hpp"
 #include "core/Logger/Logger.hpp"
 
 #include "ECS/ECS.hpp"
@@ -53,10 +54,9 @@ void printUsage(const char *program)
 {
     std::printf("Usage: %s [--backend=sdl|bgfx]\n\n"
                 "Opens the editor on the playground game.\n\n"
-                "  --backend=sdl    Draw with SDL3 (the default)\n"
-                "  --backend=bgfx   Draw with bgfx (builds with ENGINE_RENDERER_BGFX=ON)\n"
+                "%s"
                 "  --help, -h       Show this help\n",
-        program);
+        program, UiBackendOptionHelp);
 }
 
 std::vector<uint8_t> readFile(const std::string &path)
@@ -71,13 +71,11 @@ std::vector<uint8_t> readFile(const std::string &path)
 
 int main(int argc, char **argv)
 {
-    gfx::Backend backend = gfx::Backend::Sdl3Cpu;
+    UiBackend uiBackend = UiBackend::Sdl;
     for (int i = 1; i < argc; i++) {
         const std::string arg = argv[i];
-        if (arg == "--backend=sdl") {
-            backend = gfx::Backend::Sdl3Cpu;
-        } else if (arg == "--backend=bgfx") {
-            backend = gfx::Backend::Bgfx;
+        if (const auto chosen = parseUiBackendOption(arg)) {
+            uiBackend = *chosen;
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             return 0;
@@ -87,7 +85,9 @@ int main(int argc, char **argv)
             return 2;
         }
     }
-    if (!gfx::isBackendBuilt(backend)) {
+    // The game draws with what draws the UI.
+    const gfx::Backend backend = uiBackend == UiBackend::Bgfx ? gfx::Backend::Bgfx : gfx::Backend::Sdl3Cpu;
+    if (!isUiBackendBuilt(uiBackend)) {
         std::fprintf(stderr, "The bgfx backend is not built (ENGINE_RENDERER_BGFX=OFF): use --backend=sdl\n");
         return 1;
     }
@@ -100,7 +100,7 @@ int main(int argc, char **argv)
 
     try {
         // Declaration order is the lifetime: everything holding a texture dies before the renderer, and it before the window.
-        GuiContext gui("MetroV Playground", 1600, 900, bgfx ? UiBackend::Bgfx : UiBackend::Sdl);
+        GuiContext gui("MetroV Playground", 1600, 900, uiBackend);
         // The game draws with what draws the UI: into a texture of the editor's SDL_Renderer, or on its bgfx context.
         const std::unique_ptr<gfx::IOffscreenRenderer> renderer = bgfx
             ? gfx::makeOffscreenRenderer(*gui.getBgfxContext(), 1280, 720)

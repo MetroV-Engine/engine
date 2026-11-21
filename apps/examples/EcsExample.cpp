@@ -22,6 +22,7 @@
 
 #include "core/Editor/Editor.hpp"
 #include "core/GuiContext/GuiContext.hpp"
+#include "core/GuiContext/UiBackendOption.hpp"
 #include "core/Logger/Logger.hpp"
 
 #include "ECS/ECS.hpp"
@@ -31,6 +32,7 @@
 #include <cmath>
 #include <cstdint>
 #include <exception>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -255,8 +257,40 @@ void drawWorld(ECS::Registry &world, ImDrawList *drawList, ImVec2 min, ImVec2 ma
     }
 }
 
-int main()
+namespace {
+
+void printUsage(const char *program)
 {
+    std::printf("Usage: %s [--backend=sdl|bgfx]\n\n"
+                "Opens the editor on a small ECS world (moving and pulsing shapes).\n\n"
+                "%s"
+                "  --help, -h       Show this help\n",
+        program, UiBackendOptionHelp);
+}
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+    UiBackend backend = UiBackend::Sdl;
+    for (int i = 1; i < argc; i++) {
+        const std::string arg = argv[i];
+        if (const auto chosen = parseUiBackendOption(arg)) {
+            backend = *chosen;
+        } else if (arg == "--help" || arg == "-h") {
+            printUsage(argv[0]);
+            return 0;
+        } else {
+            std::fprintf(stderr, "Unknown option: %s\n\n", arg.c_str());
+            printUsage(argv[0]);
+            return 2;
+        }
+    }
+    if (!isUiBackendBuilt(backend)) {
+        std::fprintf(stderr, "The bgfx backend is not built (ENGINE_RENDERER_BGFX=OFF): use --backend=sdl\n");
+        return 1;
+    }
+
     Logger &logger = Logger::instance();
     logger.captureSdlLogs();
     try {
@@ -268,7 +302,7 @@ int main()
         systems.addSystem<PulseSystem>(world);
         populate(world);
 
-        GuiContext gui("MetroV Editor - ECS example", 1600, 900);
+        GuiContext gui("MetroV Editor - ECS example", 1600, 900, backend);
         Editor editor(gui, world, systems);
         editor.setViewportRenderer(
             [&world](ImDrawList *drawList, ImVec2 min, ImVec2 max) { drawWorld(world, drawList, min, max); });

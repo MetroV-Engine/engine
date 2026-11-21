@@ -4,6 +4,7 @@
 #include "core/CommandRegistry/CommandRegistry.hpp"
 #include "core/EventManager/EventManager.hpp"
 #include "core/FrameTimer/FrameTimer.hpp"
+#include "core/GuiContext/UiBackendOption.hpp"
 #include "core/Logger/Logger.hpp"
 #include "core/PanelManager/PanelManager.hpp"
 
@@ -14,6 +15,7 @@
 #include <SDL3/SDL.h>
 
 #include <filesystem>
+#include <optional>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -363,6 +365,24 @@ void run_gui_context_tests()
         expect(gui.getBgfxContext()->height() == static_cast<uint32_t>(height));
     };
 #endif
+
+    "ui backend option: --backend=sdl and --backend=bgfx are read, nothing else"_test = [] {
+        expect(parseUiBackendOption("--backend=sdl") == std::optional<UiBackend>(UiBackend::Sdl));
+        expect(parseUiBackendOption("--backend=bgfx") == std::optional<UiBackend>(UiBackend::Bgfx));
+        expect(!parseUiBackendOption("--backend=vulkan").has_value());
+        expect(!parseUiBackendOption("--backend").has_value());
+        expect(!parseUiBackendOption("--backend=").has_value());
+        expect(!parseUiBackendOption("--demo").has_value());
+    };
+
+    "ui backend option: SDL is always built, bgfx only with ENGINE_RENDERER_BGFX"_test = [] {
+        expect(isUiBackendBuilt(UiBackend::Sdl));
+#if ENGINE_RENDERER_BGFX
+        expect(isUiBackendBuilt(UiBackend::Bgfx));
+#else
+        expect(!isUiBackendBuilt(UiBackend::Bgfx));
+#endif
+    };
 
 #if !ENGINE_RENDERER_BGFX
     "gui: asking for a UI backend that is not built throws"_test = [] {
