@@ -16,9 +16,23 @@
 #include "Renderer/NullRenderer/NullRenderer.hpp"
 #include "Renderer/SdlRenderer/SdlRenderer.hpp"
 
+#if ENGINE_RENDERER_BGFX
+#include "Renderer/BgfxRenderer/BgfxRenderer.hpp"
+#endif
+
 #include <iostream>
 
 namespace gfx {
+
+    bool isBackendBuilt(const Backend backend)
+    {
+#if ENGINE_RENDERER_BGFX
+        (void)backend;
+        return true;
+#else
+        return backend != Backend::Bgfx;
+#endif
+    }
 
     std::unique_ptr<IRenderer> makeRenderer(const Backend backend, SDL_Window* window,
                                             const uint32_t width, const uint32_t height)
@@ -31,9 +45,12 @@ namespace gfx {
                 return std::make_unique<NullRenderer>(width, height);
 
             case Backend::Bgfx:
-                // Kept in the enum so callers don't change when the bgfx backend lands.
-                std::cerr << "[RendererFactory] ERROR: the bgfx backend is not built yet; use Backend::Sdl3Cpu\n";
+#if ENGINE_RENDERER_BGFX
+                return BgfxRenderer::create(window, width, height);
+#else
+                std::cerr << "[RendererFactory] ERROR: the bgfx backend is not built (ENGINE_RENDERER_BGFX=OFF)\n";
                 return nullptr;
+#endif
         }
 
         return nullptr;
@@ -48,6 +65,20 @@ namespace gfx {
         }
 
         return SdlRenderer::createOffscreen(borrowed, width, height);
+    }
+
+    std::unique_ptr<IOffscreenRenderer> makeOffscreenRenderer(BgfxContext& context, const uint32_t width,
+                                                              const uint32_t height)
+    {
+#if ENGINE_RENDERER_BGFX
+        return BgfxRenderer::createOffscreen(context, width, height);
+#else
+        (void)context;
+        (void)width;
+        (void)height;
+        std::cerr << "[RendererFactory] ERROR: the bgfx backend is not built (ENGINE_RENDERER_BGFX=OFF)\n";
+        return nullptr;
+#endif
     }
 
 }

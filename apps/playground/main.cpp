@@ -15,7 +15,8 @@
 // built from ECS entities that the Hierarchy lists and the Inspector edits.
 // Play (F5) runs the systems, Stop puts the level back.
 //
-//   ./build/all/playground [--backend=sdl|bgfx]
+//   ./build/all/playground                    SDL3
+//   ./build/bgfx/playground --backend=bgfx   bgfx (the bgfx preset)
 
 #include "Level/Level/Level.hpp"
 #include "Rendering/TextureCache/TextureCache.hpp"
@@ -53,7 +54,7 @@ void printUsage(const char *program)
     std::printf("Usage: %s [--backend=sdl|bgfx]\n\n"
                 "Opens the editor on the playground game.\n\n"
                 "  --backend=sdl    Draw with SDL3 (the default)\n"
-                "  --backend=bgfx   Draw with bgfx (not available yet)\n"
+                "  --backend=bgfx   Draw with bgfx (builds with ENGINE_RENDERER_BGFX=ON)\n"
                 "  --help, -h       Show this help\n",
         program);
 }
@@ -86,10 +87,11 @@ int main(int argc, char **argv)
             return 2;
         }
     }
-    if (backend == gfx::Backend::Bgfx) {
-        std::fprintf(stderr, "The bgfx backend is not available yet: use --backend=sdl\n");
+    if (!gfx::isBackendBuilt(backend)) {
+        std::fprintf(stderr, "The bgfx backend is not built (ENGINE_RENDERER_BGFX=OFF): use --backend=sdl\n");
         return 1;
     }
+    const bool bgfx = backend == gfx::Backend::Bgfx;
 
     Logger &logger = Logger::instance();
     logger.captureSdlLogs();
@@ -98,9 +100,11 @@ int main(int argc, char **argv)
 
     try {
         // Declaration order is the lifetime: everything holding a texture dies before the renderer, and it before the window.
-        GuiContext gui("MetroV Playground", 1600, 900);
-        const std::unique_ptr<gfx::IOffscreenRenderer> renderer =
-            gfx::makeOffscreenRenderer(backend, gui.getSdlRenderer(), 1280, 720);
+        GuiContext gui("MetroV Playground", 1600, 900, bgfx ? UiBackend::Bgfx : UiBackend::Sdl);
+        // The game draws with what draws the UI: into a texture of the editor's SDL_Renderer, or on its bgfx context.
+        const std::unique_ptr<gfx::IOffscreenRenderer> renderer = bgfx
+            ? gfx::makeOffscreenRenderer(*gui.getBgfxContext(), 1280, 720)
+            : gfx::makeOffscreenRenderer(backend, gui.getSdlRenderer(), 1280, 720);
         if (renderer == nullptr) {
             logger.error("Playground", "Cannot create the offscreen renderer");
             return 1;

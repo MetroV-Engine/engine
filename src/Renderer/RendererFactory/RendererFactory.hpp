@@ -24,7 +24,12 @@ struct SDL_Window;
 
 namespace gfx {
 
+    class BgfxContext;
+
     enum class Backend : uint8_t { Bgfx, Sdl3Cpu, Null };
+
+    // False for a backend this build left out (Bgfx without ENGINE_RENDERER_BGFX).
+    bool isBackendBuilt(Backend backend);
 
     // Returns nullptr on failure, after logging the reason. Backend::Null ignores the window.
     std::unique_ptr<IRenderer> makeRenderer(Backend backend, SDL_Window* window,
@@ -33,6 +38,10 @@ namespace gfx {
     // Draws into a texture on a renderer it borrows and never destroys; only Sdl3Cpu is supported, nullptr otherwise.
     std::unique_ptr<IOffscreenRenderer> makeOffscreenRenderer(Backend backend, SDL_Renderer* borrowed,
                                                               uint32_t width, uint32_t height);
+
+    // Draws into a bgfx framebuffer on a view of the context; never calls bgfx::frame() (the context's owner
+    // does). Needs ENGINE_RENDERER_BGFX: nullptr otherwise, as on failure, after logging the reason.
+    std::unique_ptr<IOffscreenRenderer> makeOffscreenRenderer(BgfxContext& context, uint32_t width, uint32_t height);
 
 }
 

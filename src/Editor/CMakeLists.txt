@@ -9,6 +9,9 @@ find_package(imgui CONFIG REQUIRED)
 # Every .cpp under src/ is picked up automatically; CONFIGURE_DEPENDS re-runs
 # the glob at build time so new files are detected without re-running cmake.
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+if(NOT ENGINE_RENDERER_BGFX)
+  list(FILTER EDITOR_SOURCES EXCLUDE REGEX "/BgfxUiRenderer/")
+endif()
 
 add_library(engine_editor STATIC ${EDITOR_SOURCES})
 
@@ -20,3 +23,13 @@ target_link_libraries(engine_editor PUBLIC
     SDL3::SDL3
     imgui::imgui
 )
+
+# The bgfx UI backend: ImGui drawn through bgfx, on the BgfxContext of src/Renderer.
+# PUBLIC engine_render: ENGINE_RENDERER_BGFX and the BgfxContext header reach the editor's users.
+if(ENGINE_RENDERER_BGFX)
+  include(FetchContent)
+  FetchContent_GetProperties(bgfx)
+  target_link_libraries(engine_editor PUBLIC engine_render PRIVATE bgfx bx)
+  # Only for the example's precompiled shaders, included by a prefixed path: never its ImGui headers.
+  target_include_directories(engine_editor PRIVATE ${bgfx_SOURCE_DIR}/bgfx)
+endif()

@@ -7,6 +7,10 @@
 #include "core/Logger/Logger.hpp"
 #include "core/PanelManager/PanelManager.hpp"
 
+#if ENGINE_RENDERER_BGFX
+#include "Renderer/BgfxContext/BgfxContext.hpp"
+#endif
+
 #include <SDL3/SDL.h>
 
 #include <filesystem>
@@ -305,6 +309,68 @@ void run_event_manager_tests()
 
 void run_gui_context_tests()
 {
+    "gui: SDL is the default UI backend"_test = [] {
+        EditorTest::Gui gui;
+        expect(gui.getSdlRenderer() != nullptr);
+        expect(std::string(gui.getRendererName()).find("bgfx") == std::string::npos);
+        gui.frame();
+    };
+
+#if ENGINE_RENDERER_BGFX
+    // The dummy video driver has no native window: bgfx runs its Noop device.
+    "gui bgfx: runs frames on the bgfx UI backend"_test = [] {
+        EditorTest::Gui gui(false, UiBackend::Bgfx);
+        expect(fatal(gui.getBgfxContext() != nullptr));
+        expect(gui.getSdlRenderer() == nullptr);
+        expect(std::string(gui.getRendererName()).find("bgfx") != std::string::npos);
+        const uint32_t before = gui.getBgfxContext()->frameNumber();
+        for (int i = 0; i < 3; ++i)
+            gui.frame([] { ImGui::ShowDemoWindow(); });
+        expect(gui.getBgfxContext()->frameNumber() == before + 3);
+    };
+
+    "gui bgfx: glyphs added after the first frame reach the atlas without a bgfx warning"_test = [] {
+        EditorTest::Gui gui(false, UiBackend::Bgfx);
+        expect(fatal(gui.getBgfxContext() != nullptr));
+        gui.frame();
+        gui.frame();
+        const uint32_t before = gui.getBgfxContext()->warningCount();
+        // New characters at new sizes: ImGui uploads their glyphs into the existing atlas texture.
+        for (const float size : {31.0f, 47.0f, 63.0f}) {
+            gui.frame([size] {
+                ImGui::PushFont(nullptr, size);
+                ImGui::Text("Zephyr quokka jinx: 0123456789 @#&%%");
+                ImGui::PopFont();
+            });
+        }
+        expect(gui.getBgfxContext()->warningCount() == before) << "bgfx refused an atlas update";
+    };
+
+    "gui bgfx: a window resize resets the backbuffer"_test = [] {
+        EditorTest::Gui gui(false, UiBackend::Bgfx);
+        expect(fatal(gui.getBgfxContext() != nullptr));
+        gui.setWindowSize(800, 600);
+        gui.frame();
+        gui.frame();
+        int width = 0;
+        int height = 0;
+        SDL_Window **windows = SDL_GetWindows(nullptr);
+        expect(fatal(windows != nullptr && windows[0] != nullptr));
+        SDL_GetWindowSizeInPixels(windows[0], &width, &height);
+        SDL_free(windows);
+        expect(width == 800_i);
+        expect(gui.getBgfxContext()->width() == static_cast<uint32_t>(width));
+        expect(gui.getBgfxContext()->height() == static_cast<uint32_t>(height));
+    };
+#endif
+
+#if !ENGINE_RENDERER_BGFX
+    "gui: asking for a UI backend that is not built throws"_test = [] {
+        EditorTest::HeadlessHints hints;
+        expect(throws([] { GuiContext gui("Editor tests", 64, 64, UiBackend::Bgfx); }));
+    };
+#endif
+
     using EditorTest::Gui;
 
     "a headless window, renderer and ImGui context; frames can be drawn"_test = [] {

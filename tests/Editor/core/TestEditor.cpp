@@ -112,6 +112,24 @@ void run_editor_tests()
         expect(seen == std::vector<PlayState>{PlayState::Stopped, PlayState::Playing, PlayState::Paused, PlayState::Stopped});
     };
 
+#if ENGINE_RENDERER_BGFX
+    "gui and editor: the editor opens on the bgfx backend and quits from its console"_test = [] {
+        forgetSavedState();
+        ECS::Registry world;
+        ECS::SystemManager systems;
+        Gui gui(false, UiBackend::Bgfx);
+        Editor editor(gui, world, systems);
+        expect(gui.getSdlRenderer() == nullptr);
+
+        Script script;
+        script.wait(6).keys(ImGuiKey_GraveAccent, 4);
+        script.enter("quit").keys(ImGuiKey_Enter, 4);
+        runEditor(gui, editor, script, false);
+
+        expect(!gui.isRunning()) << "quit stopped the editor";
+    };
+#endif
+
     "every console command of the editor, typed in the console"_test = [] {
         forgetSavedState();
         ECS::Registry world;
