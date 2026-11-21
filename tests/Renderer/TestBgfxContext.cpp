@@ -14,13 +14,13 @@ void run_bgfx_context_tests()
 #if ENGINE_RENDERER_BGFX
     "bgfx context: Noop starts without a window and names itself"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, gfx::BgfxContext::Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         expect(std::string(context->rendererName()) == "Noop");
     };
 
     "bgfx context: frame advances the frame number"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, gfx::BgfxContext::Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         const uint32_t before = context->frameNumber();
         context->frame();
         context->frame();
@@ -29,7 +29,7 @@ void run_bgfx_context_tests()
 
     "bgfx context: views are allocated upward and never reach the UI view"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, gfx::BgfxContext::Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         expect(context->allocateView() == 0_u);
         expect(context->allocateView() == 1_u);
         expect(gfx::BgfxContext::UiView == 255_u);
@@ -37,7 +37,7 @@ void run_bgfx_context_tests()
 
     "bgfx context: only one at a time"_test = [] {
         auto first = gfx::BgfxContext::create(nullptr, 64, 64, false, gfx::BgfxContext::Device::Noop);
-        expect(fatal(first != nullptr));
+        expect(first != nullptr) << fatal;
         expect(gfx::BgfxContext::create(nullptr, 64, 64, false, gfx::BgfxContext::Device::Noop) == nullptr);
         first.reset();
         expect(gfx::BgfxContext::create(nullptr, 64, 64, false, gfx::BgfxContext::Device::Noop) != nullptr);
@@ -45,7 +45,7 @@ void run_bgfx_context_tests()
 
     "bgfx context: reset keeps the backbuffer size and vsync"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, gfx::BgfxContext::Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         context->reset(128, 32, true);
         expect(context->width() == 128_u && context->height() == 32_u);
         expect(context->vsync());

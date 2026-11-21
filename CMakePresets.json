@@ -42,11 +42,10 @@
     },
     {
       "name": "coverage",
-      "displayName": "Everything plus the unit tests, with code coverage (GCC / Clang) (renderer off until its tests exist)",
+      "displayName": "Everything plus the unit tests, with code coverage (GCC / Clang)",
       "inherits": "tests",
       "cacheVariables": {
-        "ENGINE_ENABLE_COVERAGE": "ON",
-        "ENGINE_BUILD_RENDERER": "OFF"
+        "ENGINE_ENABLE_COVERAGE": "ON"
       }
     },
     {

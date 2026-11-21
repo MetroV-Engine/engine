@@ -50,17 +50,17 @@ void run_bgfx_offscreen_tests()
 
     "bgfx offscreen: outputs a valid texture id"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         auto offscreen = gfx::makeOffscreenRenderer(*context, 32, 16);
-        expect(fatal(offscreen != nullptr));
+        expect(offscreen != nullptr) << fatal;
         expect(offscreen->outputTexture() != 0u);
     };
 
     "bgfx offscreen: endFrame never advances the frame"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         auto offscreen = gfx::makeOffscreenRenderer(*context, 32, 16);
-        expect(fatal(offscreen != nullptr));
+        expect(offscreen != nullptr) << fatal;
         const uint32_t before = context->frameNumber();
         offscreen->beginFrame(gfx::Black);
         offscreen->drawRect({gfx::Rect{0.0f, 0.0f, 4.0f, 4.0f}, gfx::White, gfx::Layer::Game, gfx::Space::Screen});
@@ -71,9 +71,9 @@ void run_bgfx_offscreen_tests()
 
     "bgfx offscreen: resize changes the texture; zero is ignored"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         auto offscreen = gfx::makeOffscreenRenderer(*context, 32, 16);
-        expect(fatal(offscreen != nullptr));
+        expect(offscreen != nullptr) << fatal;
         const std::uintptr_t first = offscreen->outputTexture();
         offscreen->resize(64, 32);
         const std::uintptr_t second = offscreen->outputTexture();
@@ -84,29 +84,29 @@ void run_bgfx_offscreen_tests()
 
     "bgfx offscreen: two renderers get two views"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         auto first = gfx::makeOffscreenRenderer(*context, 16, 16);
         auto second = gfx::makeOffscreenRenderer(*context, 16, 16);
-        expect(fatal(first != nullptr && second != nullptr));
+        expect(first != nullptr && second != nullptr) << fatal;
         expect(first->outputTexture() != second->outputTexture());
         expect(context->allocateView() == 2_u) << "views 0 and 1 are taken";
     };
 
     "bgfx offscreen: destroying it leaves the context usable"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         {
             auto offscreen = gfx::makeOffscreenRenderer(*context, 16, 16);
-            expect(fatal(offscreen != nullptr));
+            expect(offscreen != nullptr) << fatal;
         }
         expect(nothrow([&] { context->frame(); }));
     };
 
     "bgfx offscreen: names its backend"_test = [] {
         auto context = gfx::BgfxContext::create(nullptr, 64, 64, false, Device::Noop);
-        expect(fatal(context != nullptr));
+        expect(context != nullptr) << fatal;
         auto offscreen = gfx::makeOffscreenRenderer(*context, 16, 16);
-        expect(fatal(offscreen != nullptr));
+        expect(offscreen != nullptr) << fatal;
         expect(std::string(offscreen->backendName()) == "bgfx / Noop");
     };
 #endif

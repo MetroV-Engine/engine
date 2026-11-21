@@ -2,6 +2,7 @@
 
 #include "Renderer/BasePath/BasePath.hpp"
 #include "Renderer/RendererFactory/RendererFactory.hpp"
+#include "Support/Headless.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -11,61 +12,20 @@
 
 using namespace boost::ut;
 
-namespace {
-
-// A software renderer on a plain surface: no window, no video driver needed.
-struct SoftwareRenderer
-{
-    SDL_Surface *surface = SDL_CreateSurface(64, 64, SDL_PIXELFORMAT_RGBA32);
-    SDL_Renderer *renderer = surface != nullptr ? SDL_CreateSoftwareRenderer(surface) : nullptr;
-
-    ~SoftwareRenderer()
-    {
-        if (renderer != nullptr)
-            SDL_DestroyRenderer(renderer);
-        if (surface != nullptr)
-            SDL_DestroySurface(surface);
-    }
-};
-
-SDL_Texture *textureOf(const gfx::IOffscreenRenderer &offscreen)
-{
-    return reinterpret_cast<SDL_Texture *>(offscreen.outputTexture());
-}
-
-// Reads one pixel of the offscreen output back, leaving the renderer's target as it was.
-gfx::Color pixelAt(SDL_Renderer *renderer, SDL_Texture *texture, int x, int y)
-{
-    SDL_Texture *previous = SDL_GetRenderTarget(renderer);
-    SDL_SetRenderTarget(renderer, texture);
-    const SDL_Rect area{x, y, 1, 1};
-    SDL_Surface *read = SDL_RenderReadPixels(renderer, &area);
-    SDL_SetRenderTarget(renderer, previous);
-    gfx::Color color{0, 0, 0, 0};
-    if (read != nullptr) {
-        SDL_ReadSurfacePixel(read, 0, 0, &color.r, &color.g, &color.b, &color.a);
-        SDL_DestroySurface(read);
-    }
-    return color;
-}
-
-bool same(gfx::Color a, gfx::Color b)
-{
-    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
-}
-
-constexpr gfx::Color Red{255, 0, 0, 255};
-constexpr gfx::Color Blue{0, 0, 255, 255};
-
-} // namespace
+using test::Blue;
+using test::pixelAt;
+using test::Red;
+using test::same;
+using test::SoftwareRenderer;
+using test::textureOf;
 
 void run_offscreen_renderer_tests()
 {
     "offscreen: clear colour lands in the output texture"_test = [] {
         SoftwareRenderer sdl;
-        expect(fatal(sdl.renderer != nullptr));
+        expect(sdl.renderer != nullptr) << fatal;
         auto offscreen = gfx::makeOffscreenRenderer(gfx::Backend::Sdl3Cpu, sdl.renderer, 16, 8);
-        expect(fatal(offscreen != nullptr));
+        expect(offscreen != nullptr) << fatal;
         offscreen->beginFrame(Red);
         offscreen->endFrame();
         expect(offscreen->outputTexture() != 0u);
@@ -75,7 +35,7 @@ void run_offscreen_renderer_tests()
     "offscreen: a screen-space rect is drawn into the texture"_test = [] {
         SoftwareRenderer sdl;
         auto offscreen = gfx::makeOffscreenRenderer(gfx::Backend::Sdl3Cpu, sdl.renderer, 16, 8);
-        expect(fatal(offscreen != nullptr));
+        expect(offscreen != nullptr) << fatal;
         offscreen->beginFrame(Red);
         offscreen->drawRect({gfx::Rect{0.0f, 0.0f, 4.0f, 4.0f}, Blue, gfx::Layer::Game, gfx::Space::Screen});
         offscreen->endFrame();
@@ -86,12 +46,12 @@ void run_offscreen_renderer_tests()
     "offscreen: the previous render target and blend mode come back"_test = [] {
         SoftwareRenderer sdl;
         SDL_Texture *other = SDL_CreateTexture(sdl.renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, 4, 4);
-        expect(fatal(other != nullptr));
+        expect(other != nullptr) << fatal;
         SDL_SetRenderTarget(sdl.renderer, other);
         SDL_SetRenderDrawBlendMode(sdl.renderer, SDL_BLENDMODE_NONE);
         {
             auto offscreen = gfx::makeOffscreenRenderer(gfx::Backend::Sdl3Cpu, sdl.renderer, 16, 8);
-            expect(fatal(offscreen != nullptr));
+            expect(offscreen != nullptr) << fatal;
             offscreen->beginFrame(Red);
             offscreen->drawRect({gfx::Rect{0.0f, 0.0f, 4.0f, 4.0f}, Blue, gfx::Layer::Game, gfx::Space::Screen});
             offscreen->endFrame();
@@ -107,7 +67,7 @@ void run_offscreen_renderer_tests()
     "offscreen: resize recreates the texture; zero is ignored"_test = [] {
         SoftwareRenderer sdl;
         auto offscreen = gfx::makeOffscreenRenderer(gfx::Backend::Sdl3Cpu, sdl.renderer, 16, 8);
-        expect(fatal(offscreen != nullptr));
+        expect(offscreen != nullptr) << fatal;
         float w = 0.0f;
         float h = 0.0f;
         offscreen->resize(32, 16);
@@ -121,7 +81,7 @@ void run_offscreen_renderer_tests()
     "offscreen: destroying it leaves the borrowed renderer usable"_test = [] {
         SoftwareRenderer sdl;
         auto offscreen = gfx::makeOffscreenRenderer(gfx::Backend::Sdl3Cpu, sdl.renderer, 16, 8);
-        expect(fatal(offscreen != nullptr));
+        expect(offscreen != nullptr) << fatal;
         offscreen.reset();
         expect(SDL_RenderClear(sdl.renderer));
     };

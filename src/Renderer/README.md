@@ -53,8 +53,9 @@ switch OFF nothing about the build changes.
 bgfx. The manual workflow `.github/workflows/bgfx-compile.yml` compiles and tests this build on Linux,
 Windows and macOS: start it from the Actions tab, or push to the `bgfx-check` branch.
 
-Its tests are in `tests/Renderer` (`tests_render`). The `coverage` preset turns the renderer OFF, because CI
-requires 90 % line coverage over `src/` and most of the renderer has no tests yet.
+Its tests are in `tests/Renderer` (`tests_render`). They run headless (SDL's software renderer and its `dummy`
+video driver) and count towards the 90 % line coverage CI requires over `src/`. The bgfx files and
+`SdlWindowBridge` are only built with `ENGINE_RENDERER_BGFX=ON`, so the `coverage` preset does not measure them.
 
 ## Layout
 
