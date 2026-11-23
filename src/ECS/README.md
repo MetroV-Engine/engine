@@ -209,17 +209,33 @@ E_SYSTEM(MovementSystem)   // registered before main, under "MovementSystem"
 auto& catalog = ECS::SystemCatalog::instance();
 catalog.createInto("MovementSystem", systems, world);   // creates it, adds it last, calls init
 catalog.names();                                       // every registered name, sorted
+
+systems.getSystem("MovementSystem");                   // first system with that name(), or nullptr
+systems.removeSystem(world, "MovementSystem");         // calls its shutdown, removes the first one
 ```
 
-- The name is the macro argument as written. Qualify it to avoid collisions
-  (`E_SYSTEM(game::MovementSystem)` gives `"game::MovementSystem"`), and give
-  `name()` the same value.
+- **The name given to `E_SYSTEM` must be exactly what `name()` returns.** It
+  is the macro argument as written, each run of spaces reduced to one:
+  `E_SYSTEM(game::MovementSystem)` gives `"game::MovementSystem"`, but
+  `E_SYSTEM(::game::MovementSystem)` gives `"::game::MovementSystem"` and
+  `E_SYSTEM(game :: MovementSystem)` gives `"game :: MovementSystem"`. Write it
+  with no leading `::` and no spaces. Scene files store the name, so
+  `catalog.create()` checks that `name()` matches: when it does not, the
+  system is refused (`nullptr`, nothing added) and the mismatch is listed in
+  `catalog.errors()`. The check runs in every build.
+- Qualify the name to avoid collisions between modules.
+- A template system can be registered: `E_SYSTEM(game::Spawner<Enemy, 3>)`
+  gives `"game::Spawner<Enemy, 3>"`, with the spaces after the commas as
+  written.
 - A system created by name needs a default constructor.
 - A name registered twice is not an exception (it would happen before `main`):
-  it is listed in `SystemCatalog::instance().errors()` and printed on
-  `std::cerr`.
+  the first system is kept, and the error is listed in
+  `SystemCatalog::instance().errors()` and printed on `std::cerr`.
 - `catalog.add<T>("Name")` or `catalog.add("Name", factory)` register a system
   by hand.
+- `createInto` called twice with the same name adds **two instances** of the
+  system: a `SystemManager` may hold several systems with the same name.
+  `getSystem(name)` and `removeSystem(world, name)` act on the first one.
 
 **Put `E_SYSTEM` in the header, and make sure the header is compiled.** Nothing
 in the code references a system that is only chosen by name, so the linker
@@ -348,6 +364,8 @@ int main() {
 - **Do not add or remove systems from a system's `update`.** `SystemManager`
   is iterating over its systems: changing the list then is undefined behaviour.
   Add them before the loop (scene creation, `onEnter`) or between two frames.
+- **`SystemCatalog` is not thread-safe.** `E_SYSTEM` registrations run before
+  `main`, on one thread; do not register systems from several threads.
 
 ## Going further
 
@@ -363,7 +381,7 @@ int main() {
 | [Core/Component/](Core/Component/) | `ComponentStorage` (one dense array per type), `ComponentStore` (all of them), `SignatureTable` (which entity has which component) |
 | [Core/Query/](Core/Query/) | `View` and the `Zipper` that walks several arrays at once |
 | [Core/Resource/](Core/Resource/) | `ResourceStore` |
-| [Core/System/](Core/System/) | `ISystem`, `SystemManager`, `SystemCatalog` and `E_SYSTEM` (systems created by name) |
+| [Core/System/](Core/System/) | `ISystem`, `SystemManager` (systems found and removed by type or by name), `SystemCatalog` and `E_SYSTEM` (systems created by name) |
 
 The ECS is header-only: [CMakeLists.txt](CMakeLists.txt) defines an `INTERFACE`
 target that only exposes the include directory.
