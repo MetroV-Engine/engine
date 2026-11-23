@@ -189,6 +189,50 @@ systems.update(world, dt);
 `init(world)` and `shutdown(world)` are optional hooks, called by `addSystem`
 and `removeSystem<T>(world)`.
 
+#### Creating a system from its name
+
+A scene file lists the systems it runs by name, and the editor lets the user
+pick them. For that, a system is registered in the `SystemCatalog` with
+`E_SYSTEM`, in its header, after the class:
+
+```cpp
+// Movement.hpp
+class MovementSystem : public ECS::ISystem {
+    public:
+        void update(ECS::Registry& world, double dt) override;   // may be defined in Movement.cpp
+        const std::string name() const override { return "MovementSystem"; }
+};
+E_SYSTEM(MovementSystem)   // registered before main, under "MovementSystem"
+```
+
+```cpp
+auto& catalog = ECS::SystemCatalog::instance();
+catalog.createInto("MovementSystem", systems, world);   // creates it, adds it last, calls init
+catalog.names();                                       // every registered name, sorted
+```
+
+- The name is the macro argument as written. Qualify it to avoid collisions
+  (`E_SYSTEM(game::MovementSystem)` gives `"game::MovementSystem"`), and give
+  `name()` the same value.
+- A system created by name needs a default constructor.
+- A name registered twice is not an exception (it would happen before `main`):
+  it is listed in `SystemCatalog::instance().errors()` and printed on
+  `std::cerr`.
+- `catalog.add<T>("Name")` or `catalog.add("Name", factory)` register a system
+  by hand.
+
+**Put `E_SYSTEM` in the header, and make sure the header is compiled.** Nothing
+in the code references a system that is only chosen by name, so the linker
+may drop it:
+
+| The game's systems are... | Registered? |
+| --- | --- |
+| compiled into the executable | yes: every object file of the executable is kept |
+| in a shared library (plugins) | yes: the library is loaded whole |
+| in a static library | only if their headers are included from a `.cpp` of the executable (for example one `Systems.hpp` that includes them all), or if the library is linked with `WHOLE_ARCHIVE` |
+
+The last case goes away once the game's code is a shared library.
+
 ### Changing the world during a loop
 
 Spawning, killing, adding or removing components while a view is being iterated
@@ -301,6 +345,9 @@ int main() {
   `std::unique_ptr` to store several.
 - **Handles belong to their registry.** An entity from another registry is
   rejected (`std::invalid_argument`), even if its index matches.
+- **Do not add or remove systems from a system's `update`.** `SystemManager`
+  is iterating over its systems: changing the list then is undefined behaviour.
+  Add them before the loop (scene creation, `onEnter`) or between two frames.
 
 ## Going further
 
@@ -316,7 +363,7 @@ int main() {
 | [Core/Component/](Core/Component/) | `ComponentStorage` (one dense array per type), `ComponentStore` (all of them), `SignatureTable` (which entity has which component) |
 | [Core/Query/](Core/Query/) | `View` and the `Zipper` that walks several arrays at once |
 | [Core/Resource/](Core/Resource/) | `ResourceStore` |
-| [Core/System/](Core/System/) | `ISystem`, `SystemManager` |
+| [Core/System/](Core/System/) | `ISystem`, `SystemManager`, `SystemCatalog` and `E_SYSTEM` (systems created by name) |
 
 The ECS is header-only: [CMakeLists.txt](CMakeLists.txt) defines an `INTERFACE`
 target that only exposes the include directory.

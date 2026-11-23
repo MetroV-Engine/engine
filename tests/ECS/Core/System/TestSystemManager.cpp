@@ -1,6 +1,8 @@
 #include <boost/ut.hpp>
 
 #include <cstddef>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -280,6 +282,66 @@ namespace {
             expect(systems.size() == std::size_t{1});
         };
     }
+
+    // ---- addSystem(reg, unique_ptr): a system created elsewhere (by name)
+
+    void test_add_created_system_takes_it_and_calls_init() {
+        "addSystem of a created system takes ownership, calls init once and returns it"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            int initCount = 0;
+            int shutdownCount = 0;
+            auto created = std::make_unique<LifecycleRecordingSystem>(initCount, shutdownCount);
+            const ECS::ISystem* address = created.get();
+
+            ECS::ISystem& added = systems.addSystem(registry, std::move(created));
+
+            expect(&added == address);
+            expect(initCount == 1);
+            expect(shutdownCount == 0);
+            expect(systems.size() == std::size_t{1});
+        };
+    }
+
+    void test_add_created_system_runs_after_existing_ones() {
+        "a created system runs after the systems already added, in order"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<int> order;
+            systems.addSystem<OrderRecordingSystem>(registry, order, 1);
+            systems.addSystem(registry, std::make_unique<OrderRecordingSystem>(order, 2));
+            systems.addSystem<OrderRecordingSystem>(registry, order, 3);
+
+            systems.update(registry);
+
+            expect(order == std::vector<int>{1, 2, 3});
+        };
+    }
+
+    void test_add_created_system_is_found_and_removed_by_type() {
+        "a created system is found and removed by its concrete type"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            int initCount = 0;
+            int shutdownCount = 0;
+            systems.addSystem(registry, std::make_unique<LifecycleRecordingSystem>(initCount, shutdownCount));
+
+            expect(systems.getSystem<LifecycleRecordingSystem>() != nullptr);
+            expect(systems.removeSystem<LifecycleRecordingSystem>(registry));
+            expect(shutdownCount == 1);
+            expect(systems.size() == std::size_t{0});
+        };
+    }
+
+    void test_add_created_system_refuses_null() {
+        "addSystem of a null system throws and adds nothing"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+
+            expect(throws<std::invalid_argument>([&] { systems.addSystem(registry, std::unique_ptr<ECS::ISystem>{}); }));
+            expect(systems.size() == std::size_t{0});
+        };
+    }
 }
 
 void run_system_manager_tests() {
@@ -294,4 +356,8 @@ void run_system_manager_tests() {
     test_add_system_calls_init_once();
     test_remove_system_calls_shutdown_once_and_removes_it();
     test_remove_system_returns_false_when_not_found();
+    test_add_created_system_takes_it_and_calls_init();
+    test_add_created_system_runs_after_existing_ones();
+    test_add_created_system_is_found_and_removed_by_type();
+    test_add_created_system_refuses_null();
 }

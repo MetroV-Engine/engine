@@ -23,6 +23,11 @@ namespace ECS {
             /** @brief Called once per frame by SystemManager::update, under its own deferred-mutation scope. */
             virtual void update(ECS::Registry &reg, double dt = 0.0) = 0;
 
+            /**
+             * @brief Name of the system. For a system registered with
+             *        E_SYSTEM, it should be the name given to the macro: the
+             *        one scene files and the editor use.
+             */
             virtual const std::string name() const = 0;
     };
 }

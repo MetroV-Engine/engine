@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -36,6 +37,23 @@ namespace ECS {
                     "ECS::SystemManager::addSystem: System must derive from ISystem");
                 auto system = std::make_unique<System>(std::forward<Params>(params)...);
                 System& ref = *system;
+                ref.init(reg);
+                _systems.push_back(std::move(system));
+                return ref;
+            }
+
+            /**
+             * @brief Takes ownership of an already created system (for example
+             *        one created by name by the SystemCatalog), and calls its
+             *        init(reg) hook. It runs after the systems already added.
+             * @return Reference to the system.
+             * @throws std::invalid_argument if system is null.
+             */
+            ISystem& addSystem(Registry& reg, std::unique_ptr<ISystem> system) {
+                if (!system) {
+                    throw std::invalid_argument("ECS::SystemManager::addSystem: the system is null");
+                }
+                ISystem& ref = *system;
                 ref.init(reg);
                 _systems.push_back(std::move(system));
                 return ref;
