@@ -32,6 +32,11 @@ void run_console_panel_tests();
 void run_shortcuts_panel_tests();
 void run_panels_tests();
 void run_editor_tests();
+void run_editor_on_ecs_tests();
+void run_entity_drag_drop_tests();
+void run_demo_scene_renderer_tests();
+void run_level_tests();
+void run_asset_tests();
 
 int main()
 {
@@ -73,6 +78,11 @@ int main()
     run_shortcuts_panel_tests();
     run_panels_tests();
     run_editor_tests();
+    run_editor_on_ecs_tests();
+    run_entity_drag_drop_tests();
+    run_demo_scene_renderer_tests();
+    run_level_tests();
+    run_asset_tests();
 
     fs::current_path(previous);
     std::error_code ignored;
