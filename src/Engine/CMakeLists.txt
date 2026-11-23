@@ -14,4 +14,9 @@ add_library(engine_core STATIC ${ENGINE_SOURCES})
 # Includes are written from src/: #include "Engine/Engine.hpp".
 target_include_directories(engine_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 # Public: Scene.hpp exposes the ECS types.
-target_link_libraries(engine_core PUBLIC engine_ecs)
+# Private: nlohmann-json is the format behind Serialization/; its public
+# header exposes no JSON type, so the library can change freely.
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(engine_core
+  PUBLIC engine_ecs
+  PRIVATE nlohmann_json::nlohmann_json)

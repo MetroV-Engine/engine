@@ -10,6 +10,8 @@ No editor, no ImGui. The editor (`engine_editor`) and the executables link it.
 | `Scenes/SceneManager.hpp/.cpp` | `SceneManager`: a stack of scenes, the top one is active. `push(id)` builds a scene from its identifier |
 | `Scenes/SceneRegistry.hpp/.cpp` | `SceneRegistry`: identifier -> scene factory (`add`, `remove`, `has`, `create`) |
 | `Services/Services.hpp` | `Services`: objects owned by the Engine (asset cache, audio...), injected into every scene as `ServiceRef<T>`; read with `getService<T>(registry)` |
+| `Components/Uuid.hpp` | `Uuid`: persistent identity of an entity, and its reflection (in the header, so that including it registers the type) |
+| `Serialization/` | Saves and loads a world or a reflected value as text: see [Serialization/README.md](Serialization/README.md) |
 
 New `.cpp` files are picked up by CMake automatically. Includes are written
 from `src/`: `#include "Engine/Engine.hpp"`.

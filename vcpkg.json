@@ -5,7 +5,8 @@
   "description": "MetroV Engine",
   "builtin-baseline": "256acc64012b23a13041d8705805e1f23b43a024",
   "dependencies": [
-    "bext-ut"
+    "bext-ut",
+    "nlohmann-json"
   ],
   "features": {
     "gui": {
