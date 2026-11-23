@@ -21,6 +21,7 @@ include(cmake/Coverage.cmake)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Modules: one CMakeLists.txt, one target, only the dependencies it needs.
+add_subdirectory(src/Engine/Logger) # engine_logger: used by every module
 add_subdirectory(src/ECS)
 # add_subdirectory(src/Rendering) # engine_render: enable with its first .cpp
 # add_subdirectory(src/Engine)    # engine_core:   enable with its first .cpp
