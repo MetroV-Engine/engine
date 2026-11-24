@@ -13,6 +13,7 @@
 
 #include "core/Editor/Editor.hpp"
 #include "core/GuiContext/GuiContext.hpp"
+#include "core/GuiContext/UiBackendOption.hpp"
 #include "core/Logger/Logger.hpp"
 
 #include "ECS/ECS.hpp"
@@ -25,11 +26,12 @@ namespace {
 
 void printUsage(const char *program)
 {
-    std::printf("Usage: %s [--demo]\n\n"
+    std::printf("Usage: %s [--demo] [--backend=sdl|bgfx]\n\n"
                 "Without option, edits an empty ECS world.\n\n"
-                "  --demo, -d   Edit the built-in demo level instead, with the widget demo panels\n"
-                "  --help, -h   Show this help\n",
-        program);
+                "  --demo, -d       Edit the built-in demo level instead, with the widget demo panels\n"
+                "%s"
+                "  --help, -h       Show this help\n",
+        program, UiBackendOptionHelp);
 }
 
 } // namespace
@@ -37,10 +39,13 @@ void printUsage(const char *program)
 int main(int argc, char **argv)
 {
     Editor::Options options;
+    UiBackend backend = UiBackend::Sdl;
     for (int i = 1; i < argc; i++) {
         const std::string arg = argv[i];
         if (arg == "--demo" || arg == "-d") {
             options.demo = true;
+        } else if (const auto chosen = parseUiBackendOption(arg)) {
+            backend = *chosen;
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             return 0;
@@ -50,6 +55,10 @@ int main(int argc, char **argv)
             return 2;
         }
     }
+    if (!isUiBackendBuilt(backend)) {
+        std::fprintf(stderr, "The bgfx backend is not built (ENGINE_RENDERER_BGFX=OFF): use --backend=sdl\n");
+        return 1;
+    }
 
     Logger &logger = Logger::instance();
     logger.captureSdlLogs();
@@ -57,7 +66,7 @@ int main(int argc, char **argv)
         logger.warning("Editor", "Cannot write logs/editor.log; logging to the terminal only");
 
     try {
-        GuiContext gui(options.demo ? "MetroV Editor (demo)" : "MetroV Editor", 1600, 900);
+        GuiContext gui(options.demo ? "MetroV Editor (demo)" : "MetroV Editor", 1600, 900, backend);
         if (options.demo) {
             Editor editor(gui, options);
             editor.run();

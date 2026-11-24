@@ -15,12 +15,14 @@
 
 #include "core/EventManager/EventManager.hpp"
 #include "core/FrameTimer/FrameTimer.hpp"
+#include "core/GuiContext/UiRenderer.hpp"
 #include "ui/ThemeManager/ThemeManager.hpp"
 
 #include <SDL3/SDL.h>
 #include <imgui.h>
 
 #include <functional>
+#include <memory>
 
 // Size and position of the window, to save and restore it between launches.
 // width/height/x/y are the "normal" geometry (not maximized, not fullscreen),
@@ -39,7 +41,8 @@ struct WindowState
 class GuiContext
 {
 public:
-    GuiContext(const char *title, int width, int height);
+    // backend: what draws the UI (SDL3 keeps the window and the events either way).
+    GuiContext(const char *title, int width, int height, UiBackend backend = UiBackend::Sdl);
     ~GuiContext();
 
     GuiContext(const GuiContext &) = delete;
@@ -81,13 +84,15 @@ public:
     void setVSync(bool enabled);
     bool isVSync() const;
     const char *getRendererName() const;
+    // The renderer ImGui draws with, e.g. for a game drawing into a texture the Viewport shows.
+    SDL_Renderer *getSdlRenderer() const { return _ui ? _ui->sdlRenderer() : nullptr; }
+    // The bgfx context ImGui draws with (null on the SDL backend): a game's offscreen renderer draws on it.
+    gfx::BgfxContext *getBgfxContext() const { return _ui ? _ui->bgfxContext() : nullptr; }
 
 private:
     SDL_Window *_window = nullptr;
-    SDL_Renderer *_renderer = nullptr;
     bool _imguiContext = false;
-    bool _imguiSdlBackend = false;
-    bool _imguiRendererBackend = false;
+    std::unique_ptr<UiRenderer> _ui;
     bool _running = true;
     bool _idle = false;
     std::function<void()> _closeRequestHandler;

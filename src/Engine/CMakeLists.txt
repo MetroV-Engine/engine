@@ -11,4 +11,4 @@
 # add_library(engine_core STATIC ${ENGINE_SOURCES})
 # target_include_directories(engine_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 # target_link_libraries(engine_core PUBLIC engine_ecs)
-# target_link_libraries(engine_core PRIVATE engine_render) # once Rendering is enabled
+# target_link_libraries(engine_core PRIVATE engine_render) # when engine_core uses the renderer

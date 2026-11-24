@@ -68,7 +68,7 @@ class Gui : private HeadlessHints, public GuiContext
 public:
     // Without an ini file unless asked: a test does not depend on the layout
     // an earlier test saved.
-    explicit Gui(bool iniFile = false) : GuiContext("Editor tests", 1600, 900)
+    explicit Gui(bool iniFile = false, UiBackend backend = UiBackend::Sdl) : GuiContext("Editor tests", 1600, 900, backend)
     {
         if (!iniFile)
             ImGui::GetIO().IniFilename = nullptr;

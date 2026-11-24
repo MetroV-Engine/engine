@@ -2,7 +2,12 @@
 find_package(ut CONFIG REQUIRED)
 
 add_subdirectory(ECS)
-# add_subdirectory(Rendering) # with src/Rendering
+if(ENGINE_BUILD_RENDERER)
+  add_subdirectory(Renderer)
+endif()
+if(TARGET playground_game)
+  add_subdirectory(Playground) # the game in apps/playground
+endif()
 # add_subdirectory(Engine)    # with src/Engine
 if(ENGINE_BUILD_GUI)
   add_subdirectory(Editor)

@@ -14,9 +14,13 @@
 #include "GuiContext.hpp"
 #include "core/Logger/Logger.hpp"
 
+#include "core/GuiContext/SdlUiRenderer/SdlUiRenderer.hpp"
+#if ENGINE_RENDERER_BGFX
+#include "core/GuiContext/BgfxUiRenderer/BgfxUiRenderer.hpp"
+#endif
+
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
-#include <imgui_impl_sdlrenderer3.h>
 
 #include <algorithm>
 #include <stdexcept>
@@ -29,9 +33,24 @@ constexpr int IdleWaitMs = 100;
 // Frames longer than this are reported: the UI would feel unresponsive.
 constexpr double SlowFrameSeconds = 0.1;
 
+std::unique_ptr<UiRenderer> makeUiRenderer(UiBackend backend)
+{
+    switch (backend) {
+    case UiBackend::Sdl:
+        return std::make_unique<SdlUiRenderer>();
+    case UiBackend::Bgfx:
+#if ENGINE_RENDERER_BGFX
+        return std::make_unique<BgfxUiRenderer>();
+#else
+        throw std::runtime_error("the bgfx UI backend is not built (ENGINE_RENDERER_BGFX=OFF)");
+#endif
+    }
+    throw std::runtime_error("unknown UI backend");
+}
+
 } // namespace
 
-GuiContext::GuiContext(const char *title, int width, int height)
+GuiContext::GuiContext(const char *title, int width, int height, UiBackend backend)
 {
     try {
         // Closing the window only sends SDL_EVENT_WINDOW_CLOSE_REQUESTED, so the
@@ -41,8 +60,9 @@ GuiContext::GuiContext(const char *title, int width, int height)
         if (!SDL_Init(SDL_INIT_VIDEO))
             throw std::runtime_error(std::string("SDL_Init failed: ") + SDL_GetError());
 
-        if (!SDL_CreateWindowAndRenderer(title, width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, &_window, &_renderer))
-            throw std::runtime_error(std::string("SDL_CreateWindowAndRenderer failed: ") + SDL_GetError());
+        _window = SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+        if (!_window)
+            throw std::runtime_error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -50,13 +70,8 @@ GuiContext::GuiContext(const char *title, int width, int height)
         // Applies the default theme at the window's display scale.
         applyDisplayScale();
 
-        if (!ImGui_ImplSDL3_InitForSDLRenderer(_window, _renderer))
-            throw std::runtime_error("ImGui SDL3 backend init failed");
-        _imguiSdlBackend = true;
-
-        if (!ImGui_ImplSDLRenderer3_Init(_renderer))
-            throw std::runtime_error("ImGui SDLRenderer3 backend init failed");
-        _imguiRendererBackend = true;
+        _ui = makeUiRenderer(backend);
+        _ui->attach(_window);
 
         _events.subscribeAll([](const SDL_Event &event) { ImGui_ImplSDL3_ProcessEvent(&event); });
         _events.subscribe(SDL_EVENT_QUIT, [this](const SDL_Event &) { _running = false; });
@@ -94,20 +109,15 @@ GuiContext::~GuiContext()
 
 void GuiContext::destroy()
 {
-    if (_imguiRendererBackend)
-        ImGui_ImplSDLRenderer3_Shutdown();
-    if (_imguiSdlBackend)
-        ImGui_ImplSDL3_Shutdown();
+    // The UI renderer shuts its ImGui backends down: before the context and the window it uses.
+    _ui.reset();
     if (_imguiContext)
         ImGui::DestroyContext();
-    if (_renderer)
-        SDL_DestroyRenderer(_renderer);
     if (_window)
         SDL_DestroyWindow(_window);
     SDL_Quit();
 
-    _imguiRendererBackend = _imguiSdlBackend = _imguiContext = false;
-    _renderer = nullptr;
+    _imguiContext = false;
     _window = nullptr;
 }
 
@@ -187,20 +197,17 @@ void GuiContext::setWindowSize(int width, int height)
 
 bool GuiContext::isVSync() const
 {
-    int vsync = 0;
-    return SDL_GetRenderVSync(_renderer, &vsync) && vsync != 0;
+    return _ui->isVSync();
 }
 
 const char *GuiContext::getRendererName() const
 {
-    const char *name = SDL_GetRendererName(_renderer);
-    return name ? name : "unknown";
+    return _ui->name();
 }
 
 void GuiContext::setVSync(bool enabled)
 {
-    if (!SDL_SetRenderVSync(_renderer, enabled ? 1 : SDL_RENDERER_VSYNC_DISABLED))
-        Logger::instance().error("Renderer", std::string("SDL_SetRenderVSync failed: ") + SDL_GetError());
+    _ui->setVSync(enabled);
 }
 
 void GuiContext::run(const std::function<void()> &buildUi)
@@ -251,19 +258,12 @@ void GuiContext::beginFrame()
         Logger::instance().warning("Performance", text);
     }
 
-    ImGui_ImplSDLRenderer3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
+    _ui->newFrame();
     ImGui::NewFrame();
 }
 
 void GuiContext::present()
 {
     ImGui::Render();
-    const ImGuiIO &io = ImGui::GetIO();
-    SDL_SetRenderScale(_renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-    const ImVec4 &clear = _themes.current().colors.background;
-    SDL_SetRenderDrawColorFloat(_renderer, clear.x, clear.y, clear.z, 1.0f);
-    SDL_RenderClear(_renderer);
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), _renderer);
-    SDL_RenderPresent(_renderer);
+    _ui->render(_themes.current().colors.background);
 }

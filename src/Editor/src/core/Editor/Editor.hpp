@@ -103,6 +103,9 @@ public:
     // view it returns lets the mouse place objects there.
     void setViewportRenderer(SceneBackend::Renderer renderer);
 
+    // Stopped while editing, Playing or Paused while the game runs.
+    PlayState playState() const { return _play.getState(); }
+
     // Adds a template to the Entity Palette, after those of the scene.
     void addEntityTemplate(EntityTemplate entityTemplate);
 

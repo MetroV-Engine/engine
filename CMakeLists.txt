@@ -3,10 +3,16 @@ cmake_minimum_required(VERSION 3.24)
 # Single entry point: configure from here, then build the target you need
 # (cmake --build <dir> --target <name>). See CMakePresets.json.
 option(ENGINE_BUILD_GUI        "Build the editor GUI (needs SDL3 and Dear ImGui)" ON)
+option(ENGINE_BUILD_RENDERER   "Build the renderer (src/Renderer, needs SDL3)"    ON)
+option(ENGINE_RENDERER_BGFX    "Add the bgfx backend to the renderer (fetches bgfx, builds its shader compiler: slow)" OFF)
 option(ENGINE_BUILD_APP        "Build the executables (apps/)"                    ON)
 option(ENGINE_BUILD_TESTS      "Build unit tests"                                 OFF)
 option(ENGINE_BUILD_BENCHMARKS "Build benchmarks (use a Release build)"           OFF)
 option(ENGINE_ENABLE_COVERAGE  "Enable code coverage"                             OFF)
+
+if(ENGINE_RENDERER_BGFX AND NOT ENGINE_BUILD_RENDERER)
+  message(FATAL_ERROR "ENGINE_RENDERER_BGFX requires ENGINE_BUILD_RENDERER=ON")
+endif()
 
 include(cmake/Vcpkg.cmake) # before project(): vcpkg reads its settings there
 project(engine LANGUAGES CXX)
@@ -22,7 +28,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Modules: one CMakeLists.txt, one target, only the dependencies it needs.
 add_subdirectory(src/ECS)
-# add_subdirectory(src/Rendering) # engine_render: enable with its first .cpp
+if(ENGINE_BUILD_RENDERER)
+  add_subdirectory(src/Renderer)
+endif()
 # add_subdirectory(src/Engine)    # engine_core:   enable with its first .cpp
 if(ENGINE_BUILD_GUI)
   add_subdirectory(src/Editor)
