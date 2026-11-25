@@ -16,6 +16,7 @@ void run_zipper_driver_tests();
 void run_view_tests();
 void run_registry_tests();
 void run_system_manager_tests();
+void run_system_catalog_tests();
 void run_descriptor_tests();
 void run_type_registry_tests();
 void run_containers_tests();
@@ -43,6 +44,7 @@ int main()
     run_zipper_driver_tests();
     run_view_tests();
     run_system_manager_tests();
+    run_system_catalog_tests();
     run_descriptor_tests();
     run_type_registry_tests();
     run_containers_tests();

@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -36,6 +39,23 @@ namespace ECS {
                     "ECS::SystemManager::addSystem: System must derive from ISystem");
                 auto system = std::make_unique<System>(std::forward<Params>(params)...);
                 System& ref = *system;
+                ref.init(reg);
+                _systems.push_back(std::move(system));
+                return ref;
+            }
+
+            /**
+             * @brief Takes ownership of an already created system (for example
+             *        one created by name by the SystemCatalog), and calls its
+             *        init(reg) hook. It runs after the systems already added.
+             * @return Reference to the system.
+             * @throws std::invalid_argument if system is null.
+             */
+            ISystem& addSystem(Registry& reg, std::unique_ptr<ISystem> system) {
+                if (!system) {
+                    throw std::invalid_argument("ECS::SystemManager::addSystem: the system is null");
+                }
+                ISystem& ref = *system;
                 ref.init(reg);
                 _systems.push_back(std::move(system));
                 return ref;
@@ -95,12 +115,62 @@ namespace ECS {
                 return true;
             }
 
+            /**
+             * @brief Finds a registered system by its name() (the editor
+             *        only knows names).
+             *
+             * noexcept like getSystem<T>(): name() returns a std::string, so
+             * an allocation failure there ends the program.
+             * @return The first system whose name() equals name, in
+             *         registration order, or nullptr.
+             */
+            [[nodiscard]] ISystem* getSystem(std::string_view name) noexcept {
+                const auto it = findByName(name);
+                return it == _systems.end() ? nullptr : it->get();
+            }
+
+            /**
+             * @brief Removes the first system whose name() equals name,
+             *        calling its shutdown(reg) first. The other systems keep
+             *        their order.
+             * @return True when a matching system was found and removed.
+             */
+            bool removeSystem(Registry& reg, std::string_view name) {
+                const auto it = findByName(name);
+                if (it == _systems.end()) {
+                    return false;
+                }
+                (*it)->shutdown(reg);
+                _systems.erase(it);
+                return true;
+            }
+
+            /**
+             * @brief The name() of every system, in execution order, duplicates
+             *        included: what a scene file stores in its "systems" block.
+             */
+            [[nodiscard]] std::vector<std::string> names() const {
+                std::vector<std::string> result;
+                result.reserve(_systems.size());
+                for (const auto& system : _systems) {
+                    result.push_back(system->name());
+                }
+                return result;
+            }
+
             /** @brief Returns the number of registered systems. */
             [[nodiscard]] std::size_t size() const noexcept {
                 return _systems.size();
             }
 
         private:
-            std::vector<std::unique_ptr<ISystem>> _systems;
+            using Systems = std::vector<std::unique_ptr<ISystem>>;
+
+            Systems::iterator findByName(std::string_view name) {
+                return std::find_if(_systems.begin(), _systems.end(),
+                    [name](const std::unique_ptr<ISystem>& system) { return system->name() == name; });
+            }
+
+            Systems _systems;
     };
 }

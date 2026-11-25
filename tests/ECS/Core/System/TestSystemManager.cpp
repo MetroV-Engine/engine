@@ -1,7 +1,10 @@
 #include <boost/ut.hpp>
 
 #include <cstddef>
+#include <memory>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ECS/Core/System/SystemManager.hpp"
@@ -280,6 +283,232 @@ namespace {
             expect(systems.size() == std::size_t{1});
         };
     }
+
+    // ---- addSystem(reg, unique_ptr): a system created elsewhere (by name)
+
+    void test_add_created_system_takes_it_and_calls_init() {
+        "addSystem of a created system takes ownership, calls init once and returns it"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            int initCount = 0;
+            int shutdownCount = 0;
+            auto created = std::make_unique<LifecycleRecordingSystem>(initCount, shutdownCount);
+            const ECS::ISystem* address = created.get();
+
+            ECS::ISystem& added = systems.addSystem(registry, std::move(created));
+
+            expect(&added == address);
+            expect(initCount == 1);
+            expect(shutdownCount == 0);
+            expect(systems.size() == std::size_t{1});
+        };
+    }
+
+    void test_add_created_system_runs_after_existing_ones() {
+        "a created system runs after the systems already added, in order"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<int> order;
+            systems.addSystem<OrderRecordingSystem>(registry, order, 1);
+            systems.addSystem(registry, std::make_unique<OrderRecordingSystem>(order, 2));
+            systems.addSystem<OrderRecordingSystem>(registry, order, 3);
+
+            systems.update(registry);
+
+            expect(order == std::vector<int>{1, 2, 3});
+        };
+    }
+
+    void test_add_created_system_is_found_and_removed_by_type() {
+        "a created system is found and removed by its concrete type"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            int initCount = 0;
+            int shutdownCount = 0;
+            systems.addSystem(registry, std::make_unique<LifecycleRecordingSystem>(initCount, shutdownCount));
+
+            expect(systems.getSystem<LifecycleRecordingSystem>() != nullptr);
+            expect(systems.removeSystem<LifecycleRecordingSystem>(registry));
+            expect(shutdownCount == 1);
+            expect(systems.size() == std::size_t{0});
+        };
+    }
+
+    // ---- getSystem(name) / removeSystem(reg, name): the editor only knows names
+
+    // A system named at construction, recording its runs and its shutdowns.
+    class NamedSystem : public ECS::ISystem {
+        public:
+            NamedSystem(std::string name, std::vector<std::string>& runs, int& shutdowns)
+                : _name(std::move(name)), _runs(runs), _shutdowns(shutdowns) {}
+
+            void update(ECS::Registry&, double) override { _runs.push_back(_name); }
+            void shutdown(ECS::Registry&) override { ++_shutdowns; }
+            const std::string name() const override { return _name; }
+
+        private:
+            std::string _name;
+            std::vector<std::string>& _runs;
+            int& _shutdowns;
+    };
+
+    void test_get_system_by_name_finds_it() {
+        "getSystem(name) returns the system with that name"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            systems.addSystem<NamedSystem>(registry, "First", runs, shutdowns);
+            auto& second = systems.addSystem<NamedSystem>(registry, "Second", runs, shutdowns);
+
+            expect(systems.getSystem("Second") == &second);
+        };
+    }
+
+    void test_get_system_by_name_unknown_or_empty() {
+        "getSystem(name) returns nullptr for an unknown or empty name"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            expect(systems.getSystem("Anything") == nullptr);   // no system at all
+
+            systems.addSystem<NamedSystem>(registry, "First", runs, shutdowns);
+            expect(systems.getSystem("Unknown") == nullptr);
+            expect(systems.getSystem("") == nullptr);
+            expect(systems.getSystem("first") == nullptr);   // case sensitive
+        };
+    }
+
+    void test_get_system_by_name_returns_the_first_of_two() {
+        "getSystem(name) returns the first of two systems with the same name"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            auto& first = systems.addSystem<NamedSystem>(registry, "Twin", runs, shutdowns);
+            systems.addSystem<NamedSystem>(registry, "Twin", runs, shutdowns);
+
+            expect(systems.getSystem("Twin") == &first);
+        };
+    }
+
+    void test_remove_system_by_name_removes_it() {
+        "removeSystem(name) calls shutdown once and removes the system"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            systems.addSystem<NamedSystem>(registry, "Gone", runs, shutdowns);
+
+            expect(systems.removeSystem(registry, "Gone"));
+
+            expect(shutdowns == 1);
+            expect(systems.size() == std::size_t{0});
+            expect(systems.getSystem("Gone") == nullptr);
+        };
+    }
+
+    void test_remove_system_by_name_unknown() {
+        "removeSystem(name) returns false and removes nothing for an unknown name"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            expect(!systems.removeSystem(registry, "Anything"));   // no system at all
+
+            systems.addSystem<NamedSystem>(registry, "Kept", runs, shutdowns);
+            expect(!systems.removeSystem(registry, "Unknown"));
+            expect(!systems.removeSystem(registry, ""));
+
+            expect(shutdowns == 0);
+            expect(systems.size() == std::size_t{1});
+        };
+    }
+
+    void test_remove_system_by_name_removes_only_the_first() {
+        "removeSystem(name) removes only the first of two systems with the same name"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            systems.addSystem<NamedSystem>(registry, "Twin", runs, shutdowns);
+            auto& second = systems.addSystem<NamedSystem>(registry, "Twin", runs, shutdowns);
+
+            expect(systems.removeSystem(registry, "Twin"));
+
+            expect(shutdowns == 1);
+            expect(systems.size() == std::size_t{1});
+            expect(systems.getSystem("Twin") == &second);
+        };
+    }
+
+    void test_remove_system_by_name_keeps_the_order() {
+        "removeSystem(name) keeps the order of the remaining systems"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            systems.addSystem<NamedSystem>(registry, "A", runs, shutdowns);
+            systems.addSystem<NamedSystem>(registry, "B", runs, shutdowns);
+            systems.addSystem<NamedSystem>(registry, "C", runs, shutdowns);
+            systems.addSystem<NamedSystem>(registry, "D", runs, shutdowns);
+
+            expect(systems.removeSystem(registry, "B"));
+            systems.update(registry);
+
+            expect(runs == std::vector<std::string>{"A", "C", "D"});
+        };
+    }
+
+    // ---- names
+
+    void test_names_is_empty_without_systems() {
+        "names is empty when there is no system"_test = [] {
+            const ECS::SystemManager systems;
+            expect(systems.names().empty());
+        };
+    }
+
+    void test_names_lists_systems_in_execution_order() {
+        "names lists the systems in execution order, duplicates included"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            systems.addSystem<NamedSystem>(registry, "Input", runs, shutdowns);
+            systems.addSystem(registry, std::make_unique<NamedSystem>("Movement", runs, shutdowns));
+            systems.addSystem<NamedSystem>(registry, "Input", runs, shutdowns);
+
+            expect(systems.names() == std::vector<std::string>{"Input", "Movement", "Input"});
+        };
+    }
+
+    void test_names_follows_removals() {
+        "names follows the removal of a system"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            systems.addSystem<NamedSystem>(registry, "A", runs, shutdowns);
+            systems.addSystem<NamedSystem>(registry, "B", runs, shutdowns);
+            systems.addSystem<NamedSystem>(registry, "C", runs, shutdowns);
+
+            systems.removeSystem(registry, "B");
+
+            expect(systems.names() == std::vector<std::string>{"A", "C"});
+        };
+    }
+
+    void test_add_created_system_refuses_null() {
+        "addSystem of a null system throws and adds nothing"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+
+            expect(throws<std::invalid_argument>([&] { systems.addSystem(registry, std::unique_ptr<ECS::ISystem>{}); }));
+            expect(systems.size() == std::size_t{0});
+        };
+    }
 }
 
 void run_system_manager_tests() {
@@ -294,4 +523,18 @@ void run_system_manager_tests() {
     test_add_system_calls_init_once();
     test_remove_system_calls_shutdown_once_and_removes_it();
     test_remove_system_returns_false_when_not_found();
+    test_add_created_system_takes_it_and_calls_init();
+    test_add_created_system_runs_after_existing_ones();
+    test_add_created_system_is_found_and_removed_by_type();
+    test_add_created_system_refuses_null();
+    test_get_system_by_name_finds_it();
+    test_get_system_by_name_unknown_or_empty();
+    test_get_system_by_name_returns_the_first_of_two();
+    test_remove_system_by_name_removes_it();
+    test_remove_system_by_name_unknown();
+    test_remove_system_by_name_removes_only_the_first();
+    test_remove_system_by_name_keeps_the_order();
+    test_names_is_empty_without_systems();
+    test_names_lists_systems_in_execution_order();
+    test_names_follows_removals();
 }
