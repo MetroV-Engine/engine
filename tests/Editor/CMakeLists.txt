@@ -9,3 +9,5 @@ target_include_directories(tests_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(tests_editor PRIVATE engine_editor Boost::ut)
 target_compile_definitions(tests_editor PRIVATE ENGINE_TESTING)
 add_test(NAME tests_editor COMMAND tests_editor)
+# Some tests run the real editor: fail rather than hang if it never quits.
+set_tests_properties(tests_editor PROPERTIES TIMEOUT 120)

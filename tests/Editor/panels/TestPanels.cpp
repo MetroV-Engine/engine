@@ -5,17 +5,23 @@
 #include "layout/EditorLayout/EditorLayout.hpp"
 #include "navigation/ActionRegistry/ActionRegistry.hpp"
 #include "panels/ButtonsPanel/ButtonsPanel.hpp"
+#include "panels/EntityDropTarget/EntityDropTarget.hpp"
 #include "panels/ImGuiDemoPanel.hpp"
 #include "panels/InputsPanel/InputsPanel.hpp"
 #include "panels/PlayControlsPanel/PlayControlsPanel.hpp"
 #include "panels/SettingsPanel/SettingsPanel.hpp"
 #include "panels/ViewportPanel/ViewportPanel.hpp"
+#include "scene/DemoScene/DemoScene.hpp"
+#include "scene/EntityTemplate.hpp"
 #include "scene/PlayController/PlayController.hpp"
+#include "scene/Selection.hpp"
+#include "scene/ViewportGrid.hpp"
 #include "ui/DialogManager/DialogManager.hpp"
 #include "ui/NotificationManager/NotificationManager.hpp"
 #include "ui/PerformanceOverlay/PerformanceOverlay.hpp"
 
 #include <string>
+#include <vector>
 
 using namespace boost::ut;
 using namespace EditorTest;
@@ -140,8 +146,9 @@ void run_panels_tests()
     "Settings: VSync, fullscreen, resolution, quality, overlay and theme"_test = [] {
         Gui gui;
         PerformanceOverlay overlay(gui.timer());
+        ViewportGrid grid;
         PanelManager panels;
-        panels.registerPanel<SettingsPanel>(gui, overlay);
+        panels.registerPanel<SettingsPanel>(gui, overlay, grid);
         const auto ui = [&] {
             ImGui::SetNextWindowPos(ImVec2(0, 0));
             ImGui::SetNextWindowSize(ImVec2(500, 500));
@@ -179,8 +186,16 @@ void run_panels_tests()
         CountingSimulation simulation;
         PlayController play(simulation);
         PerformanceOverlay overlay(gui.timer());
+        DemoScene scene;
+        Selection selection;
+        NotificationManager notifications;
+        ViewportGrid grid;
+        // No entity template: drag and drop is checked in ecs/TestEntityDragDrop.cpp.
+        const std::vector<EntityTemplate> templates;
+        EntityDropTarget dropTarget(templates, scene, scene, notifications, play, [](HierarchyModel::ObjectId) {});
         PanelManager panels;
-        ViewportPanel &viewport = panels.registerPanel<ViewportPanel>(overlay, play);
+        ViewportPanel &viewport =
+            panels.registerPanel<ViewportPanel>(overlay, play, dropTarget, scene, scene, selection, grid);
         ImVec2 size(800, 600);
         const auto ui = [&] {
             ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -193,6 +208,7 @@ void run_panels_tests()
         viewport.setRenderer([&](ImDrawList *, ImVec2 min, ImVec2 max) {
             rendered++;
             expect(max.x > min.x);
+            return ViewportView{};
         });
         gui.frames(2, ui);
         expect(rendered == 2_i);
