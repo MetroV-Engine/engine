@@ -1,9 +1,12 @@
 #include <boost/ut.hpp>
 
+#include <algorithm>
+#include <chrono>
 #include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #include "Engine/Engine.hpp"
 #include "Support/RecordingScene.hpp"
@@ -451,6 +454,166 @@ void run_engine_tests() {
         Engine engine;
         expect(engine.stop() == 0);
         expect(engine.stop() == 0);
+    };
+
+    // ---- frame rate: setTargetFrameRate / setMaxFrameTime
+
+    "a new engine runs at 60 frames per second and caps dt at 0.25 s"_test = [] {
+        const Engine engine;
+        expect(engine.targetFrameRate() == 60.0);
+        expect(engine.maxFrameTime() == 0.25);
+    };
+
+    "setTargetFrameRate accepts a positive rate or 0"_test = [] {
+        Engine engine;
+        expect(engine.setTargetFrameRate(60.0));
+        expect(engine.targetFrameRate() == 60.0);
+        expect(engine.setTargetFrameRate(0.0));
+        expect(engine.targetFrameRate() == 0.0);
+    };
+
+    "setTargetFrameRate refuses a negative, NaN or infinite rate and keeps the previous one"_test = [] {
+        Engine engine;
+        engine.setTargetFrameRate(30.0);
+        expect(!engine.setTargetFrameRate(-1.0));
+        expect(!engine.setTargetFrameRate(std::numeric_limits<double>::quiet_NaN()));
+        expect(!engine.setTargetFrameRate(std::numeric_limits<double>::infinity()));
+        expect(engine.targetFrameRate() == 30.0);
+    };
+
+    "setMaxFrameTime accepts a positive duration or 0"_test = [] {
+        Engine engine;
+        expect(engine.setMaxFrameTime(0.1));
+        expect(engine.maxFrameTime() == 0.1);
+        expect(engine.setMaxFrameTime(0.0));
+        expect(engine.maxFrameTime() == 0.0);
+    };
+
+    "setMaxFrameTime refuses a negative, NaN or infinite duration and keeps the previous one"_test = [] {
+        Engine engine;
+        engine.setMaxFrameTime(0.5);
+        expect(!engine.setMaxFrameTime(-0.1));
+        expect(!engine.setMaxFrameTime(std::numeric_limits<double>::quiet_NaN()));
+        expect(!engine.setMaxFrameTime(std::numeric_limits<double>::infinity()));
+        expect(engine.maxFrameTime() == 0.5);
+    };
+
+    "run with a target frame rate sleeps between frames"_test = [] {
+        Log log;
+        Engine engine;
+        engine.init();
+        engine.setTargetFrameRate(100.0);   // one frame every 10 ms
+        engine.scenes().push(endsAfter(6, engine, log));
+
+        const auto start = std::chrono::steady_clock::now();
+        expect(engine.run() == 0);
+        const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+        expect(elapsed >= 0.045);   // 5 sleeps of 10 ms between the 6 frames, minus some slack
+        expect(elapsed < 2.0);
+    };
+
+    "run with a target frame rate gives frames a dt close to the period"_test = [] {
+        Engine engine;
+        engine.init();
+        engine.setTargetFrameRate(50.0);    // 20 ms
+        Log log;
+        auto scene = std::make_unique<RecordingScene>("A", log);
+        RecordingScene* a = scene.get();
+        double smallestLaterDt = 1.0;
+        scene->onUpdate = [&](double dt) {
+            if (a->updates > 1)
+                smallestLaterDt = std::min(smallestLaterDt, dt);
+            if (a->updates >= 4)
+                engine.scenes().pop();
+        };
+        engine.scenes().push(std::move(scene));
+
+        engine.run();
+
+        expect(smallestLaterDt >= 0.015);
+    };
+
+    "run caps a long frame's dt at maxFrameTime"_test = [] {
+        Engine engine;
+        engine.init();
+        engine.setMaxFrameTime(0.02);
+        Log log;
+        auto scene = std::make_unique<RecordingScene>("A", log);
+        RecordingScene* a = scene.get();
+        double secondDt = -1.0;
+        scene->onUpdate = [&](double dt) {
+            if (a->updates == 1)
+                std::this_thread::sleep_for(std::chrono::milliseconds(60));   // a slow frame
+            if (a->updates == 2) {
+                secondDt = dt;
+                engine.scenes().pop();
+            }
+        };
+        engine.scenes().push(std::move(scene));
+
+        engine.run();
+
+        expect(secondDt >= 0.0);
+        expect(secondDt <= 0.02);
+    };
+
+    "run does not cap dt when maxFrameTime is 0"_test = [] {
+        Engine engine;
+        engine.init();
+        engine.setMaxFrameTime(0.0);
+        Log log;
+        auto scene = std::make_unique<RecordingScene>("A", log);
+        RecordingScene* a = scene.get();
+        double secondDt = -1.0;
+        scene->onUpdate = [&](double dt) {
+            if (a->updates == 1)
+                std::this_thread::sleep_for(std::chrono::milliseconds(60));
+            if (a->updates == 2) {
+                secondDt = dt;
+                engine.scenes().pop();
+            }
+        };
+        engine.scenes().push(std::move(scene));
+
+        engine.run();
+
+        expect(secondDt >= 0.05);
+    };
+
+    "step neither sleeps nor caps dt: the host drives the frames"_test = [] {
+        Log log;
+        Engine engine;
+        engine.init();
+        engine.setTargetFrameRate(1.0);     // one frame per second, if step slept
+        engine.setMaxFrameTime(0.1);
+        auto scene = std::make_unique<RecordingScene>("A", log);
+        RecordingScene* a = scene.get();
+        engine.scenes().push(std::move(scene));
+
+        const auto start = std::chrono::steady_clock::now();
+        engine.step(1.5);
+        engine.step(1.5);
+        const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+        expect(a->lastDt == 1.5);
+        expect(elapsed < 0.5);
+    };
+
+    "stop with a target frame rate ends run without waiting for another frame"_test = [] {
+        Log log;
+        Engine engine;
+        engine.init();
+        engine.setTargetFrameRate(1.0);     // a 1 s sleep, if run slept after stop
+        auto scene = std::make_unique<RecordingScene>("A", log);
+        scene->onUpdate = [&engine](double) { engine.stop(); };
+        engine.scenes().push(std::move(scene));
+
+        const auto start = std::chrono::steady_clock::now();
+        engine.run();
+        const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+        expect(elapsed < 0.5);
     };
 
     // ---- run again

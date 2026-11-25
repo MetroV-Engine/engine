@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.24)
 # (cmake --build <dir> --target <name>). See CMakePresets.json.
 option(ENGINE_BUILD_GUI        "Build the editor GUI (needs SDL3 and Dear ImGui)" ON)
 option(ENGINE_BUILD_APP        "Build the executables (apps/)"                    ON)
+option(ENGINE_BUILD_DEMO       "Build the demo game (apps/demo/, needs curses)"   ON)
 option(ENGINE_BUILD_TESTS      "Build unit tests"                                 OFF)
 option(ENGINE_BUILD_BENCHMARKS "Build benchmarks (use a Release build)"           OFF)
 option(ENGINE_ENABLE_COVERAGE  "Enable code coverage"                             OFF)

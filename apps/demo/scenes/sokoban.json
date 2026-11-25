@@ -1,0 +1,399 @@
+{
+  "format": "metrov.world",
+  "version": 1,
+  "systems": [
+    "demo::InputSystem",
+    "demo::MoveSystem",
+    "demo::ProgressSystem",
+    "demo::RenderSystem"
+  ],
+  "entities": [
+    {
+      "id": "a5808e3a-2740-5baf-bd85-c5f6bf66d623",
+      "components": {
+        "demo::Position": {
+          "x": 6,
+          "y": 4
+        },
+        "ECS::Name": {
+          "value": "player"
+        },
+        "demo::Player": {},
+        "demo::MoveIntent": {
+          "dx": 0,
+          "dy": 0
+        }
+      }
+    },
+    {
+      "id": "e4297e95-6623-58dc-b529-c484943630fe",
+      "components": {
+        "demo::Position": {
+          "x": 2,
+          "y": 2
+        },
+        "demo::Box": {}
+      }
+    },
+    {
+      "id": "35216c2b-9f8b-5990-80f6-a9be96a0b634",
+      "components": {
+        "demo::Position": {
+          "x": 6,
+          "y": 3
+        },
+        "demo::Box": {}
+      }
+    },
+    {
+      "id": "c2b7504f-72e4-5074-bce4-b9a7ca47aa99",
+      "components": {
+        "demo::Position": {
+          "x": 6,
+          "y": 2
+        },
+        "demo::Goal": {}
+      }
+    },
+    {
+      "id": "d34944a3-5a23-53db-a2e3-b1079eb180bc",
+      "components": {
+        "demo::Position": {
+          "x": 2,
+          "y": 4
+        },
+        "demo::Goal": {}
+      }
+    },
+    {
+      "id": "82cc8fbd-6336-52d8-a348-4d05be0739eb",
+      "components": {
+        "demo::Position": {
+          "x": 0,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "1a641481-52e0-5e9d-a1c7-ef0923f8aa31",
+      "components": {
+        "demo::Position": {
+          "x": 1,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "cca3d2bd-bb90-52ac-83fc-cd9b5bb92518",
+      "components": {
+        "demo::Position": {
+          "x": 2,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "7e45a2a8-6b12-5a67-83fd-cd261b38045e",
+      "components": {
+        "demo::Position": {
+          "x": 3,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "3819fd1c-76c7-5045-b301-04e672f1ddff",
+      "components": {
+        "demo::Position": {
+          "x": 4,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "a31c190e-6394-5536-9641-e35c4345d086",
+      "components": {
+        "demo::Position": {
+          "x": 5,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "a6c6bd52-bb42-5604-ab02-86dfaa3e77b2",
+      "components": {
+        "demo::Position": {
+          "x": 6,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "0a943e10-b5c3-54a3-8017-15b435638458",
+      "components": {
+        "demo::Position": {
+          "x": 7,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "3ece4dbb-7886-5aed-bb7f-730a05b42982",
+      "components": {
+        "demo::Position": {
+          "x": 8,
+          "y": 0
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "d9fa0604-6b35-5303-b499-293dd5443720",
+      "components": {
+        "demo::Position": {
+          "x": 0,
+          "y": 1
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "1455f718-cb1b-5ba6-8016-6c96ff8d9586",
+      "components": {
+        "demo::Position": {
+          "x": 4,
+          "y": 1
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "fb58a22d-3a8b-5846-aa5d-4f196ccd35ec",
+      "components": {
+        "demo::Position": {
+          "x": 8,
+          "y": 1
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "f0f63789-3658-583a-86c8-49cf618c408f",
+      "components": {
+        "demo::Position": {
+          "x": 0,
+          "y": 2
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "4c49f15e-a8f8-57c2-8629-8388ba17a570",
+      "components": {
+        "demo::Position": {
+          "x": 8,
+          "y": 2
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "12146f41-cdd0-5429-aca7-0e3ebca937c2",
+      "components": {
+        "demo::Position": {
+          "x": 0,
+          "y": 3
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "7adcd954-d8ae-544e-ac3b-4a977b57c9c0",
+      "components": {
+        "demo::Position": {
+          "x": 4,
+          "y": 3
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "1708001a-bba6-5d8e-941b-41b34e376c99",
+      "components": {
+        "demo::Position": {
+          "x": 8,
+          "y": 3
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "5b24fc40-0f88-5ee4-90b7-c71150bcc027",
+      "components": {
+        "demo::Position": {
+          "x": 0,
+          "y": 4
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "5089deb0-ea6e-51d5-bd40-9976eb73f60f",
+      "components": {
+        "demo::Position": {
+          "x": 1,
+          "y": 4
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "8cd84fd7-fd32-56de-9b41-0cada5abbe5b",
+      "components": {
+        "demo::Position": {
+          "x": 3,
+          "y": 4
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "2c162d17-6747-5f40-909f-fe81b6086274",
+      "components": {
+        "demo::Position": {
+          "x": 4,
+          "y": 4
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "8ca219c1-f808-5b3f-a345-c40b4be1f3d4",
+      "components": {
+        "demo::Position": {
+          "x": 8,
+          "y": 4
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "797b5805-80f4-50da-a3ca-96bdc36424b9",
+      "components": {
+        "demo::Position": {
+          "x": 0,
+          "y": 5
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "429cd54b-f62c-5947-bc66-115afbcce873",
+      "components": {
+        "demo::Position": {
+          "x": 8,
+          "y": 5
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "56b7174d-3fc9-5711-825a-43ab5054e389",
+      "components": {
+        "demo::Position": {
+          "x": 0,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "2ad87260-97d2-5281-8f3c-69892146b741",
+      "components": {
+        "demo::Position": {
+          "x": 1,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "45c1738f-a389-574e-8cee-c9d736435fae",
+      "components": {
+        "demo::Position": {
+          "x": 2,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "5d2ef3c6-a20a-5087-b8c4-ec47d0b10bdc",
+      "components": {
+        "demo::Position": {
+          "x": 3,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "8690ab45-f09b-5b0c-9ac8-1fe83c3ecf40",
+      "components": {
+        "demo::Position": {
+          "x": 4,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "9cd4fbea-3d64-54a3-aaed-6062938dbf9b",
+      "components": {
+        "demo::Position": {
+          "x": 5,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "725d0c04-1ff4-51ee-a462-6336c6dbb1bf",
+      "components": {
+        "demo::Position": {
+          "x": 6,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "6c3a98a6-11d5-5290-bd97-b528a197aaa2",
+      "components": {
+        "demo::Position": {
+          "x": 7,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    },
+    {
+      "id": "31caa6aa-e1c9-5d4b-b740-02e9bf9597ae",
+      "components": {
+        "demo::Position": {
+          "x": 8,
+          "y": 6
+        },
+        "demo::Wall": {}
+      }
+    }
+  ]
+}
