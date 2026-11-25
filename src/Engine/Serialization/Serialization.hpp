@@ -50,6 +50,23 @@ namespace serial {
         bool assignMissingUuids = false;
     };
 
+    /**
+     * @brief What a scene file holds besides its entities.
+     *
+     * The world (ECS::Registry) only holds entities; the rest of a scene, such
+     * as its systems, lives elsewhere (in a Scene). serialize() writes it and
+     * load() hands it back, so the scene can apply it. More scene settings
+     * will join it later without changing the functions.
+     */
+    struct SceneInfo {
+        /**
+         * @brief Names of the systems the scene runs (the "systems" block), in
+         *        creation and execution order. Names are the ones of the
+         *        ECS::SystemCatalog; this module only stores them.
+         */
+        std::vector<std::string> systems;
+    };
+
     // --- A whole world ------------------------------------------------------
 
     /**
@@ -62,9 +79,12 @@ namespace serial {
      * their target, or null when the target is not in this world.
      * Fields that cannot be written (Opaque types, unsupported scalars) are
      * skipped with a warning.
+     * @param scene Written along with the entities ("systems" block, even
+     *        when empty). Null: no "systems" block.
      * @return The text, or an empty string with an error in the report.
      */
-    [[nodiscard]] std::string serialize(ECS::Registry& world, Report* report = nullptr, const SaveOptions& options = {});
+    [[nodiscard]] std::string serialize(ECS::Registry& world, Report* report = nullptr, const SaveOptions& options = {},
+                                        const SceneInfo* scene = nullptr);
 
     /**
      * @brief Creates the entities described by the text, in addition to the
@@ -77,11 +97,17 @@ namespace serial {
      * created. References between entities are rebuilt, whatever the order
      * of the entities in the text. Every loaded entity gets its Uuid.
      *
+     * The optional "systems" block must be an array, or it is an error.
+     * An entry that is not a non-empty string is skipped with a warning.
+     *
      * Must not be called inside ECS::Registry::runDeferred (the Registry does not
      * let this module detect it).
+     * @param scene Receives what the text holds besides the entities: its
+     *        systems are replaced by the text's list (empty when the text has
+     *        no "systems" block). Left untouched when the call fails. May be null.
      * @return false when this call adds an error (the world is left unchanged).
      */
-    bool load(ECS::Registry& world, std::string_view text, Report* report = nullptr);
+    bool load(ECS::Registry& world, std::string_view text, Report* report = nullptr, SceneInfo* scene = nullptr);
 
     /**
      * @brief serialize() to a file.
@@ -92,10 +118,11 @@ namespace serial {
      * one, never half of it. On failure the target is untouched.
      */
     bool saveFile(ECS::Registry& world, const std::filesystem::path& path, Report* report = nullptr,
-                  const SaveOptions& options = {});
+                  const SaveOptions& options = {}, const SceneInfo* scene = nullptr);
 
     /** @brief load() from a file. */
-    bool loadFile(ECS::Registry& world, const std::filesystem::path& path, Report* report = nullptr);
+    bool loadFile(ECS::Registry& world, const std::filesystem::path& path, Report* report = nullptr,
+                  SceneInfo* scene = nullptr);
 
     // --- One value ----------------------------------------------------------
 

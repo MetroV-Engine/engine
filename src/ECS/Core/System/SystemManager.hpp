@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -142,6 +143,19 @@ namespace ECS {
                 (*it)->shutdown(reg);
                 _systems.erase(it);
                 return true;
+            }
+
+            /**
+             * @brief The name() of every system, in execution order, duplicates
+             *        included: what a scene file stores in its "systems" block.
+             */
+            [[nodiscard]] std::vector<std::string> names() const {
+                std::vector<std::string> result;
+                result.reserve(_systems.size());
+                for (const auto& system : _systems) {
+                    result.push_back(system->name());
+                }
+                return result;
             }
 
             /** @brief Returns the number of registered systems. */

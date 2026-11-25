@@ -461,6 +461,45 @@ namespace {
         };
     }
 
+    // ---- names
+
+    void test_names_is_empty_without_systems() {
+        "names is empty when there is no system"_test = [] {
+            const ECS::SystemManager systems;
+            expect(systems.names().empty());
+        };
+    }
+
+    void test_names_lists_systems_in_execution_order() {
+        "names lists the systems in execution order, duplicates included"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            systems.addSystem<NamedSystem>(registry, "Input", runs, shutdowns);
+            systems.addSystem(registry, std::make_unique<NamedSystem>("Movement", runs, shutdowns));
+            systems.addSystem<NamedSystem>(registry, "Input", runs, shutdowns);
+
+            expect(systems.names() == std::vector<std::string>{"Input", "Movement", "Input"});
+        };
+    }
+
+    void test_names_follows_removals() {
+        "names follows the removal of a system"_test = [] {
+            ECS::Registry registry;
+            ECS::SystemManager systems;
+            std::vector<std::string> runs;
+            int shutdowns = 0;
+            systems.addSystem<NamedSystem>(registry, "A", runs, shutdowns);
+            systems.addSystem<NamedSystem>(registry, "B", runs, shutdowns);
+            systems.addSystem<NamedSystem>(registry, "C", runs, shutdowns);
+
+            systems.removeSystem(registry, "B");
+
+            expect(systems.names() == std::vector<std::string>{"A", "C"});
+        };
+    }
+
     void test_add_created_system_refuses_null() {
         "addSystem of a null system throws and adds nothing"_test = [] {
             ECS::Registry registry;
@@ -495,4 +534,7 @@ void run_system_manager_tests() {
     test_remove_system_by_name_unknown();
     test_remove_system_by_name_removes_only_the_first();
     test_remove_system_by_name_keeps_the_order();
+    test_names_is_empty_without_systems();
+    test_names_lists_systems_in_execution_order();
+    test_names_follows_removals();
 }

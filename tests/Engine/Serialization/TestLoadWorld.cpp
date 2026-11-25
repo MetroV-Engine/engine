@@ -30,6 +30,11 @@ namespace {
         return ECS::Entity{};
     }
 
+    // A world text with a "systems" block (written as given, any JSON).
+    std::string sceneText(const std::string& systems, const std::string& entities = "[]") {
+        return R"({"format":"metrov.world","version":1,"systems":)" + systems + R"(,"entities":)" + entities + "}";
+    }
+
     // A text that must be refused, and leave the world as it was.
     void expectRefused(const std::string& text, const std::string& errorPart = "") {
         ECS::Registry world;
@@ -366,5 +371,70 @@ void run_load_world_tests() {
         expect(load(world, worldText("[" + entity(B) + "]"), &report));    // the error above does not fail this one
         expect(world.entityCount() == std::size_t{2});
         expect(report.errors.size() == std::size_t{1});
+    };
+
+    // ---- SceneInfo: the "systems" block
+
+    "load gives the systems of the text, in order"_test = [] {
+        ECS::Registry world;
+        serial::SceneInfo scene;
+        Report report;
+        expect(load(world, sceneText(R"(["Input","Movement","Collision"])", "[" + entity(A) + "]"), &report, &scene));
+        expect(report.ok());
+        expect(scene.systems == std::vector<std::string>{"Input", "Movement", "Collision"});
+        expect(world.entityCount() == std::size_t{1});
+    };
+
+    "load gives no systems for a text without a systems block"_test = [] {
+        ECS::Registry world;
+        serial::SceneInfo scene;
+        scene.systems = {"Stale"};   // replaced, not appended to
+        expect(load(world, worldText("[]"), nullptr, &scene));
+        expect(scene.systems.empty());
+    };
+
+    "load gives an empty list for an empty systems block"_test = [] {
+        ECS::Registry world;
+        serial::SceneInfo scene;
+        expect(load(world, sceneText("[]"), nullptr, &scene));
+        expect(scene.systems.empty());
+    };
+
+    "load keeps duplicated system names"_test = [] {
+        ECS::Registry world;
+        serial::SceneInfo scene;
+        expect(load(world, sceneText(R"(["Twin","Twin"])"), nullptr, &scene));
+        expect(scene.systems == std::vector<std::string>{"Twin", "Twin"});
+    };
+
+    "load works without a SceneInfo, systems block or not"_test = [] {
+        ECS::Registry world;
+        expect(load(world, sceneText(R"(["Movement"])", "[" + entity(A) + "]")));
+        expect(world.entityCount() == std::size_t{1});
+    };
+
+    "a systems block that is not an array is refused"_test = [] {
+        expectRefused(sceneText(R"("Movement")", "[" + entity(A) + "]"), "'systems' must be an array");
+        expectRefused(sceneText(R"({"Movement":true})"), "'systems' must be an array");
+        expectRefused(sceneText("null"), "'systems' must be an array");
+    };
+
+    "a refused text leaves the SceneInfo untouched"_test = [] {
+        ECS::Registry world;
+        serial::SceneInfo scene;
+        scene.systems = {"Before"};
+        expect(!load(world, sceneText(R"(["Movement"])", R"([{"id":"not an id"}])"), nullptr, &scene));
+        expect(scene.systems == std::vector<std::string>{"Before"});
+    };
+
+    "a system name that is not a non-empty string is skipped with a warning"_test = [] {
+        ECS::Registry world;
+        serial::SceneInfo scene;
+        Report report;
+        expect(load(world, sceneText(R"(["Input", 3, "", null, {"a":1}, "Movement"])"), &report, &scene));
+        expect(scene.systems == std::vector<std::string>{"Input", "Movement"});
+        expect(report.warnings.size() == std::size_t{4});
+        expect(hasWarning(report, "systems[1]"));
+        expect(hasWarning(report, "systems[2]"));
     };
 }

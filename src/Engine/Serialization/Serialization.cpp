@@ -62,10 +62,33 @@ namespace serial {
             const Json* components = nullptr;   // null: none
         };
 
+        // Reads the optional "systems" block. Not an array: an error. An entry
+        // that is not a non-empty string: skipped with a warning.
+        bool readSystems(const Json& doc, std::vector<std::string>& systems, Report& report) {
+            if (!doc.contains("systems")) {
+                return true;
+            }
+            const Json& block = doc["systems"];
+            if (!block.is_array()) {
+                report.errors.push_back("'systems' must be an array of system names");
+                return false;
+            }
+            std::size_t position = 0;
+            for (const Json& entry : block) {
+                const std::string where = "systems[" + std::to_string(position++) + "]";
+                if (!entry.is_string() || entry.get<std::string>().empty()) {
+                    report.warnings.push_back(where + ": a system name must be a non-empty string, skipped");
+                    continue;
+                }
+                systems.push_back(entry.get<std::string>());
+            }
+            return true;
+        }
+
         // Checks the whole text before anything is created. Returns false and
         // reports every problem found.
         bool validate(const Json& doc, std::vector<PendingEntity>& pending, const std::unordered_set<Uuid>& existing,
-                      Report& report) {
+                      std::vector<std::string>& systems, Report& report) {
             if (!doc.is_object() || !doc.contains("format") || doc["format"] != FormatName) {
                 report.errors.push_back(std::string("not a '") + FormatName + "' text");
                 return false;
@@ -85,8 +108,8 @@ namespace serial {
                 return false;
             }
 
+            bool valid = readSystems(doc, systems, report);
             std::unordered_set<Uuid> seen;
-            bool valid = true;
             std::size_t position = 0;
             for (const Json& item : doc["entities"]) {
                 const std::string where = "entities[" + std::to_string(position++) + "]";
@@ -173,7 +196,7 @@ namespace serial {
         }
     }
 
-    std::string serialize(Registry& world, Report* report, const SaveOptions& options) {
+    std::string serialize(Registry& world, Report* report, const SaveOptions& options, const SceneInfo* scene) {
         ReportScope scope(report);
         Report& rep = scope.get();
         try {
@@ -227,6 +250,9 @@ namespace serial {
             Json doc = Json::object();
             doc["format"] = FormatName;
             doc["version"] = FormatVersion;
+            if (scene) {
+                doc["systems"] = scene->systems;   // before the entities: short, read first by a human
+            }
             doc["entities"] = std::move(entities);
             return doc.dump(2) + "\n";
         } catch (const std::exception& error) {
@@ -235,7 +261,7 @@ namespace serial {
         }
     }
 
-    bool load(Registry& world, std::string_view text, Report* report) {
+    bool load(Registry& world, std::string_view text, Report* report, SceneInfo* scene) {
         ReportScope scope(report);
         Report& rep = scope.get();
         const std::size_t errorsBefore = rep.errors.size();   // the Report may hold the errors of earlier calls
@@ -255,7 +281,8 @@ namespace serial {
         }
 
         std::vector<PendingEntity> pending;
-        if (!validate(doc, pending, existing, rep)) {
+        std::vector<std::string> systems;
+        if (!validate(doc, pending, existing, systems, rep)) {
             return false;
         }
 
@@ -297,7 +324,13 @@ namespace serial {
                     detail::decode(it.value(), ref, context, path);
                 }
             }
-            return rep.errors.size() == errorsBefore;
+            if (rep.errors.size() != errorsBefore) {
+                return false;
+            }
+            if (scene) {
+                scene->systems = std::move(systems);
+            }
+            return true;
         } catch (const std::exception& error) {
             for (const Entity entity : created) {
                 if (world.isAlive(entity)) {
@@ -309,12 +342,13 @@ namespace serial {
         }
     }
 
-    bool saveFile(Registry& world, const std::filesystem::path& path, Report* report, const SaveOptions& options) {
+    bool saveFile(Registry& world, const std::filesystem::path& path, Report* report, const SaveOptions& options,
+                  const SceneInfo* scene) {
         ReportScope scope(report);
         Report& rep = scope.get();
         const std::size_t errorsBefore = rep.errors.size();   // the Report may hold the errors of earlier calls
 
-        const std::string text = serialize(world, &rep, options);
+        const std::string text = serialize(world, &rep, options, scene);
         if (rep.errors.size() != errorsBefore || text.empty()) {
             return false;
         }
@@ -339,13 +373,13 @@ namespace serial {
         return true;
     }
 
-    bool loadFile(Registry& world, const std::filesystem::path& path, Report* report) {
+    bool loadFile(Registry& world, const std::filesystem::path& path, Report* report, SceneInfo* scene) {
         ReportScope scope(report);
         std::string text;
         if (!readFile(path, text, scope.get())) {
             return false;
         }
-        return load(world, text, &scope.get());
+        return load(world, text, &scope.get(), scene);
     }
 
     std::string serialize(reflect::Ref value, Report* report) {
