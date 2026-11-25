@@ -5,11 +5,12 @@ No editor, no ImGui. The editor (`engine_editor`) and the executables link it.
 
 | File | Content |
 | --- | --- |
-| `Engine.hpp/.cpp` | `Engine`: `init()`, `step(dt)` (one frame, for a host with its own loop such as the editor), `run()` (calls `step` until `stop()` or no scene is left), `shutdown()`, `scenes()`, `services()` / `addService<T>()` |
+| `Engine.hpp/.cpp` | `Engine`: `init()`, `step(dt)` (one frame, for a host with its own loop such as the editor), `run()` (calls `step` until `stop()` or no scene is left), `setTargetFrameRate(fps)` / `setMaxFrameTime(s)` (the pace of `run()`), `shutdown()`, `scenes()`, `services()` / `addService<T>()` |
 | `Scenes/Scene.hpp` | `Scene`: a world (its own `ECS::Registry` and `SystemManager`) with `onEnter` / `onExit` / `onPause` / `onResume` hooks |
 | `Scenes/DataScene.hpp/.cpp` | `DataScene`: a scene built from a scene file (see below). `addDataScene(registry, id, file, setup)` registers one under an identifier |
 | `Scenes/SceneManager.hpp/.cpp` | `SceneManager`: a stack of scenes, the top one is active. `push(id)` builds a scene from its identifier |
 | `Scenes/SceneRegistry.hpp/.cpp` | `SceneRegistry`: identifier -> scene factory (`add`, `remove`, `has`, `create`) |
+| `Game/GameCatalog.hpp` | `GameCatalog` and `E_GAME`: the games in the program, and how each one prepares the Engine (see below) |
 | `Services/Services.hpp` | `Services`: objects owned by the Engine (asset cache, audio...), injected into every scene as `ServiceRef<T>`; read with `getService<T>(registry)` |
 | `Components/Uuid.hpp` | `Uuid`: persistent identity of an entity, and its reflection (in the header, so that including it registers the type) |
 | `Serialization/` | Saves and loads a world or a reflected value as text: see [Serialization/README.md](Serialization/README.md) |
@@ -31,6 +32,23 @@ engine.scenes().push("menu");
 engine.run();                                          // or engine.step(dt) from your own loop
 // in a system: auto& cache = getService<AssetCache>(registry);
 ```
+
+## Frame rate
+
+`run()` is the game's main loop. Each frame gets as `dt` the real time since
+the previous one.
+
+```cpp
+engine.setTargetFrameRate(60);   // the default: run() sleeps until the next frame is due (0: no limit)
+engine.setMaxFrameTime(0.25);    // the default: after a long pause, a frame gets at most 0.25 s
+```
+
+- 60 frames per second by default. With 0, `run()` runs as fast as it can
+  and keeps a core busy. A late frame is not caught up: the schedule starts again.
+- Both only apply to `run()`. `step(dt)` never sleeps and passes its `dt` as
+  it is: a host with its own loop (the editor) sets its own pace.
+- One rate for everything for now. A fixed simulation step (physics at 60 Hz
+  while the rendering goes faster) can be added later beside it.
 
 ## Scenes made of data: `DataScene`
 
@@ -126,3 +144,34 @@ A C++ scene has no file: the editor can run it (Play goes through the same
 `SceneRegistry`) but not edit its content. To turn one into data, run it once
 and save its world with `serial::saveFile`, passing
 `serial::SceneInfo{scene.systems().names()}` for its systems.
+
+## Games: `E_GAME` and the `GameCatalog`
+
+A game is the code its scene files need: components (`E_REFLECT`), systems
+(`E_SYSTEM`), and an **install function** that prepares the Engine for it
+(its services: a terminal, an asset cache...). It registers that function
+with `E_GAME`, before `main`:
+
+```cpp
+namespace demo { inline void install(Engine& engine) { engine.addService<Terminal>(); } }
+E_GAME(demo, demo::install)
+```
+
+A generic program installs every game it contains, without naming any:
+
+```cpp
+GameCatalog::instance().installAll(engine);   // sorted by name; an exception stops it
+```
+
+This is what makes `apps/runtime` generic: which games it contains is chosen
+in CMake only. It does not matter how a game's code gets into the program:
+
+- **linked** into the executable (today, and for a shipped game: one binary).
+  The game must be fully linked, since nothing references its registrations:
+  an `OBJECT` library (like `apps/demo`), `WHOLE_ARCHIVE`, or its sources
+  compiled into the executable;
+- **loaded** from a shared library by a plugin loader (later): its
+  registrations run when the library is loaded, and `installAll` is the same.
+
+A name taken twice is not an exception (it would happen before `main`): it is
+listed in `GameCatalog::instance().errors()` and printed on `std::cerr`.

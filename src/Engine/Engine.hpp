@@ -47,9 +47,36 @@ class Engine {
         /**
          * @brief Runs the main loop: calls step() every frame until stop() is
          *        called or no scene is left, then exits the remaining scenes.
+         *
+         * Each frame's dt is the real time since the previous frame, capped
+         * by maxFrameTime(). With a target frame rate, the loop sleeps until
+         * the next frame is due; a late frame is not caught up.
          * @return 0 on a normal exit, non-zero if init() was not called.
          */
         int run();
+
+        /**
+         * @brief Frames per second run() aims for (60 by default): after
+         *        each frame it sleeps until the next one is due. 0: no limit,
+         *        the loop runs as fast as it can (and keeps a core busy).
+         *
+         * Only run() uses it: step() never sleeps, since a host that drives
+         * the frames itself (the editor) has its own pace.
+         * @return false (nothing changed) when fps is negative, NaN or infinite.
+         */
+        bool setTargetFrameRate(double fps);
+        double targetFrameRate() const { return _targetFrameRate; }
+
+        /**
+         * @brief Longest dt run() gives a frame, in seconds (0.25 by default).
+         *        After a long pause (debugger, window moved), the next frame
+         *        gets this dt instead of the whole pause. 0: no cap.
+         *
+         * Only run() uses it: step() passes its dt as it is.
+         * @return false (nothing changed) when seconds is negative, NaN or infinite.
+         */
+        bool setMaxFrameTime(double seconds);
+        double maxFrameTime() const { return _maxFrameTime; }
 
         /**
          * @brief Asks the main loop to end after the current frame.
@@ -89,4 +116,6 @@ class Engine {
         SceneManager _scenes;
         bool _initialized = false;
         bool _running = false;
+        double _targetFrameRate = 60.0;
+        double _maxFrameTime = 0.25;
 };
