@@ -55,6 +55,7 @@ therefore identified in the text by an `Uuid`, a component of the entity
 {
   "format": "metrov.world",
   "version": 1,
+  "systems": ["InputSystem", "MovementSystem"],
   "entities": [
     {
       "id": "3f2a9c1e-5b7d-4e08-9a41-c2d6e8f01b37",
@@ -68,6 +69,14 @@ therefore identified in the text by an `Uuid`, a component of the entity
 }
 ```
 
+- `"systems"` (optional) lists the names of the scene's systems, in creation
+  and execution order (names of the `ECS::SystemCatalog`). The world holds
+  only entities, so this block goes through a `serial::SceneInfo`:
+  `serialize(world, report, options, &scene)` writes it,
+  `load(world, text, report, &scene)` hands it back (`saveFile` and
+  `loadFile` too). Without a `SceneInfo`, nothing is written, and a block in
+  the text is read and checked but not returned. A `DataScene`
+  (`Engine/Scenes/`) creates these systems.
 - Components are keyed by their reflected name; fields keep their declaration order.
 - Scalars are JSON values. Enums are their integer value. `std::vector` and
   `std::array` are arrays, `std::optional` is the value or `null`, maps are
@@ -86,9 +95,11 @@ therefore identified in the text by an `Uuid`, a component of the entity
 An unknown component or field, or a value of the wrong type, is a warning and
 the default value stays. So does a number that does not fit its field: an
 integer out of range, a value too large for an enum's type or for a `float`
-(it is never truncated or turned into infinity). These are errors, and nothing is created: text that is
+(it is never truncated or turned into infinity). A system name that is not a
+non-empty string is skipped with a warning. These are errors, and nothing is created: text that is
 not JSON, a wrong `format`, a `version` newer than this build, an entity
-without a valid `id`, an id that appears twice or is already in the world.
+without a valid `id`, an id that appears twice or is already in the world, a
+`"systems"` block that is not an array.
 
 ## Loading into an existing value
 

@@ -212,6 +212,7 @@ catalog.names();                                       // every registered name,
 
 systems.getSystem("MovementSystem");                   // first system with that name(), or nullptr
 systems.removeSystem(world, "MovementSystem");         // calls its shutdown, removes the first one
+systems.names();                                       // name() of every system, in execution order
 ```
 
 - **The name given to `E_SYSTEM` must be exactly what `name()` returns.** It

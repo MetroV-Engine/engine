@@ -281,4 +281,31 @@ void run_file_tests() {
 
         expect(readAll(dir.path() / "a.json") == readAll(dir.path() / "b.json"));
     };
+
+    // ---- SceneInfo through a file
+
+    "the systems of a scene survive saveFile then loadFile"_test = [] {
+        TempDir dir;
+        ECS::Registry source;
+        makeWorld(source);
+        serial::SceneInfo saved;
+        saved.systems = {"Input", "Movement"};
+        expect(saveFile(source, dir.path() / "scene.json", nullptr, {}, &saved));
+
+        ECS::Registry target;
+        serial::SceneInfo loaded;
+        expect(loadFile(target, dir.path() / "scene.json", nullptr, &loaded));
+
+        expect(loaded.systems == saved.systems);
+        expect(target.entityCount() == std::size_t{1});
+    };
+
+    "loadFile of a missing file leaves the SceneInfo untouched"_test = [] {
+        TempDir dir;
+        ECS::Registry world;
+        serial::SceneInfo scene;
+        scene.systems = {"Before"};
+        expect(!loadFile(world, dir.path() / "missing.json", nullptr, &scene));
+        expect(scene.systems == std::vector<std::string>{"Before"});
+    };
 }

@@ -355,4 +355,41 @@ void run_serialize_world_tests() {
         report.errors.push_back("from an earlier call");
         expect(!serialize(world, &report).empty());
     };
+
+    // ---- SceneInfo: the "systems" block
+
+    "serialize writes the systems of the scene, in order"_test = [] {
+        ECS::Registry world;
+        spawnWithUuid(world);
+        serial::SceneInfo scene;
+        scene.systems = {"Input", "Movement", "Collision"};
+
+        const Json json = parseJson(serialize(world, nullptr, {}, &scene));
+
+        expect(json["systems"] == Json::array({"Input", "Movement", "Collision"}));
+        expect(json["entities"].size() == 1_u);
+    };
+
+    "serialize writes no systems block without a SceneInfo"_test = [] {
+        ECS::Registry world;
+        const Json json = parseJson(serialize(world));
+        expect(!json.contains("systems"));
+    };
+
+    "serialize writes an empty systems block for a scene without systems"_test = [] {
+        ECS::Registry world;
+        const serial::SceneInfo scene;
+        const Json json = parseJson(serialize(world, nullptr, {}, &scene));
+        expect(json.contains("systems"));
+        expect(json["systems"].is_array());
+        expect(json["systems"].empty());
+    };
+
+    "serialize writes the systems as given, duplicates included"_test = [] {
+        ECS::Registry world;
+        serial::SceneInfo scene;
+        scene.systems = {"Twin", "Twin"};
+        const Json json = parseJson(serialize(world, nullptr, {}, &scene));
+        expect(json["systems"] == Json::array({"Twin", "Twin"}));
+    };
 }
